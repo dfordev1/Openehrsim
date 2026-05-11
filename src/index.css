@@ -1,0 +1,64 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Playfair+Display:ital,wght@1,400;1,700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-serif: "Playfair Display", serif;
+
+  --color-clinical-bg: #F0F2F5;
+  --color-clinical-surface: #FFFFFF;
+  --color-clinical-ink: #1A202C;
+  --color-clinical-slate: #4A5568;
+  --color-clinical-line: #E2E8F0;
+  --color-clinical-blue: #3182CE;
+  --color-clinical-red: #E53E3E;
+  --color-clinical-amber: #DD6B20;
+  --color-clinical-green: #38A169;
+}
+
+@layer base {
+  body {
+    @apply bg-clinical-bg text-clinical-ink font-sans antialiased;
+  }
+}
+
+/* Professional Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E0;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #A0AEC0;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Clinical Table Styles */
+.clinical-table {
+  @apply w-full border-collapse text-left;
+}
+
+.clinical-table th {
+  @apply py-3 px-4 bg-clinical-bg text-clinical-slate font-serif italic text-[11px] uppercase tracking-wider border-b border-clinical-line;
+}
+
+.clinical-table td {
+  @apply py-3 px-4 border-b border-clinical-line text-sm;
+}
