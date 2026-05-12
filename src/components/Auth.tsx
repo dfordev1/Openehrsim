@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mail, Lock, LogIn, UserPlus, Fingerprint, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, User, LogIn, UserPlus, Fingerprint, ShieldCheck } from 'lucide-react';
 import { getSupabase } from '../lib/supabase';
+import { cn } from '../lib/utils';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -144,7 +145,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
             <div className="bg-clinical-bg p-4 flex items-center justify-center gap-3">
               <ShieldCheck className="w-3 h-3 text-clinical-slate opacity-40" />
-              <p className="text-[8px] text-clinical-slate uppercase font-bold tracking-widest opacity-60">End-to-End Encryption • HIPAA Compliant Protocols</p>
+              <p className="text-[8px] text-clinical-slate uppercase font-bold tracking-widest opacity-60">End-to-End Encryption • HIPAA Complaint Protocols</p>
             </div>
           </motion.div>
         </>
