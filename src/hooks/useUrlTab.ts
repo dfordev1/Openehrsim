@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 
-type TabId = 'hpi' | 'exam' | 'labs' | 'imaging' | 'pharmacy' | 'treatment' | 'comms' | 'archive' | 'notes' | 'tools' | 'assess';
+type TabId = 'triage' | 'hpi' | 'exam' | 'labs' | 'imaging' | 'pharmacy' | 'treatment' | 'comms' | 'archive' | 'notes' | 'tools' | 'assess' | 'dxpause';
 
-const VALID_TABS: TabId[] = ['hpi', 'exam', 'labs', 'imaging', 'pharmacy', 'treatment', 'comms', 'archive', 'notes', 'tools', 'assess'];
+const VALID_TABS: TabId[] = ['triage', 'hpi', 'exam', 'labs', 'imaging', 'pharmacy', 'treatment', 'comms', 'archive', 'notes', 'tools', 'assess', 'dxpause'];
 
 function getTabFromUrl(): TabId {
   const params = new URLSearchParams(window.location.search);
   const tab = params.get('tab') as TabId | null;
   if (tab && VALID_TABS.includes(tab)) return tab;
-  return 'hpi';
+  return 'triage';
 }
 
 export function useUrlTab(): [TabId, (tab: TabId) => void] {

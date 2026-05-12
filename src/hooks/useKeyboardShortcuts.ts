@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-type TabId = 'hpi' | 'exam' | 'labs' | 'imaging' | 'pharmacy' | 'treatment' | 'comms' | 'archive' | 'notes' | 'tools' | 'assess';
+type TabId = 'triage' | 'hpi' | 'exam' | 'labs' | 'imaging' | 'pharmacy' | 'treatment' | 'comms' | 'archive' | 'notes' | 'tools' | 'assess' | 'dxpause';
 
 interface KeyboardShortcutsOptions {
   onTabChange: (tab: TabId) => void;

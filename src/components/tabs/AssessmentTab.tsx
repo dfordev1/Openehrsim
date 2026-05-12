@@ -309,6 +309,40 @@ export function AssessmentTab({
                 </div>
               )}
 
+              {/* Clinical Reasoning Score (Healer-style) */}
+              {evaluation?.reasoningScore && (
+                <div className="border-t border-clinical-line/50 pt-4">
+                  <h5 className="text-[10px] font-semibold text-teal-700 uppercase mb-3 flex items-center gap-1.5">
+                    <Stethoscope className="w-3 h-3" />
+                    Clinical Reasoning Assessment
+                  </h5>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {[
+                      { label: 'Data Thoroughness', val: evaluation.reasoningScore.dataAcquisitionThoroughness },
+                      { label: 'Data Efficiency', val: evaluation.reasoningScore.dataAcquisitionEfficiency },
+                      { label: 'Problem Rep.', val: evaluation.reasoningScore.problemRepresentation },
+                      { label: 'DDx Accuracy', val: evaluation.reasoningScore.differentialAccuracy },
+                      { label: 'Lead Diagnosis', val: evaluation.reasoningScore.finalLeadDiagnosis },
+                      { label: 'Management', val: evaluation.reasoningScore.managementPlan },
+                    ].map(({ label, val }) => (
+                      <div key={label} className="bg-teal-50/50 border border-teal-200/50 rounded-lg p-2.5 text-center">
+                        <div className="text-[9px] text-teal-700 uppercase mb-1 font-medium">{label}</div>
+                        <div className={cn(
+                          'text-sm font-bold',
+                          val >= 80 ? 'text-clinical-green' : val >= 60 ? 'text-teal-700' : 'text-clinical-amber'
+                        )}>{val}%</div>
+                        <div className="mt-1 h-1 bg-teal-100 rounded-full overflow-hidden">
+                          <div
+                            className={cn('h-full rounded-full', val >= 80 ? 'bg-clinical-green' : val >= 60 ? 'bg-teal-500' : 'bg-clinical-amber')}
+                            style={{ width: `${val}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Key actions */}
               {evaluation?.keyActions && evaluation.keyActions.length > 0 && (
                 <div>

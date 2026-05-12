@@ -344,7 +344,7 @@ Time advances by ${waitTime} min (${medicalCase.simulationTime} → ${newSimTime
   // ── POST /api/end-case ──────────────────────────────────────────────────────
   app.post("/api/end-case", async (req, res) => {
     try {
-      const { caseId, medicalCase, userNotes } = req.body ?? {};
+      const { caseId, medicalCase, userNotes, problemRepresentation, differentials, findingsCount, positiveFindings, negativeFindings } = req.body ?? {};
       if (!caseId || typeof caseId !== "string") return res.status(400).json({ error: "Missing: caseId" });
       if (!medicalCase || typeof medicalCase !== "object") return res.status(400).json({ error: "Missing: medicalCase" });
 
@@ -370,26 +370,64 @@ Time advances by ${waitTime} min (${medicalCase.simulationTime} → ${newSimTime
         .map((i: any) => `${i.type} (ordered T+${i.orderedAt ?? "?"})`)
         .join(", ") || "None";
 
+      // Clinical reasoning context (Healer-style)
+      const reasoningContext = problemRepresentation || differentials
+        ? `
+CLINICAL REASONING DATA:
+  Problem Representation: "${problemRepresentation || "Not provided"}"
+  Differential Diagnoses: ${(differentials || []).map((d: any) => `${d.diagnosis} (${d.confidence}${d.isLead ? ', LEAD' : ''})`).join(', ') || "None"}
+  Findings Tracked: ${findingsCount || 0}
+  Pertinent Positives: ${(positiveFindings || []).join(', ') || "None identified"}
+  Pertinent Negatives: ${(negativeFindings || []).join(', ') || "None identified"}`
+        : "";
+
       const aiRes = await openai.chat.completions.create({
         model: "deepseek-chat",
         messages: [
           {
             role: "system",
-            content: `You are a USMLE Step 3 CCS examiner. Score management quality.
+            content: `You are a clinical reasoning assessor combining USMLE Step 3 CCS scoring with Healer-style clinical reasoning evaluation.
 
 ANSWER KEY:
   Correct Diagnosis: ${fullCase.correctDiagnosis}
   Explanation: ${fullCase.explanation || ""}
 
-SCORING (100 pts total):
-  initialManagement (0-25), diagnosticWorkup (0-25), therapeuticInterventions (0-30), patientOutcome (0-20).
-  Subtract efficiency penalties if warranted.
+SCORING (100 pts total — 2 dimensions):
+
+A) MANAGEMENT QUALITY (60 pts):
+  initialManagement (0-15): Appropriate initial orders, acuity recognition
+  diagnosticWorkup (0-15): Right tests at right time, efficiency
+  therapeuticInterventions (0-20): Correct treatment, timing, doses
+  patientOutcome (0-10): Patient status at end
+
+B) CLINICAL REASONING QUALITY (40 pts):
+  dataAcquisitionThoroughness (0-10): How many pertinent findings were gathered
+  dataAcquisitionEfficiency (0-10): How focused was data gathering (few irrelevant tests)
+  problemRepresentation (0-10): Quality of PR — includes key demographics, timeline, discriminating features
+  differentialAccuracy (0-10): Lead diagnosis correct? Differential reasonable?
+
+EFFICIENCY PENALTIES (subtract from total): >5 unnecessary tests: -5, Key intervention >30 min late: -5
 
 Return JSON ONLY:
 {
-  "score": number,
-  "breakdown": { "initialManagement": number, "diagnosticWorkup": number, "therapeuticInterventions": number, "patientOutcome": number, "efficiencyPenalty": number },
-  "feedback": "3-4 sentence narrative",
+  "score": number (0-100),
+  "breakdown": {
+    "initialManagement": number,
+    "diagnosticWorkup": number,
+    "therapeuticInterventions": number,
+    "patientOutcome": number,
+    "efficiencyPenalty": number
+  },
+  "reasoningScore": {
+    "dataAcquisitionThoroughness": number (0-100 scale),
+    "dataAcquisitionEfficiency": number (0-100 scale),
+    "problemRepresentation": number (0-100 scale),
+    "differentialAccuracy": number (0-100 scale),
+    "finalLeadDiagnosis": number (0-100 scale),
+    "managementPlan": number (0-100 scale),
+    "overall": number (0-100 scale)
+  },
+  "feedback": "3-4 sentence narrative covering both management AND reasoning quality",
   "correctDiagnosis": "${fullCase.correctDiagnosis}",
   "explanation": "brief teaching point",
   "keyActions": ["description", ...],
@@ -405,7 +443,7 @@ IMAGING ORDERED: ${imagingOrdered}
 ACTIONS:\n${actionLog}
 MEDICATIONS:\n${medLog}
 FINAL STATE: T+${medicalCase.simulationTime} min | Outcome: ${medicalCase.patientOutcome || "alive"} | Trend: ${medicalCase.physiologicalTrend}
-USER NOTES: ${userNotes || "none"}`,
+USER NOTES: ${userNotes || "none"}${reasoningContext}`,
           },
         ],
         response_format: { type: "json_object" },
