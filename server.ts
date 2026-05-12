@@ -48,6 +48,7 @@ async function startServer() {
         status: 'normal' | 'abnormal' | 'critical';
         orderedAt?: number;
         availableAt?: number;
+        clinicalNote?: string;
       }[];
       imaging: {
         type: string;
@@ -71,6 +72,8 @@ async function startServer() {
       physiologicalTrend: 'improving' | 'stable' | 'declining' | 'critical';
       simulationTime: number;
       currentLocation: string;
+      difficulty: 'intern' | 'resident' | 'attending';
+      category: 'cardiology' | 'pulmonology' | 'sepsis' | 'trauma' | 'neurology' | 'toxicology';
       communicationLog: {
         id: string;
         timestamp: number;
@@ -93,9 +96,15 @@ async function startServer() {
   // API Routes
   app.post("/api/generate-case", async (req, res) => {
     try {
+      const { category, difficulty, history } = req.body;
+
       if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY.includes("MY_")) {
         return res.status(500).json({ error: "DEEPSEEK_API_KEY is not configured in Secrets." });
       }
+
+      const historyContext = history && history.length > 0 
+        ? `User's Recent Case History: ${history.map((h: any) => `${h.category} (${h.score}%)`).join(", ")}. Avoid repeating the exact clinical presentation from these cases.`
+        : "";
 
       const response = await openai.chat.completions.create({
         model: "deepseek-chat",
@@ -103,6 +112,13 @@ async function startServer() {
           {
             role: "system",
             content: `You are a high-fidelity clinical simulation engine. Generate a complex, acute medical case. 
+            Difficulty Settings:
+            - Intern: Clear clues, classic presentations (e.g. STEMI, Sepsis).
+            - Resident: Mixed clues, moderate complexity (e.g. PE vs Pneumonia, DKA).
+            - Attending: Subtle clues, rare conditions or diagnostic dilemmas (e.g. Thyroid Storm, Serotonin Syndrome, occult Hemorrhage).
+
+            ${historyContext}
+
             Initialize simulationTime at 0. Initialize currentLocation as "Emergency Room (ER) Bay 1". 
             Initialize communicationLog, medications, and activeAlarms as empty arrays.
             Initialize physiologicalTrend as 'stable' or 'declining' based on acuity.
@@ -111,7 +127,7 @@ async function startServer() {
           },
           {
             role: "user",
-            content: "Generate a realistic emergency case requiring precise intervention (e.g. Septic Shock, Aortic Dissection, Massive PE)."
+            content: `Generate a realistic ${difficulty || 'resident'} level case in the category of ${category || 'any'}.`
           }
         ],
         response_format: { type: 'json_object' }
@@ -144,9 +160,11 @@ async function startServer() {
             4. If action is "Transfer to [Dept]", update currentLocation accordingly.
             5. If intervention involves medication (e.g. "Administer [Drug] [Dose]"), add to 'medications' array.
             6. If vitals are critical (extremes), add descriptive strings to 'activeAlarms' (e.g. "Low SpO2", "Bradycardia").
-            7. If an intervention was "Order lab: [name]" or "Order imaging: [type]", handle orderedAt/availableAt.
-            8. Imaging 'findings' and 'impression' MUST be professional radiologic reports.
-            9. Add a log entry to clinicalActions.
+            7. If an intervention was "Order lab: [name]" or "Order imaging: [type]", handle orderedAt/availableAt. 
+            8. Lab "clinicalNote" should include relevant path/tech comments (e.g. "Toxic granulation seen", "Consistent with dehydration").
+            9. Imaging 'findings' and 'impression' MUST be professional radiologic reports.
+            10. If the patient is transferred to a new department, appropriately update 'currentLocation'. 
+            11. Add a log entry to clinicalActions.
             
             CRITICAL: Return the ENTIRE MedicalCase object.
             Output MUST be valid JSON adhering to: ${MEDICAL_CASE_SCHEMA}`

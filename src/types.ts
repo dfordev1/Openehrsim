@@ -1,10 +1,3 @@
-export enum Intensity {
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high',
-  CRITICAL = 'critical',
-}
-
 export interface Vitals {
   heartRate: number;
   bloodPressure: string;
@@ -30,6 +23,7 @@ export interface LabResult {
   status: 'normal' | 'abnormal' | 'critical';
   orderedAt?: number;
   availableAt?: number;
+  clinicalNote?: string; // Pathologist/Tech notes
 }
 
 export interface ImagingResult {
@@ -96,4 +90,6 @@ export interface MedicalCase {
   simulationTime: number;
   currentLocation: string; // e.g. "ER Bay 3", "ICU Bed 4", "Cath Lab"
   communicationLog: CommunicationMessage[];
+  difficulty?: 'intern' | 'resident' | 'attending';
+  category?: 'cardiology' | 'pulmonology' | 'sepsis' | 'trauma' | 'neurology' | 'toxicology';
 }
