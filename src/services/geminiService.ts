@@ -1,16 +1,27 @@
-import { MedicalCase } from "../types";
+import { CaseEvaluation, MedicalCase } from "../types";
 
-/**
- * Trim a MedicalCase before sending to the server to prevent payload bloat.
- * Keeps only the last 10 clinicalActions and communicationLog entries.
- */
-function trimCase(mc: MedicalCase): MedicalCase {
+function trimCase(mc: MedicalCase): Partial<MedicalCase> {
   return {
     ...mc,
-    clinicalActions: (mc.clinicalActions || []).slice(-10),
+    clinicalActions:  (mc.clinicalActions  || []).slice(-12),
     communicationLog: (mc.communicationLog || []).slice(-10),
   };
 }
+
+async function post<T>(url: string, body: object): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as any).error || `${url} failed`);
+  }
+  return res.json();
+}
+
+// ── Case generation ──────────────────────────────────────────────────────────
 
 export async function generateMedicalCase(
   difficulty?: string,
@@ -18,72 +29,67 @@ export async function generateMedicalCase(
   history?: any[],
   environment?: string
 ): Promise<MedicalCase> {
-  const response = await fetch("/api/generate-case", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ difficulty, category, history, environment }),
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error((err as any).error || "Failed to generate case from server");
-  }
-
-  return response.json();
+  return post("/api/generate-case", { difficulty, category, history, environment });
 }
 
-export async function evaluateDiagnosis(
-  userDiagnosis: string,
-  medicalCase: MedicalCase
-): Promise<{ score: number; feedback: string }> {
-  const response = await fetch("/api/evaluate-diagnosis", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userDiagnosis, medicalCase: trimCase(medicalCase) }),
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error((err as any).error || "Failed to evaluate diagnosis from server");
-  }
-
-  return response.json();
-}
+// ── Intervention / time-advance ──────────────────────────────────────────────
 
 export async function performIntervention(
   intervention: string,
   medicalCase: MedicalCase,
-  waitTime: number = 5
+  waitTime = 5
 ): Promise<MedicalCase> {
-  const response = await fetch("/api/perform-intervention", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ intervention, medicalCase: trimCase(medicalCase), waitTime }),
+  return post("/api/perform-intervention", {
+    intervention,
+    medicalCase: trimCase(medicalCase),
+    waitTime,
   });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error((err as any).error || "Simulator failed to process intervention.");
-  }
-
-  return response.json();
 }
+
+// ── CCS: order a test ────────────────────────────────────────────────────────
+
+export async function orderTest(
+  caseId: string,
+  testType: "lab" | "imaging",
+  testName: string,
+  currentSimTime: number,
+  priority: "stat" | "routine" = "stat"
+): Promise<{ success: boolean; testResult: any; action: any; message: string }> {
+  return post("/api/order-test", { caseId, testType, testName, currentSimTime, priority });
+}
+
+// ── CCS: end case & score ────────────────────────────────────────────────────
+
+export async function endCase(
+  caseId: string,
+  medicalCase: MedicalCase,
+  userNotes?: string
+): Promise<CaseEvaluation> {
+  return post("/api/end-case", {
+    caseId,
+    medicalCase: trimCase(medicalCase),
+    userNotes,
+  });
+}
+
+// ── Staff comms ──────────────────────────────────────────────────────────────
 
 export async function staffCall(
   target: string,
   message: string,
   medicalCase: MedicalCase
 ): Promise<{ reply: string; updatedCase: MedicalCase }> {
-  const response = await fetch("/api/staff-call", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ target, message, medicalCase: trimCase(medicalCase) }),
+  return post("/api/staff-call", { target, message, medicalCase: trimCase(medicalCase) });
+}
+
+// ── Legacy evaluate-diagnosis (kept for backward-compat) ─────────────────────
+
+export async function evaluateDiagnosis(
+  userDiagnosis: string,
+  medicalCase: MedicalCase
+): Promise<{ score: number; feedback: string }> {
+  return post("/api/evaluate-diagnosis", {
+    userDiagnosis,
+    medicalCase: trimCase(medicalCase),
   });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error((err as any).error || "Communication line disrupted.");
-  }
-
-  return response.json();
 }

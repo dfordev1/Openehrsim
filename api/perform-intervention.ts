@@ -1,107 +1,133 @@
+/**
+ * CCS-style intervention + time-advance endpoint.
+ *
+ * Reads full case from Supabase (pathology, underlying dx) to evolve
+ * the patient realistically without leaking the answer to the client.
+ * Writes updated full case back after each step.
+ */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import OpenAI from "openai";
 import { MEDICAL_CASE_SCHEMA } from "../src/lib/schema.js";
+import { getCaseServerSide, updateCaseServerSide } from "./_supabase.js";
 
 function validateRequest(body: any) {
-  if (!body || typeof body !== "object") {
-    throw new Error("Request body must be a JSON object.");
-  }
-  if (typeof body.intervention !== "string" || body.intervention.trim() === "") {
-    throw new Error("Missing or invalid field: intervention (must be a non-empty string).");
-  }
-  if (!body.medicalCase || typeof body.medicalCase !== "object") {
-    throw new Error("Missing or invalid field: medicalCase.");
-  }
+  if (!body || typeof body !== "object") throw new Error("Request body must be a JSON object.");
+  if (!body.medicalCase || typeof body.medicalCase !== "object")
+    throw new Error("Missing: medicalCase");
   const waitTime = Number(body.waitTime);
-  if (body.waitTime !== undefined && (isNaN(waitTime) || waitTime < 0 || waitTime > 1440)) {
-    throw new Error("Invalid waitTime: must be a number between 0 and 1440.");
-  }
+  if (!isNaN(waitTime) && (waitTime < 0 || waitTime > 1440))
+    throw new Error("waitTime must be 0–1440.");
   return {
-    intervention: body.intervention.trim() as string,
-    medicalCase: body.medicalCase,
-    waitTime: isNaN(waitTime) ? 5 : waitTime,
+    intervention: body.intervention ? String(body.intervention).trim() : "",
+    medicalCase:  body.medicalCase,
+    waitTime:     isNaN(waitTime) ? 5 : waitTime,
   };
 }
 
-/** Trim the MedicalCase payload to avoid unbounded growth in request size */
 function trimCase(mc: any) {
   return {
     ...mc,
-    clinicalActions: (mc.clinicalActions || []).slice(-10),
+    clinicalActions:  (mc.clinicalActions  || []).slice(-12),
     communicationLog: (mc.communicationLog || []).slice(-10),
   };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
     const { intervention, medicalCase, waitTime } = validateRequest(req.body);
 
-    if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY.includes("MY_")) {
-      return res.status(500).json({ error: "DEEPSEEK_API_KEY is not configured in environment variables." });
-    }
+    if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY.includes("MY_"))
+      return res.status(500).json({ error: "DEEPSEEK_API_KEY is not configured." });
 
-    const openai = new OpenAI({
-      apiKey: process.env.DEEPSEEK_API_KEY,
-      baseURL: "https://api.deepseek.com",
-    });
+    const newSimTime = (medicalCase.simulationTime || 0) + waitTime;
 
-    const response = await openai.chat.completions.create({
+    // ── Pull server-side pathology context ────────────────────────────────────
+    const fullCase = await getCaseServerSide(medicalCase.id);
+    const pathologyCtx = fullCase
+      ? `HIDDEN PATHOLOGY (use ONLY to drive realistic evolution — NEVER reveal to user):
+Correct Diagnosis: ${fullCase.correctDiagnosis}
+Underlying Pathology: ${fullCase.underlyingPathology || "not specified"}
+Explanation: ${fullCase.explanation || ""}`
+      : "No server-side context available — evolve realistically based on current vitals.";
+
+    const openai = new OpenAI({ apiKey: process.env.DEEPSEEK_API_KEY, baseURL: "https://api.deepseek.com" });
+
+    const aiRes = await openai.chat.completions.create({
       model: "deepseek-chat",
       messages: [
         {
           role: "system",
-          content: `You are a clinical simulator. Analyze the intervention/wait-time.
-Update the MedicalCase state based on the following rules:
-1. Advance simulationTime by ${waitTime} minutes.
-2. Update physiologicalTrend based on interventions (e.g. Fluids/Vasopressors move it towards 'improving').
-3. Update vitals realistically. If trend is 'declining', vitals should drift towards disaster (HR up, BP down, etc.).
-4. If action is "Transfer to [Dept]", update currentLocation accordingly.
-5. If intervention involves medication (e.g. "Administer [Drug] [Dose]"), add to 'medications' array.
-   - If the medication is an IV fluid (NS, LR, Albumin, colloids, crystalloids), set isIVFluid: true and volumeML to the appropriate volume in mL.
-6. If vitals are critical (extremes), add descriptive strings to 'activeAlarms' (e.g. "Low SpO2", "Bradycardia").
-7. If an intervention was "Order lab: [name]" or "Order imaging: [type]", handle orderedAt/availableAt.
-8. Lab "clinicalNote" should include relevant path/tech comments (e.g. "Toxic granulation seen").
-9. Imaging 'findings' and 'impression' MUST be professional radiologic reports.
-10. If the patient is transferred to a new department, update 'currentLocation'.
-11. Add a log entry to clinicalActions.
-12. PATIENT OUTCOME: Set patientOutcome based on vitals:
-    - "deceased" if HR < 20 or HR > 200 or SBP < 50 or SpO2 < 60 or temp < 32 or temp > 42.
-    - "critical_deterioration" if physiologicalTrend is 'critical' for 2+ consecutive states.
-    - Otherwise "alive".
+          content: `You are a CCS clinical simulator. Advance the patient state.
 
-CRITICAL: Return the ENTIRE MedicalCase object.
-Output MUST be valid JSON adhering to: ${MEDICAL_CASE_SCHEMA}`,
+${pathologyCtx}
+
+RULES:
+1. Set simulationTime = ${newSimTime}.
+2. Evolve vitals realistically based on the hidden pathology + interventions given.
+   - Correct treatment → improving trend
+   - No/wrong treatment → worsening; untreated sepsis/shock WILL deteriorate
+3. If intervention is a medication, add to medications[] (with timestamp ${newSimTime}).
+   IV fluids → isIVFluid:true, volumeML:[appropriate].
+4. Update activeAlarms based on current vitals (e.g. "Hypotension", "Tachycardia").
+5. Update physiologicalTrend: improving | stable | declining | critical.
+6. If "Transfer to X", update currentLocation.
+7. Append one entry to clinicalActions (timestamp: ${newSimTime}).
+8. patientOutcome:
+   - "deceased" if HR<20 or HR>200 or SBP<50 or SpO2<60 or temp<32 or temp>42
+   - "critical_deterioration" if trend is 'critical' and vitals worsening
+   - otherwise "alive"
+9. DO NOT modify labs or imaging arrays — those are managed separately.
+10. DO NOT include correctDiagnosis or explanation in the response.
+
+Return the ENTIRE updated MedicalCase JSON. Schema: ${MEDICAL_CASE_SCHEMA}`,
         },
         {
           role: "user",
-          content: `Current Case State: ${JSON.stringify(trimCase(medicalCase))}.
-Action Taken: ${intervention}.
-Wait Time: ${waitTime} min.`,
+          content: `Current state: ${JSON.stringify(trimCase(medicalCase))}
+${intervention ? `Intervention: ${intervention}` : "Time advancement only — no active intervention."}
+Time advances by ${waitTime} min (${medicalCase.simulationTime} → ${newSimTime}).`,
         },
       ],
       response_format: { type: "json_object" },
     });
 
-    const content = response.choices[0].message.content;
+    const content = aiRes.choices[0].message.content;
     if (!content) throw new Error("Empty response from AI");
 
-    const updatedCase = JSON.parse(content);
-    if (!updatedCase.vitals || !updatedCase.labs || !updatedCase.imaging) {
-      throw new Error("AI returned an incomplete medical case object.");
+    const updated = JSON.parse(content);
+    if (!updated.vitals) throw new Error("AI returned incomplete case.");
+
+    // Safety: preserve id & availableTests
+    updated.id             = medicalCase.id;
+    updated.availableTests = medicalCase.availableTests || updated.availableTests;
+
+    // Merge ordered tests back (AI must not wipe them)
+    updated.labs    = medicalCase.labs    || [];
+    updated.imaging = medicalCase.imaging || [];
+
+    // ── Write updated full case back to Supabase ──────────────────────────────
+    if (fullCase) {
+      await updateCaseServerSide(medicalCase.id, {
+        ...fullCase,
+        vitals:              updated.vitals,
+        physiologicalTrend:  updated.physiologicalTrend,
+        currentLocation:     updated.currentLocation,
+        simulationTime:      updated.simulationTime,
+        activeAlarms:        updated.activeAlarms,
+        medications:         updated.medications,
+        clinicalActions:     updated.clinicalActions,
+        patientOutcome:      updated.patientOutcome,
+        currentCondition:    updated.currentCondition,
+      });
     }
 
-    // Preserve original id in case AI drops it
-    if (!updatedCase.id && medicalCase.id) {
-      updatedCase.id = medicalCase.id;
-    }
-
-    res.json(updatedCase);
-  } catch (error: any) {
-    console.error("Intervention Error:", error);
+    // Strip server-only fields before sending to client
+    const { correctDiagnosis, explanation, underlyingPathology, ...clientCase } = updated;
+    res.json(clientCase);
+  } catch (err: any) {
+    console.error("perform-intervention error:", err);
     res.status(500).json({ error: "Simulator failed to process intervention." });
   }
 }

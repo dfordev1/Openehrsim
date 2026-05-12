@@ -21,9 +21,9 @@ export interface LabResult {
   unit: string;
   normalRange: string;
   status: 'normal' | 'abnormal' | 'critical';
-  orderedAt?: number;
-  availableAt?: number;
-  clinicalNote?: string; // Pathologist/Tech notes
+  orderedAt?: number;    // sim-minutes when ordered
+  availableAt?: number;  // sim-minutes when result ready
+  clinicalNote?: string;
 }
 
 export interface ImagingResult {
@@ -35,17 +35,15 @@ export interface ImagingResult {
   availableAt?: number;
 }
 
-export interface Treatment {
-  name: string;
-  category: 'medication' | 'procedure' | 'fluid' | 'respiratory';
-  dose?: string;
-  route?: string;
+export interface AvailableTests {
+  labs: string[];
+  imaging: string[];
 }
 
 export interface ClinicalAction {
   id: string;
-  timestamp: string; // Simulation time minute
-  type: 'order' | 'medication' | 'procedure' | 'exam' | 'transfer' | 'communication';
+  timestamp: number; // sim-minutes (number, not string)
+  type: 'order' | 'medication' | 'procedure' | 'exam' | 'transfer' | 'communication' | 'time-advance';
   description: string;
   result?: string;
   impact?: string;
@@ -66,8 +64,8 @@ export interface MedicationRecord {
   dose: string;
   route: string;
   timestamp: number;
-  isIVFluid?: boolean;  // true for NS, LR, albumin, colloids, etc.
-  volumeML?: number;    // mL administered — used for fluid balance tracking
+  isIVFluid?: boolean;
+  volumeML?: number;
 }
 
 export interface MedicalCase {
@@ -78,27 +76,51 @@ export interface MedicalCase {
   chiefComplaint: string;
   historyOfPresentIllness: string;
   pastMedicalHistory: string[];
+  initialAppearance?: string;       // CCS: vivid first impression
   vitals: Vitals;
   physicalExam: PhysicalExam;
   labs: LabResult[];
   imaging: ImagingResult[];
+  availableTests?: AvailableTests;  // CCS: catalog of orderable tests
   medications: MedicationRecord[];
   activeAlarms: string[];
-  correctDiagnosis: string;
-  explanation: string;
   currentCondition: string;
   physiologicalTrend: 'improving' | 'stable' | 'declining' | 'critical';
   clinicalActions: ClinicalAction[];
   simulationTime: number;
-  currentLocation: string; // e.g. "ER Bay 3", "ICU Bed 4", "Cath Lab"
+  currentLocation: string;
   communicationLog: CommunicationMessage[];
   difficulty?: 'intern' | 'resident' | 'attending';
   category?: 'cardiology' | 'pulmonology' | 'sepsis' | 'trauma' | 'neurology' | 'toxicology';
   patientOutcome?: 'alive' | 'deceased' | 'critical_deterioration';
+
+  // Server-side only — will be undefined on the client during an active case
+  correctDiagnosis?: string;
+  explanation?: string;
 }
 
 export interface ConsultantAdvice {
   advice: string;
   reasoning: string;
   recommendedActions: string[];
+}
+
+/** Returned by /api/end-case */
+export interface CaseEvaluation {
+  score: number;
+  breakdown: {
+    initialManagement: number;
+    diagnosticWorkup: number;
+    therapeuticInterventions: number;
+    patientOutcome: number;
+    efficiencyPenalty: number;
+  };
+  feedback: string;
+  correctDiagnosis: string;
+  explanation: string;
+  keyActions: string[];
+  criticalMissed: string[];
+  clinicalPearl: string;
+  caseId: string;
+  totalSimulationTime: number;
 }
