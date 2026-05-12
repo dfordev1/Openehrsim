@@ -450,7 +450,7 @@ function ClinicalSimulator() {
       />
 
       {/* Header */}
-      <header className="h-11 bg-white border-b border-clinical-line flex items-center px-4 shrink-0 z-30" role="banner">
+      <header className="h-11 bg-clinical-surface border-b border-clinical-line flex items-center px-4 shrink-0 z-30" role="banner">
         <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-1.5 hover:bg-clinical-bg rounded-md mr-3" aria-label="Menu">
           <Menu className="w-4 h-4 text-clinical-slate" />
         </button>
@@ -494,7 +494,7 @@ function ClinicalSimulator() {
       </AnimatePresence>
 
       {/* Vitals Rail with sparklines and expand */}
-      <div className="h-11 bg-white border-b border-clinical-line/50 flex items-center px-4 gap-3 shrink-0 overflow-x-auto no-scrollbar" role="region" aria-label="Vital signs">
+      <div className="h-11 bg-clinical-surface border-b border-clinical-line/50 flex items-center px-4 gap-3 shrink-0 overflow-x-auto no-scrollbar" role="region" aria-label="Vital signs">
         <div className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full", medicalCase?.physiologicalTrend === 'improving' ? "text-clinical-green bg-green-50/80" : medicalCase?.physiologicalTrend === 'declining' ? "text-clinical-amber bg-amber-50/80" : medicalCase?.physiologicalTrend === 'critical' ? "text-clinical-red bg-red-50/80" : "text-clinical-slate bg-slate-50")}>
           {medicalCase?.physiologicalTrend}
         </div>
@@ -515,7 +515,7 @@ function ClinicalSimulator() {
           {isSidebarOpen && (
             <>
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-clinical-ink/40 backdrop-blur-sm z-[100] lg:hidden" aria-hidden="true" />
-              <motion.div initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }} className="fixed top-0 left-0 bottom-0 w-60 bg-white border-r border-clinical-line z-[101] lg:hidden flex flex-col" role="dialog" aria-modal="true" aria-label="Navigation menu">
+              <motion.div initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }} className="fixed top-0 left-0 bottom-0 w-60 bg-clinical-surface border-r border-clinical-line z-[101] lg:hidden flex flex-col" role="dialog" aria-modal="true" aria-label="Navigation menu">
                 <div className="flex items-center justify-between p-4 border-b border-clinical-line">
                   <span className="text-sm font-semibold tracking-tight">OpenEHR</span>
                   <button onClick={() => setIsSidebarOpen(false)} className="p-1.5 hover:bg-clinical-bg rounded-md" aria-label="Close navigation">
@@ -542,7 +542,7 @@ function ClinicalSimulator() {
         </AnimatePresence>
 
         {/* Desktop Sidebar */}
-        <nav className="w-48 bg-white border-r border-clinical-line/50 flex-col py-3 px-2 z-20 shrink-0 hidden lg:flex" aria-label="Main navigation">
+        <nav className="w-48 bg-clinical-surface border-r border-clinical-line/50 flex-col py-3 px-2 z-20 shrink-0 hidden lg:flex" aria-label="Main navigation">
           <div className="space-y-4 flex-1">
             <div>
               <p className="text-[10px] font-semibold text-clinical-slate/50 uppercase tracking-wider px-3 mb-1">Patient Data</p>
@@ -624,7 +624,7 @@ function ClinicalSimulator() {
                           <label className="text-[10px] font-medium text-clinical-slate uppercase tracking-wide">{category} Response</label>
                           <div className="flex flex-col gap-1">
                             {GCS_MAPPING[category].map(option => (
-                              <button key={option.score} onClick={() => setGcsState(prev => ({ ...prev, [category]: option.score }))} role="radio" aria-checked={gcsState[category] === option.score} className={cn("text-left p-2.5 rounded-md text-xs transition-all border", gcsState[category] === option.score ? "bg-clinical-blue/10 text-clinical-blue border-clinical-blue/30 font-medium" : "bg-white border-clinical-line hover:border-clinical-blue/20 text-clinical-ink")}>
+                              <button key={option.score} onClick={() => setGcsState(prev => ({ ...prev, [category]: option.score }))} role="radio" aria-checked={gcsState[category] === option.score} className={cn("text-left p-2.5 rounded-md text-xs transition-all border", gcsState[category] === option.score ? "bg-clinical-blue/10 text-clinical-blue border-clinical-blue/30 font-medium" : "bg-clinical-surface border-clinical-line hover:border-clinical-blue/20 text-clinical-ink")}>
                                 <div className="flex justify-between items-center">
                                   <span>{option.label}</span>
                                   <span className="text-[10px] font-mono text-clinical-slate/50">{option.score}</span>
@@ -661,7 +661,7 @@ function ClinicalSimulator() {
                     </div>
                     <div className="flex-1 overflow-auto">
                       <table className="clinical-table w-full" aria-label="Lab results">
-                        <thead className="sticky top-0 bg-white z-10">
+                        <thead className="sticky top-0 bg-clinical-surface z-10">
                           <tr><th scope="col">Test</th><th scope="col">Value</th><th scope="col">Status</th><th scope="col">Reference</th><th className="w-8"></th></tr>
                         </thead>
                         <tbody>
@@ -717,7 +717,7 @@ function ClinicalSimulator() {
                         const isAvailable = img.orderedAt !== undefined && img.availableAt !== undefined && img.availableAt <= simTime;
                         const isPending = img.orderedAt !== undefined && (img.availableAt === undefined || img.availableAt > simTime);
                         return (
-                          <button key={i} onClick={() => isAvailable && setRevealedLabs(prev => [...prev, img.type])} className={cn("w-full text-left p-3 rounded-md border transition-all flex flex-col gap-1", revealedLabs.includes(img.type) ? "bg-clinical-blue/10 text-clinical-blue border-clinical-blue/30" : "bg-white border-clinical-line hover:border-clinical-blue/30", isPending && "bg-clinical-bg opacity-70", !img.orderedAt && "opacity-50")}>
+                          <button key={i} onClick={() => isAvailable && setRevealedLabs(prev => [...prev, img.type])} className={cn("w-full text-left p-3 rounded-md border transition-all flex flex-col gap-1", revealedLabs.includes(img.type) ? "bg-clinical-blue/10 text-clinical-blue border-clinical-blue/30" : "bg-clinical-surface border-clinical-line hover:border-clinical-blue/30", isPending && "bg-clinical-bg opacity-70", !img.orderedAt && "opacity-50")}>
                             <div className="flex justify-between items-center">
                               <span className="text-xs font-medium">{img.type}</span>
                               {isAvailable ? <div className="w-1.5 h-1.5 bg-clinical-green rounded-full" /> : isPending ? <Clock className="w-3 h-3 text-clinical-amber animate-spin" /> : <div className="w-1.5 h-1.5 bg-clinical-slate/30 rounded-full" />}
@@ -836,7 +836,7 @@ function ClinicalSimulator() {
                       medicalCase.communicationLog.map((msg, i) => (
                         <div key={i} className={cn("max-w-[80%] flex flex-col gap-1", msg.from === 'You' || msg.from === 'Physician' ? "ml-auto items-end" : "mr-auto items-start")}>
                           <div className="text-[9px] font-medium text-clinical-slate px-1">{msg.from} → {msg.to}</div>
-                          <div className={cn("p-3 rounded-lg text-sm", msg.from === 'You' || msg.from === 'Physician' ? "bg-clinical-blue text-white rounded-tr-sm" : "bg-white border border-clinical-line rounded-tl-sm text-clinical-ink")}>{msg.message}</div>
+                          <div className={cn("p-3 rounded-lg text-sm", msg.from === 'You' || msg.from === 'Physician' ? "bg-clinical-blue text-white rounded-tr-sm" : "bg-clinical-surface border border-clinical-line rounded-tl-sm text-clinical-ink")}>{msg.message}</div>
                           <div className="text-[9px] text-clinical-slate/50 font-mono px-1">T+{msg.timestamp}m</div>
                         </div>
                       ))
@@ -908,7 +908,7 @@ function ClinicalSimulator() {
                         <LineChart data={vitalsHistory}>
                           <Line type="monotone" dataKey="hr" stroke="var(--color-clinical-green)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
                           <YAxis hide domain={['dataMin - 5', 'dataMax + 5']} />
-                          <Tooltip content={({ payload }) => <div className="text-xs text-clinical-slate bg-white border border-clinical-line rounded px-2 py-1 shadow-sm">{payload?.[0]?.value ? `${Math.round(Number(payload[0].value))} BPM` : ''}</div>} />
+                          <Tooltip content={({ payload }) => <div className="text-xs text-clinical-slate bg-clinical-surface border border-clinical-line rounded px-2 py-1 shadow-sm">{payload?.[0]?.value ? `${Math.round(Number(payload[0].value))} BPM` : ''}</div>} />
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
