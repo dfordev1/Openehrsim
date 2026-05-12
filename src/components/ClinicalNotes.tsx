@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Save, History } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 
 interface Note {
   timestamp: string;
@@ -28,41 +29,45 @@ export function ClinicalNotes() {
   };
 
   return (
-    <div className="flex flex-col gap-6 h-full">
-      <div className="bg-clinical-surface border border-clinical-line rounded shadow-sm overflow-hidden flex flex-col h-[300px]">
-        <div className="bg-clinical-bg p-3 border-b border-clinical-line flex justify-between items-center">
-          <span className="text-[11px] font-bold text-clinical-slate uppercase tracking-wider flex items-center gap-2">
-            <FileText className="w-3 h-3" /> Progress Note
+    <div className="flex flex-col gap-4 h-full">
+      <div className="panel flex flex-col h-[280px]">
+        <div className="panel-header">
+          <span className="panel-title flex items-center gap-2">
+            <FileText className="w-3.5 h-3.5" /> Progress Note
           </span>
-          <button 
+          <button
             onClick={handleSave}
-            className="flex items-center gap-1.5 px-3 py-1 bg-clinical-blue text-white rounded text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all"
+            disabled={!currentNote.trim()}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-clinical-blue text-white rounded-md text-xs font-medium hover:bg-clinical-blue/90 transition-all disabled:opacity-40"
           >
-            <Save className="w-3 h-3" /> Save Note
+            <Save className="w-3 h-3" /> Save
           </button>
         </div>
         <textarea
           value={currentNote}
           onChange={(e) => setCurrentNote(e.target.value)}
           placeholder="Document clinical assessment, differential, and plan..."
-          className="flex-1 p-4 text-sm font-medium focus:outline-none bg-white resize-none"
+          className="flex-1 p-4 text-sm focus:outline-none bg-white resize-none"
         />
       </div>
 
-      <div className="bg-clinical-surface border border-clinical-line rounded shadow-sm overflow-hidden flex flex-col flex-1">
-        <div className="bg-clinical-bg p-3 border-b border-clinical-line flex items-center gap-2">
-          <History className="w-3 h-3 text-clinical-slate" />
-          <span className="text-[11px] font-bold text-clinical-slate uppercase tracking-wider">Note History</span>
+      <div className="panel flex flex-col flex-1">
+        <div className="panel-header">
+          <span className="panel-title flex items-center gap-2">
+            <History className="w-3.5 h-3.5" /> Note History
+          </span>
         </div>
-        <div className="overflow-y-auto divide-y divide-clinical-line">
+        <div className="overflow-y-auto divide-y divide-clinical-line/50 flex-1">
           {history.length === 0 ? (
-            <div className="p-8 text-center text-clinical-slate opacity-40 text-[10px] uppercase font-bold tracking-widest">
-              No previous notes for this shift
-            </div>
+            <EmptyState
+              icon={<FileText className="w-10 h-10" />}
+              title="No notes yet"
+              description="Save a progress note to see it here."
+            />
           ) : (
             history.map((note, idx) => (
               <div key={idx} className="p-4 hover:bg-clinical-bg/30 transition-colors">
-                <div className="text-[9px] font-bold text-clinical-slate mb-1">{note.timestamp}</div>
+                <div className="text-[10px] font-medium text-clinical-slate mb-1">{note.timestamp}</div>
                 <p className="text-xs text-clinical-ink leading-relaxed whitespace-pre-wrap">{note.content}</p>
               </div>
             ))

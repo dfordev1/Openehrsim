@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { BookOpen, Search, ChevronRight, CheckCircle2, ShieldAlert, Zap, Thermometer } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 
 const GUIDELINES = [
   {
     id: 'acls',
     title: 'ACLS Cardiac Arrest',
     category: 'Cardiology',
-    icon: <Zap className="w-4 h-4 text-amber-500" />,
+    icon: <Zap className="w-4 h-4 text-clinical-amber" />,
     steps: [
       'Start CPR: Give oxygen, attach monitor/defibrillator',
       'Check Rhythm: Shockable (VF/pVT) or Non-shockable (Asystole/PEA)',
@@ -47,54 +48,57 @@ export function ClinicalGuidelines() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const filtered = GUIDELINES.filter(g => 
+  const filtered = GUIDELINES.filter(g =>
     g.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     g.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
-    <div className="flex flex-col gap-6 h-full">
-      <div className="bg-clinical-surface border border-clinical-line rounded shadow-sm overflow-hidden flex flex-col max-h-[500px]">
-        <div className="bg-clinical-bg p-4 border-b border-clinical-line flex items-center gap-3">
-          <BookOpen className="w-4 h-4 text-clinical-blue" />
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-clinical-slate" />
-            <input 
+    <div className="flex flex-col gap-4 h-full">
+      <div className="panel flex flex-col max-h-[500px]">
+        <div className="panel-header">
+          <div className="flex items-center gap-2">
+            <BookOpen className="w-3.5 h-3.5 text-clinical-blue" />
+            <span className="panel-title">Clinical Protocols</span>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-clinical-slate/40" />
+            <input
               type="text"
-              placeholder="Search Institutional Guidelines..."
+              placeholder="Search..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-white border border-clinical-line rounded h-9 pl-9 pr-4 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-clinical-blue transition-all"
+              className="bg-clinical-bg border border-clinical-line rounded-md h-8 pl-8 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-clinical-blue/50 transition-all w-44"
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto divide-y divide-clinical-line">
+        <div className="flex-1 overflow-y-auto divide-y divide-clinical-line/50">
           {filtered.map(g => (
-            <div key={g.id} className="group">
-              <button 
+            <div key={g.id}>
+              <button
                 onClick={() => setSelectedId(selectedId === g.id ? null : g.id)}
                 className="w-full p-4 flex items-center justify-between hover:bg-clinical-bg/50 transition-colors"
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-8 h-8 rounded bg-white border border-clinical-line flex items-center justify-center shadow-sm group-hover:border-clinical-blue transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-clinical-bg border border-clinical-line flex items-center justify-center">
                     {g.icon}
                   </div>
                   <div className="text-left">
-                    <div className="text-sm font-bold text-clinical-ink">{g.title}</div>
-                    <div className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest">{g.category}</div>
+                    <div className="text-sm font-medium text-clinical-ink">{g.title}</div>
+                    <div className="text-[10px] text-clinical-slate">{g.category}</div>
                   </div>
                 </div>
-                <ChevronRight className={`w-4 h-4 text-clinical-slate transition-transform ${selectedId === g.id ? 'rotate-90' : ''}`} />
+                <ChevronRight className={`w-4 h-4 text-clinical-slate/40 transition-transform ${selectedId === g.id ? 'rotate-90' : ''}`} />
               </button>
-              
+
               {selectedId === g.id && (
                 <div className="bg-clinical-bg/30 px-4 pb-4 animate-in slide-in-from-top-2">
-                  <div className="mt-2 space-y-2">
+                  <div className="space-y-2">
                     {g.steps.map((step, i) => (
-                      <div key={i} className="flex items-start gap-3 p-3 bg-white border border-clinical-line rounded-lg shadow-sm">
-                        <CheckCircle2 className="w-4 h-4 text-clinical-blue shrink-0 mt-0.5" />
-                        <span className="text-xs font-medium text-clinical-ink leading-relaxed">{step}</span>
+                      <div key={i} className="flex items-start gap-3 p-3 bg-white border border-clinical-line rounded-lg">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-clinical-blue shrink-0 mt-0.5" />
+                        <span className="text-xs text-clinical-ink leading-relaxed">{step}</span>
                       </div>
                     ))}
                   </div>
@@ -104,19 +108,21 @@ export function ClinicalGuidelines() {
           ))}
 
           {filtered.length === 0 && (
-            <div className="p-12 text-center">
-              <div className="text-xs font-bold text-clinical-slate uppercase tracking-widest opacity-40">No protocols matching search query</div>
-            </div>
+            <EmptyState
+              icon={<Search className="w-10 h-10" />}
+              title="No protocols found"
+              description="Try a different search term."
+            />
           )}
         </div>
       </div>
 
-      <div className="p-6 bg-blue-50 border border-blue-100 rounded-xl flex gap-4">
-        <ShieldAlert className="w-5 h-5 text-blue-600 shrink-0" />
+      <div className="p-4 bg-clinical-blue/5 border border-clinical-blue/10 rounded-lg flex gap-3">
+        <ShieldAlert className="w-4 h-4 text-clinical-blue shrink-0 mt-0.5" />
         <div>
-          <p className="text-[10px] font-black text-blue-800 uppercase tracking-widest mb-1">Evidence-Based Medicine</p>
-          <p className="text-xs text-blue-700 leading-relaxed">
-            These protocols are based on current ILCOR, AHA, and Surviving Sepsis Campaign guidelines. Use clinical judgment for bedside deviations.
+          <p className="text-xs font-medium text-clinical-blue mb-0.5">Evidence-Based Medicine</p>
+          <p className="text-xs text-clinical-slate leading-relaxed">
+            Protocols based on current ILCOR, AHA, and Surviving Sepsis Campaign guidelines. Use clinical judgment for bedside deviations.
           </p>
         </div>
       </div>
