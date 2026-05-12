@@ -9,14 +9,12 @@ import {
   Clipboard,
   Stethoscope,
   FlaskConical,
-  Stethoscope as StethIcon,
   Plus,
   FileSearch,
   ChevronRight,
   AlertCircle,
   AlertTriangle,
   CheckCircle2,
-  User as UserIcon,
   History,
   Send,
   Loader2,
@@ -25,7 +23,6 @@ import {
   UserPlus,
   RefreshCw,
   Clock,
-  ShieldAlert,
   Menu,
   X,
   Sparkles,
@@ -33,7 +30,8 @@ import {
   PenTool,
   Zap,
   BookOpen,
-  Pill
+  Pill,
+  Command
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -57,39 +55,31 @@ import { ClinicalVital } from './components/ClinicalVital';
 import { NavTab } from './components/NavTab';
 import { CaseLibrary } from './components/CaseLibrary';
 import { ArchiveView } from './components/ArchiveView';
+import { CommandPalette } from './components/CommandPalette';
+import { EmptyState } from './components/EmptyState';
+import { SkeletonCard, SkeletonVitals } from './components/Skeleton';
 import { cn } from './lib/utils';
 
-interface ErrorBoundaryProps {
-  children: ReactNode;
-}
-
-interface ErrorBoundaryState {
-  hasError: boolean;
-}
+// --- Error Boundary ---
+interface ErrorBoundaryProps { children: ReactNode; }
+interface ErrorBoundaryState { hasError: boolean; }
 
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false };
   }
-
-  static getDerivedStateFromError(_: Error): ErrorBoundaryState {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("UI Crash:", error, errorInfo);
-  }
-
+  static getDerivedStateFromError(_: Error): ErrorBoundaryState { return { hasError: true }; }
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) { console.error("UI Crash:", error, errorInfo); }
   render() {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-clinical-bg flex items-center justify-center p-8">
-          <div className="bg-clinical-surface border border-clinical-line p-8 rounded-lg max-w-md text-center shadow-xl">
-            <AlertCircle className="w-12 h-12 text-clinical-red mx-auto mb-4" aria-hidden="true" />
-            <h2 className="text-xl font-bold text-clinical-ink mb-2">Interface Disruption</h2>
-            <p className="text-sm text-clinical-slate mb-6">The clinical dashboard encountered a processing error. Patient data state remains intact.</p>
-            <button onClick={() => window.location.reload()} className="w-full py-3 bg-clinical-blue text-white rounded font-bold uppercase text-xs tracking-widest">
+          <div className="panel p-8 max-w-md text-center">
+            <AlertCircle className="w-10 h-10 text-clinical-red mx-auto mb-4" />
+            <h2 className="text-lg font-semibold text-clinical-ink mb-2">Interface Disruption</h2>
+            <p className="text-sm text-clinical-slate mb-6">The clinical dashboard encountered an error. Patient data remains intact.</p>
+            <button onClick={() => window.location.reload()} className="w-full py-2.5 bg-clinical-blue text-white rounded-lg font-medium text-sm">
               Re-initialize Station
             </button>
           </div>
@@ -101,11 +91,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 }
 
 export default function App() {
-  return (
-    <ErrorBoundary>
-      <ClinicalSimulator />
-    </ErrorBoundary>
-  );
+  return <ErrorBoundary><ClinicalSimulator /></ErrorBoundary>;
 }
 
 const GCS_MAPPING = {
@@ -132,11 +118,13 @@ const GCS_MAPPING = {
   ]
 };
 
+
+
 function ClinicalSimulator() {
   const [medicalCase, setMedicalCase] = useState<MedicalCase | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'hpi' | 'exam' | 'labs' | 'imaging' | 'pharmacy' | 'treatment' | 'comms' | 'archive' | 'notes' | 'tools'>('hpi');
+  const [activeTab, setActiveTab] = useState<'hpi' | 'exam' | 'labs' | 'imaging' | 'pharmacy' | 'treatment' | 'comms' | 'archive' | 'notes' | 'tools' | 'assess'>('hpi');
   const [userDiagnosis, setUserDiagnosis] = useState('');
   const [consultantAdvice, setConsultantAdvice] = useState<ConsultantAdvice | null>(null);
   const [isConsulting, setIsConsulting] = useState(false);
@@ -158,8 +146,13 @@ function ClinicalSimulator() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  // Fix: Replace document.getElementById with React state for custom med input
   const [customMedInput, setCustomMedInput] = useState('');
+  // Phase 4: Command Palette
+  const [isCommandOpen, setIsCommandOpen] = useState(false);
+  // Phase 3: Progressive disclosure — collapsed sections
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+
+  const toggleSection = (id: string) => setExpandedSections(prev => ({ ...prev, [id]: !prev[id] }));
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -171,6 +164,18 @@ function ClinicalSimulator() {
       });
       return () => subscription.unsubscribe();
     }
+  }, []);
+
+  // Phase 4: Global keyboard shortcut for command palette
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsCommandOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, []);
 
   const handleLogout = async () => {
@@ -282,8 +287,7 @@ function ClinicalSimulator() {
     if (!medicalCase) return;
     setIntervening(true);
     const interventionToExecute = directIntervention || interventionInput || "Observation";
-    const actionText = directIntervention ? `ACTION: ${directIntervention}` : (customWait ? `WAIT ${customWait} min` : `ORDER: ${interventionInput}`);
-    setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: actionText }]);
+    setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: directIntervention ? `ACTION: ${directIntervention}` : (customWait ? `WAIT ${customWait} min` : `ORDER: ${interventionInput}`) }]);
     try {
       const updatedCase = await performIntervention(interventionToExecute, medicalCase, customWait || 5);
       setMedicalCase(prev => {
@@ -330,23 +334,28 @@ function ClinicalSimulator() {
     finally { setIntervening(false); }
   };
 
+  // --- Loading / Error States with Skeletons (Phase 4) ---
   if (loading || error) {
     return (
       <div className="min-h-screen bg-clinical-bg flex items-center justify-center font-sans">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center gap-6 max-w-md text-center">
           {error ? (
-            <div className="p-8 bg-clinical-surface border border-clinical-line rounded-lg shadow-sm">
-              <AlertCircle className="w-10 h-10 text-clinical-red mx-auto mb-4" aria-hidden="true" />
-              <h2 className="text-lg font-bold mb-2 text-clinical-ink">System Fault</h2>
+            <div className="panel p-8">
+              <AlertCircle className="w-10 h-10 text-clinical-red mx-auto mb-4" />
+              <h2 className="text-lg font-semibold mb-2 text-clinical-ink">System Fault</h2>
               <p className="text-sm text-clinical-slate mb-6 leading-relaxed">{error}</p>
-              <button onClick={() => loadNewCase()} className="w-full py-2 bg-clinical-blue text-white rounded font-medium text-sm flex items-center justify-center gap-2">
+              <button onClick={() => loadNewCase()} className="w-full py-2.5 bg-clinical-blue text-white rounded-lg font-medium text-sm flex items-center justify-center gap-2">
                 <RefreshCw className="w-4 h-4" /> Restart Station
               </button>
             </div>
           ) : (
-            <div className="flex flex-col items-center" role="status" aria-label="Loading">
-              <Loader2 className="w-8 h-8 animate-spin text-clinical-blue mb-4" />
-              <p className="text-xs uppercase tracking-widest font-bold text-clinical-slate">Synchronizing Clinic Data...</p>
+            <div className="w-full max-w-sm space-y-4" role="status" aria-label="Loading">
+              <div className="flex justify-center mb-4">
+                <Loader2 className="w-6 h-6 animate-spin text-clinical-blue" />
+              </div>
+              <SkeletonVitals />
+              <SkeletonCard />
+              <p className="text-xs text-clinical-slate text-center">Synchronizing clinical data...</p>
             </div>
           )}
         </motion.div>
@@ -356,151 +365,200 @@ function ClinicalSimulator() {
 
   const simTime = medicalCase?.simulationTime || 0;
 
-  // Navigation tabs config (used in both mobile drawer and desktop sidebar)
-  const navTabs = [
-    { id: 'hpi', icon: <Clipboard className="w-4 h-4" />, label: 'History & Intake' },
-    { id: 'exam', icon: <Stethoscope className="w-4 h-4" />, label: 'Physical Exam' },
-    { id: 'labs', icon: <FlaskConical className="w-4 h-4" />, label: 'Order Results' },
-    { id: 'imaging', icon: <FileSearch className="w-4 h-4" />, label: 'Radiology PACS' },
-    { id: 'pharmacy', icon: <Pill className="w-4 h-4" />, label: 'Pharmacy' },
-    { id: 'comms', icon: <Phone className="w-4 h-4" />, label: 'Communication' },
-    { id: 'treatment', icon: <Activity className="w-4 h-4" />, label: 'Interventions' },
-    { id: 'notes', icon: <PenTool className="w-4 h-4" />, label: 'Clinical Notes' },
-    { id: 'tools', icon: <BookOpen className="w-4 h-4" />, label: 'Guidelines' },
-    ...(user ? [{ id: 'archive', icon: <History className="w-4 h-4" />, label: 'Clinical Archive' }] : [])
+  // Phase 3: Consolidated navigation — group tabs into categories
+  const primaryTabs = [
+    { id: 'hpi', icon: <Clipboard className="w-4 h-4" />, label: 'History' },
+    { id: 'exam', icon: <Stethoscope className="w-4 h-4" />, label: 'Exam' },
+    { id: 'labs', icon: <FlaskConical className="w-4 h-4" />, label: 'Labs' },
+    { id: 'imaging', icon: <FileSearch className="w-4 h-4" />, label: 'Imaging' },
   ];
+
+  const actionTabs = [
+    { id: 'pharmacy', icon: <Pill className="w-4 h-4" />, label: 'Pharmacy' },
+    { id: 'treatment', icon: <Activity className="w-4 h-4" />, label: 'Orders' },
+    { id: 'comms', icon: <Phone className="w-4 h-4" />, label: 'Comms' },
+  ];
+
+  const toolTabs = [
+    { id: 'assess', icon: <CheckCircle2 className="w-4 h-4" />, label: 'Assessment' },
+    { id: 'notes', icon: <PenTool className="w-4 h-4" />, label: 'Notes' },
+    { id: 'tools', icon: <BookOpen className="w-4 h-4" />, label: 'Guidelines' },
+    ...(user ? [{ id: 'archive', icon: <History className="w-4 h-4" />, label: 'Archive' }] : [])
+  ];
+
+  // Phase 4: Mobile bottom nav tabs (abbreviated)
+  const mobileNavTabs = [
+    { id: 'hpi', icon: <Clipboard className="w-4 h-4" />, label: 'HPI' },
+    { id: 'labs', icon: <FlaskConical className="w-4 h-4" />, label: 'Labs' },
+    { id: 'treatment', icon: <Activity className="w-4 h-4" />, label: 'Orders' },
+    { id: 'assess', icon: <CheckCircle2 className="w-4 h-4" />, label: 'Assess' },
+    { id: 'comms', icon: <Phone className="w-4 h-4" />, label: 'Comms' },
+  ];
+
+
 
   return (
     <div className="h-screen bg-clinical-bg flex flex-col overflow-hidden text-clinical-ink">
       {!isSupabaseConfigured && (
-        <div className="bg-amber-50 border-b border-amber-100 py-1.5 px-4 text-xs text-amber-700 z-50">
+        <div className="bg-amber-50/80 border-b border-amber-100 py-1.5 px-4 text-xs text-amber-700 z-50">
           History disabled — Supabase not configured
         </div>
       )}
 
       <CaseLibrary isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} onSelectCase={(diff, cat, env) => loadNewCase(diff, cat, env)} />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
+      <CommandPalette
+        isOpen={isCommandOpen}
+        onClose={() => setIsCommandOpen(false)}
+        onNavigate={(tab) => setActiveTab(tab as any)}
+        onNewCase={() => setIsLibraryOpen(true)}
+        onConsult={handleConsult}
+        hasArchive={!!user}
+      />
 
-
-      {/* Clean Header */}
-      <header className="h-12 bg-white border-b border-clinical-line flex items-center px-4 md:px-5 shrink-0 z-30" role="banner">
-        <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-1.5 hover:bg-slate-100 rounded-md mr-3" aria-label="Menu">
+      {/* Header — Phase 1: Softer, reduced weight */}
+      <header className="h-11 bg-white border-b border-clinical-line flex items-center px-4 shrink-0 z-30" role="banner">
+        <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-1.5 hover:bg-clinical-bg rounded-md mr-3" aria-label="Menu">
           <Menu className="w-4 h-4 text-clinical-slate" />
         </button>
-        <span className="text-sm font-semibold text-clinical-ink mr-4 hidden sm:inline">OpenEHR</span>
+        <span className="text-sm font-semibold text-clinical-ink mr-3 hidden sm:inline tracking-tight">OpenEHR</span>
         <div className="flex items-center gap-2 text-sm text-clinical-slate flex-1 min-w-0">
           <span className="font-medium text-clinical-ink truncate">{medicalCase?.patientName}</span>
-          <span className="text-xs text-clinical-slate/60 hidden md:inline">{medicalCase?.currentLocation}</span>
+          <span className="text-xs text-clinical-slate/50 hidden md:inline">{medicalCase?.currentLocation}</span>
         </div>
         <div className="flex items-center gap-3 ml-auto">
-          <span className="text-xs font-mono text-clinical-blue font-medium">T+{simTime}m</span>
-          <button onClick={() => setIsLibraryOpen(true)} className="text-xs text-clinical-slate hover:text-clinical-blue transition-colors" aria-label="New case">
+          {/* Phase 4: Command palette trigger */}
+          <button onClick={() => setIsCommandOpen(true)} className="hidden sm:flex items-center gap-1.5 text-xs text-clinical-slate/60 hover:text-clinical-slate bg-clinical-bg border border-clinical-line rounded-md px-2.5 py-1 transition-colors" aria-label="Command palette">
+            <Command className="w-3 h-3" />
+            <span className="font-mono text-[10px]">K</span>
+          </button>
+          <span className="text-xs font-mono text-clinical-blue/80">T+{simTime}m</span>
+          <button onClick={() => setIsLibraryOpen(true)} className="text-clinical-slate/50 hover:text-clinical-blue transition-colors" aria-label="New case">
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
           {user ? (
-            <button onClick={handleLogout} className="w-6 h-6 bg-clinical-blue rounded-full flex items-center justify-center text-[9px] font-bold text-white" aria-label="Account">{user.email?.[0]}</button>
+            <button onClick={handleLogout} className="w-6 h-6 bg-clinical-blue/80 rounded-full flex items-center justify-center text-[9px] font-medium text-white" aria-label="Account">{user.email?.[0]}</button>
           ) : (
             <button onClick={() => setIsAuthOpen(true)} className="text-xs text-clinical-blue font-medium hover:underline" aria-label="Sign in">Sign in</button>
           )}
         </div>
       </header>
 
-      {/* Alarm Banner - minimal */}
+      {/* Alarm Banner — Phase 1: Softer colors */}
       <AnimatePresence>
         {(medicalCase?.activeAlarms || []).length > 0 && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-red-50 border-b border-red-100 py-1.5 px-4 flex items-center gap-3 overflow-hidden shrink-0" role="alert">
-            <div className="w-1.5 h-1.5 bg-clinical-red rounded-full animate-pulse shrink-0" />
-            <div className="flex gap-3 text-xs text-clinical-red font-medium overflow-x-auto no-scrollbar">
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-red-50/60 border-b border-red-100/80 py-1.5 px-4 flex items-center gap-3 overflow-hidden shrink-0" role="alert">
+            <div className="w-1.5 h-1.5 bg-clinical-red/70 rounded-full animate-pulse shrink-0" />
+            <div className="flex gap-3 text-xs text-clinical-red/80 font-medium overflow-x-auto no-scrollbar">
               {medicalCase?.activeAlarms.map((alarm, i) => (<span key={i}>{alarm}</span>))}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Vitals Rail - clean and minimal */}
-      <div className="h-12 bg-white border-b border-clinical-line/50 flex items-center px-4 gap-4 shrink-0 overflow-x-auto no-scrollbar" role="region" aria-label="Vital signs">
-          <div className={cn("text-xs font-medium px-2 py-0.5 rounded", medicalCase?.physiologicalTrend === 'improving' ? "text-clinical-green bg-green-50" : medicalCase?.physiologicalTrend === 'declining' ? "text-clinical-amber bg-amber-50" : medicalCase?.physiologicalTrend === 'critical' ? "text-clinical-red bg-red-50" : "text-clinical-slate bg-slate-50")}>
-            {medicalCase?.physiologicalTrend}
-          </div>
-          <div className="w-px h-6 bg-clinical-line/50" />
-          <ClinicalVital label="HR" value={Math.round(vitalsHistory[vitalsHistory.length - 1]?.hr || medicalCase?.vitals?.heartRate || 0)} unit="bpm" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('HR') || a.includes('Pulse') || a.includes('Bradycardia') || a.includes('Tachycardia'))} />
-          <ClinicalVital label="BP" value={medicalCase?.vitals?.bloodPressure || '--'} unit="mmHg" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('BP') || a.includes('Pressure') || a.includes('Hypotension') || a.includes('Hypertension'))} />
-          <ClinicalVital label="SpO2" value={medicalCase?.vitals?.oxygenSaturation || 0} unit="%" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('SpO2') || a.includes('Saturation') || a.includes('Hypoxia'))} />
-          <ClinicalVital label="RR" value={medicalCase?.vitals?.respiratoryRate || '--'} unit="/min" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('RR') || a.includes('Respiratory'))} />
-          <ClinicalVital label="Temp" value={medicalCase?.vitals?.temperature || 0} unit="°C" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('Temp') || a.includes('Temperature') || a.includes('Fever'))} />
+      {/* Vitals Rail — Phase 1: Softer, Phase 2: Consistent padding */}
+      <div className="h-11 bg-white border-b border-clinical-line/50 flex items-center px-4 gap-3 shrink-0 overflow-x-auto no-scrollbar" role="region" aria-label="Vital signs">
+        <div className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full", medicalCase?.physiologicalTrend === 'improving' ? "text-clinical-green bg-green-50/80" : medicalCase?.physiologicalTrend === 'declining' ? "text-clinical-amber bg-amber-50/80" : medicalCase?.physiologicalTrend === 'critical' ? "text-clinical-red bg-red-50/80" : "text-clinical-slate bg-slate-50")}>
+          {medicalCase?.physiologicalTrend}
+        </div>
+        <div className="w-px h-5 bg-clinical-line/50" />
+        <ClinicalVital label="HR" value={Math.round(vitalsHistory[vitalsHistory.length - 1]?.hr || medicalCase?.vitals?.heartRate || 0)} unit="bpm" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('HR') || a.includes('Pulse') || a.includes('Bradycardia') || a.includes('Tachycardia'))} />
+        <ClinicalVital label="BP" value={medicalCase?.vitals?.bloodPressure || '--'} unit="mmHg" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('BP') || a.includes('Pressure') || a.includes('Hypotension') || a.includes('Hypertension'))} />
+        <ClinicalVital label="SpO2" value={medicalCase?.vitals?.oxygenSaturation || 0} unit="%" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('SpO2') || a.includes('Saturation') || a.includes('Hypoxia'))} />
+        <ClinicalVital label="RR" value={medicalCase?.vitals?.respiratoryRate || '--'} unit="/min" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('RR') || a.includes('Respiratory'))} />
+        <ClinicalVital label="Temp" value={medicalCase?.vitals?.temperature || 0} unit="°C" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('Temp') || a.includes('Temperature') || a.includes('Fever'))} />
       </div>
-
 
       <div className="flex flex-1 overflow-hidden relative">
         {/* Mobile Navigation Drawer */}
         <AnimatePresence>
           {isSidebarOpen && (
             <>
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-clinical-ink/60 backdrop-blur-sm z-[100] lg:hidden" aria-hidden="true" />
-              <motion.div initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }} className="fixed top-0 left-0 bottom-0 w-64 bg-clinical-surface border-r border-clinical-line z-[101] lg:hidden flex flex-col p-4" role="dialog" aria-modal="true" aria-label="Navigation menu">
-                <div className="flex items-center justify-between mb-8 px-2">
-                   <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 bg-clinical-blue rounded-sm flex items-center justify-center" aria-hidden="true"><Activity className="text-white w-3 h-3" /></div>
-                      <span className="text-sm font-bold tracking-tight">OpenEHR Mobile</span>
-                   </div>
-                   <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-clinical-bg rounded" aria-label="Close navigation">
-                      <X className="w-5 h-5 text-clinical-slate" />
-                   </button>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-clinical-ink/40 backdrop-blur-sm z-[100] lg:hidden" aria-hidden="true" />
+              <motion.div initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }} className="fixed top-0 left-0 bottom-0 w-60 bg-white border-r border-clinical-line z-[101] lg:hidden flex flex-col" role="dialog" aria-modal="true" aria-label="Navigation menu">
+                <div className="flex items-center justify-between p-4 border-b border-clinical-line">
+                  <span className="text-sm font-semibold tracking-tight">OpenEHR</span>
+                  <button onClick={() => setIsSidebarOpen(false)} className="p-1.5 hover:bg-clinical-bg rounded-md" aria-label="Close navigation">
+                    <X className="w-4 h-4 text-clinical-slate" />
+                  </button>
                 </div>
-                <nav className="space-y-1" aria-label="Main navigation">
-                   {navTabs.map(tab => (
-                     <NavTab key={tab.id} active={activeTab === tab.id} icon={tab.icon} label={tab.label} onClick={() => { setActiveTab(tab.id as any); setIsSidebarOpen(false); }} />
-                   ))}
+                <nav className="flex-1 overflow-y-auto p-3 space-y-4" aria-label="Main navigation">
+                  <div>
+                    <p className="text-[10px] font-semibold text-clinical-slate/60 uppercase tracking-wider px-3 mb-1">Patient Data</p>
+                    {primaryTabs.map(tab => (<NavTab key={tab.id} active={activeTab === tab.id} icon={tab.icon} label={tab.label} onClick={() => { setActiveTab(tab.id as any); setIsSidebarOpen(false); }} />))}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold text-clinical-slate/60 uppercase tracking-wider px-3 mb-1">Actions</p>
+                    {actionTabs.map(tab => (<NavTab key={tab.id} active={activeTab === tab.id} icon={tab.icon} label={tab.label} onClick={() => { setActiveTab(tab.id as any); setIsSidebarOpen(false); }} />))}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold text-clinical-slate/60 uppercase tracking-wider px-3 mb-1">Tools</p>
+                    {toolTabs.map(tab => (<NavTab key={tab.id} active={activeTab === tab.id} icon={tab.icon} label={tab.label} onClick={() => { setActiveTab(tab.id as any); setIsSidebarOpen(false); }} />))}
+                  </div>
                 </nav>
-                <div className="mt-auto pt-6 border-t border-clinical-line">
-                   <h3 className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest mb-3 px-2">Care Summary</h3>
-                   <div className="p-4 bg-yellow-50/50 border border-yellow-200/50 rounded-lg">
-                      <p className="text-[10px] text-yellow-800 leading-relaxed italic">"{medicalCase?.currentCondition}"</p>
-                   </div>
-                </div>
               </motion.div>
             </>
           )}
         </AnimatePresence>
 
-        {/* Navigation Sidebar (Desktop) - Clean */}
-        <nav className="w-52 bg-white border-r border-clinical-line/50 flex-col py-4 px-2 z-20 shrink-0 hidden lg:flex" aria-label="Main navigation">
-           <div className="space-y-0.5">
-              {navTabs.map(tab => (
-                <NavTab key={tab.id} active={activeTab === tab.id} icon={tab.icon} label={tab.label} onClick={() => setActiveTab(tab.id as any)} />
-              ))}
-           </div>
-           <div className="mt-auto pt-4 px-2">
-              <button onClick={handleConsult} disabled={isConsulting || !medicalCase} className="w-full py-2 px-3 text-xs font-medium text-clinical-slate hover:text-clinical-blue hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40" aria-label="AI Consultant">
-                {isConsulting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                AI Consultant
-              </button>
-           </div>
+        {/* Desktop Sidebar — Phase 3: Grouped tabs with categories */}
+        <nav className="w-48 bg-white border-r border-clinical-line/50 flex-col py-3 px-2 z-20 shrink-0 hidden lg:flex" aria-label="Main navigation">
+          <div className="space-y-4 flex-1">
+            <div>
+              <p className="text-[10px] font-semibold text-clinical-slate/50 uppercase tracking-wider px-3 mb-1">Patient Data</p>
+              <div className="space-y-0.5">
+                {primaryTabs.map(tab => (<NavTab key={tab.id} active={activeTab === tab.id} icon={tab.icon} label={tab.label} onClick={() => setActiveTab(tab.id as any)} />))}
+              </div>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold text-clinical-slate/50 uppercase tracking-wider px-3 mb-1">Actions</p>
+              <div className="space-y-0.5">
+                {actionTabs.map(tab => (<NavTab key={tab.id} active={activeTab === tab.id} icon={tab.icon} label={tab.label} onClick={() => setActiveTab(tab.id as any)} />))}
+              </div>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold text-clinical-slate/50 uppercase tracking-wider px-3 mb-1">Tools</p>
+              <div className="space-y-0.5">
+                {toolTabs.map(tab => (<NavTab key={tab.id} active={activeTab === tab.id} icon={tab.icon} label={tab.label} onClick={() => setActiveTab(tab.id as any)} />))}
+              </div>
+            </div>
+          </div>
+          <div className="pt-3 px-1 border-t border-clinical-line/50">
+            <button onClick={handleConsult} disabled={isConsulting || !medicalCase} className="w-full py-2 px-3 text-xs font-medium text-clinical-slate hover:text-clinical-blue hover:bg-clinical-blue/5 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40" aria-label="AI Consultant">
+              {isConsulting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              AI Consultant
+            </button>
+          </div>
         </nav>
 
-        {/* Clinical Workspace */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col gap-5" role="main">
+
+
+        {/* Clinical Workspace — Phase 2: Consistent padding */}
+        <main className="flex-1 overflow-y-auto p-4 lg:p-5 flex flex-col gap-4 pb-20 lg:pb-5" role="main">
           <AnimatePresence mode="wait">
             {activeTab === 'hpi' && (
-              <motion.div key="hpi" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-clinical-surface border border-clinical-line rounded shadow-sm overflow-hidden">
-                <div className="bg-clinical-bg p-3 border-b border-clinical-line text-[11px] font-bold text-clinical-slate uppercase">Documentation: Intake Nurse Statement</div>
-                <div className="p-4 md:p-8 space-y-8 md:space-y-10">
+              <motion.div key="hpi" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="panel">
+                <div className="panel-header">
+                  <span className="panel-title">Intake Documentation</span>
+                  <span className="text-[10px] text-clinical-slate/50">{medicalCase?.currentLocation}</span>
+                </div>
+                <div className="p-5 space-y-6">
                   <section>
-                    <label className="text-[10px] font-bold text-clinical-slate uppercase block mb-2">Chief Complaint</label>
-                    <p className="text-xl md:text-2xl font-serif text-clinical-ink leading-tight underline decoration-clinical-blue/20">"{medicalCase?.chiefComplaint}"</p>
+                    <label className="text-[10px] font-medium text-clinical-slate uppercase block mb-1.5">Chief Complaint</label>
+                    <p className="text-lg font-medium text-clinical-ink leading-snug">"{medicalCase?.chiefComplaint}"</p>
                   </section>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-16">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <section>
-                       <label className="text-[10px] font-bold text-clinical-slate uppercase block mb-3 border-b border-clinical-line pb-1">Clinical History (HPI)</label>
-                       <p className="text-[13px] text-clinical-ink leading-relaxed font-medium whitespace-pre-wrap">{medicalCase?.historyOfPresentIllness}</p>
+                      <label className="text-[10px] font-medium text-clinical-slate uppercase block mb-2 border-b border-clinical-line/50 pb-1">Clinical History (HPI)</label>
+                      <p className="text-sm text-clinical-ink leading-relaxed whitespace-pre-wrap">{medicalCase?.historyOfPresentIllness}</p>
                     </section>
                     <section>
-                       <label className="text-[10px] font-bold text-clinical-slate uppercase block mb-3 border-b border-clinical-line pb-1">Past Medical History</label>
-                       <div className="space-y-2">
-                          {(medicalCase?.pastMedicalHistory || []).map((m, i) => (
-                            <div key={i} className="flex items-center gap-3 text-sm"><div className="w-1.5 h-1.5 border border-clinical-slate rotate-45" aria-hidden="true" />{m}</div>
-                          ))}
-                       </div>
+                      <label className="text-[10px] font-medium text-clinical-slate uppercase block mb-2 border-b border-clinical-line/50 pb-1">Past Medical History</label>
+                      <div className="space-y-1.5">
+                        {(medicalCase?.pastMedicalHistory || []).map((m, i) => (
+                          <div key={i} className="flex items-center gap-2 text-sm text-clinical-ink"><div className="w-1 h-1 bg-clinical-slate/30 rounded-full shrink-0" />{m}</div>
+                        ))}
+                      </div>
                     </section>
                   </div>
                 </div>
@@ -508,45 +566,43 @@ function ClinicalSimulator() {
             )}
 
             {activeTab === 'exam' && (
-              <motion.div key="exam" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6">
-                <div className="bg-clinical-surface border border-clinical-line rounded shadow-sm overflow-hidden">
-                  <div className="bg-clinical-ink p-3 border-b border-clinical-line flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                     <span className="text-[10px] font-bold text-white uppercase tracking-widest">Glasgow Coma Scale (GCS) Workspace</span>
-                     <div className="flex items-center gap-2">
-                        <span className="text-[9px] text-white/50 uppercase">Computed Score:</span>
-                        <span className="text-xl font-mono font-black text-clinical-green">E{gcsState.eyes} V{gcsState.verbal} M{gcsState.motor} = {gcsState.eyes + gcsState.verbal + gcsState.motor}</span>
-                     </div>
-                  </div>
-                  <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-                     {(['eyes', 'verbal', 'motor'] as const).map(category => (
-                       <div key={category} className="space-y-3" role="radiogroup" aria-label={`${category} response`}>
-                         <label className="text-[9px] font-bold text-clinical-slate uppercase opacity-60 tracking-widest border-b border-clinical-line w-full block pb-1">{category} Response</label>
-                         <div className="flex flex-col gap-1.5">
-                           {GCS_MAPPING[category].map(option => (
-                             <button key={option.score} onClick={() => setGcsState(prev => ({ ...prev, [category]: option.score }))} role="radio" aria-checked={gcsState[category] === option.score} className={cn("text-left p-3 rounded text-[10px] transition-all border group", gcsState[category] === option.score ? "bg-clinical-blue text-white border-clinical-blue font-bold shadow-md transform scale-[1.02]" : "bg-white border-clinical-line hover:border-clinical-blue/40 text-clinical-ink")}>
-                               <div className="flex justify-between items-center mb-1">
-                                 <span className="uppercase tracking-tight">{option.label}</span>
-                                 <span className={cn("text-[9px] font-mono", gcsState[category] === option.score ? "text-white/60" : "text-clinical-slate")}>{option.score}</span>
-                               </div>
-                               <p className={cn("text-[8px] font-normal leading-tight opacity-70", gcsState[category] === option.score ? "text-white/80" : "text-clinical-slate")}>{option.desc}</p>
-                             </button>
-                           ))}
-                         </div>
-                       </div>
-                     ))}
-                  </div>
-                  <div className="bg-clinical-bg p-3 border-t border-clinical-line flex items-center gap-2">
-                     <div className="w-2 h-2 rounded-full bg-clinical-blue animate-pulse" aria-hidden="true" />
-                     <span className="text-[9px] text-clinical-slate uppercase font-bold tracking-tight">Clinical Correlation Essential. "The score is a sign, not a diagnosis."</span>
-                  </div>
+              <motion.div key="exam" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4">
+                {/* GCS — Phase 3: Progressive disclosure (collapsible) */}
+                <div className="panel">
+                  <button onClick={() => toggleSection('gcs')} className="panel-header w-full cursor-pointer hover:bg-clinical-bg/60 transition-colors">
+                    <span className="panel-title">Glasgow Coma Scale (GCS)</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-mono font-semibold text-clinical-blue">E{gcsState.eyes} V{gcsState.verbal} M{gcsState.motor} = {gcsState.eyes + gcsState.verbal + gcsState.motor}</span>
+                      <ChevronRight className={cn("w-4 h-4 text-clinical-slate/40 transition-transform", expandedSections['gcs'] && "rotate-90")} />
+                    </div>
+                  </button>
+                  {expandedSections['gcs'] && (
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {(['eyes', 'verbal', 'motor'] as const).map(category => (
+                        <div key={category} className="space-y-2" role="radiogroup" aria-label={`${category} response`}>
+                          <label className="text-[10px] font-medium text-clinical-slate uppercase tracking-wide">{category} Response</label>
+                          <div className="flex flex-col gap-1">
+                            {GCS_MAPPING[category].map(option => (
+                              <button key={option.score} onClick={() => setGcsState(prev => ({ ...prev, [category]: option.score }))} role="radio" aria-checked={gcsState[category] === option.score} className={cn("text-left p-2.5 rounded-md text-xs transition-all border", gcsState[category] === option.score ? "bg-clinical-blue/10 text-clinical-blue border-clinical-blue/30 font-medium" : "bg-white border-clinical-line hover:border-clinical-blue/20 text-clinical-ink")}>
+                                <div className="flex justify-between items-center">
+                                  <span>{option.label}</span>
+                                  <span className="text-[10px] font-mono text-clinical-slate/50">{option.score}</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="bg-clinical-surface border border-clinical-line rounded shadow-sm overflow-hidden">
-                  <div className="bg-clinical-bg p-3 border-b border-clinical-line text-[11px] font-bold text-clinical-slate uppercase tracking-wider">Physical Examination Findings</div>
-                  <div className="p-4 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 md:gap-y-8">
+                <div className="panel">
+                  <div className="panel-header"><span className="panel-title">Physical Examination</span></div>
+                  <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
                     {Object.entries(medicalCase?.physicalExam || {}).map(([key, val]) => (
                       <div key={key} className="space-y-1">
-                        <h4 className="text-[10px] font-bold text-clinical-slate uppercase">{key}</h4>
-                        <div className="p-3 bg-clinical-bg/30 border-l-2 border-clinical-line text-sm text-clinical-ink italic">{val}</div>
+                        <h4 className="text-[10px] font-medium text-clinical-slate uppercase">{key}</h4>
+                        <div className="p-2.5 bg-clinical-bg/50 border-l-2 border-clinical-line text-sm text-clinical-ink">{val}</div>
                       </div>
                     ))}
                   </div>
@@ -554,30 +610,29 @@ function ClinicalSimulator() {
               </motion.div>
             )}
 
-
             {activeTab === 'labs' && (
-              <motion.div key="labs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6 flex-1 min-h-0">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
-                  <div className="lg:col-span-2 bg-clinical-surface border border-clinical-line rounded shadow-sm overflow-hidden flex flex-col min-h-[300px]">
-                    <div className="bg-clinical-bg p-3 border-b border-clinical-line flex justify-between items-center">
-                      <span className="text-[11px] font-bold text-clinical-slate uppercase">Clinical Chemistry & Hematology</span>
-                      <span className="text-[9px] text-clinical-slate italic hidden sm:inline">Specimen: Whole Blood / Plasma</span>
+              <motion.div key="labs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4 flex-1 min-h-0">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
+                  <div className="lg:col-span-2 panel flex flex-col min-h-[300px]">
+                    <div className="panel-header">
+                      <span className="panel-title">Clinical Chemistry & Hematology</span>
+                      <span className="text-[10px] text-clinical-slate/50 hidden sm:inline">Specimen: Whole Blood / Plasma</span>
                     </div>
                     <div className="flex-1 overflow-auto">
                       <table className="clinical-table w-full" aria-label="Lab results">
                         <thead className="sticky top-0 bg-white z-10">
-                          <tr><th scope="col">Test</th><th scope="col">Value</th><th scope="col">Status</th><th scope="col">Reference</th><th className="w-10"></th></tr>
+                          <tr><th scope="col">Test</th><th scope="col">Value</th><th scope="col">Status</th><th scope="col">Reference</th><th className="w-8"></th></tr>
                         </thead>
                         <tbody>
                           {(medicalCase?.labs || []).map((lab) => {
                             const isAvailable = lab.orderedAt !== undefined && lab.availableAt !== undefined && lab.availableAt <= simTime;
                             const isPending = lab.orderedAt !== undefined && (lab.availableAt === undefined || lab.availableAt > simTime);
                             return (
-                              <tr key={lab.name} onClick={() => isAvailable && setSelectedLab(lab)} className={cn("transition-colors cursor-pointer", selectedLab?.name === lab.name ? "bg-clinical-blue/5" : "hover:bg-clinical-bg/30")}>
-                                <td className="font-bold text-clinical-ink">{lab.name}</td>
-                                <td className="font-mono text-sm px-4">{isAvailable ? (<span className={cn(lab.status === 'critical' ? 'text-clinical-red font-black' : lab.status === 'abnormal' ? 'text-clinical-amber' : '')}>{lab.value}</span>) : <span className="opacity-20">---</span>}</td>
-                                <td>{!lab.orderedAt ? (<button onClick={(e) => { e.stopPropagation(); handleOrderDiagnostic('lab', lab.name); }} className="text-[10px] font-bold text-clinical-blue uppercase hover:underline" aria-label={`Order ${lab.name}`}>[Order Stat]</button>) : isPending ? (<span className="text-[10px] font-bold text-clinical-amber uppercase animate-pulse">Pending...</span>) : (<div className="flex items-center gap-1.5"><div className={cn("w-1.5 h-1.5 rounded-full", lab.status === 'critical' ? 'bg-clinical-red' : lab.status === 'abnormal' ? 'bg-clinical-amber' : 'bg-clinical-green')} /><span className="text-[10px] uppercase font-bold tracking-tighter opacity-60">{lab.status}</span></div>)}</td>
-                                <td className="text-[11px] text-clinical-slate">{lab.normalRange} {lab.unit}</td>
+                              <tr key={lab.name} onClick={() => isAvailable && setSelectedLab(lab)} className={cn("transition-colors cursor-pointer", selectedLab?.name === lab.name ? "bg-clinical-blue/5" : "hover:bg-clinical-bg/50")}>
+                                <td className="font-medium text-clinical-ink">{lab.name}</td>
+                                <td className="font-mono text-sm">{isAvailable ? (<span className={cn(lab.status === 'critical' ? 'text-clinical-red font-semibold' : lab.status === 'abnormal' ? 'text-clinical-amber' : '')}>{lab.value}</span>) : <span className="opacity-20">---</span>}</td>
+                                <td>{!lab.orderedAt ? (<button onClick={(e) => { e.stopPropagation(); handleOrderDiagnostic('lab', lab.name); }} className="text-[10px] font-medium text-clinical-blue hover:underline">[Order]</button>) : isPending ? (<span className="text-[10px] font-medium text-clinical-amber animate-pulse">Pending...</span>) : (<div className="flex items-center gap-1.5"><div className={cn("w-1.5 h-1.5 rounded-full", lab.status === 'critical' ? 'bg-clinical-red' : lab.status === 'abnormal' ? 'bg-clinical-amber' : 'bg-clinical-green')} /><span className="text-[10px] text-clinical-slate/60 capitalize">{lab.status}</span></div>)}</td>
+                                <td className="text-xs text-clinical-slate/70">{lab.normalRange} {lab.unit}</td>
                                 <td>{isAvailable && <ChevronRight className="w-3 h-3 opacity-30" />}</td>
                               </tr>
                             );
@@ -586,28 +641,24 @@ function ClinicalSimulator() {
                       </table>
                     </div>
                   </div>
-                  <div className="lg:col-span-1 bg-clinical-surface border border-clinical-line rounded shadow-sm flex flex-col overflow-hidden min-h-[250px]">
-                    <div className="bg-clinical-bg p-3 border-b border-clinical-line"><span className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest">Result Interpretations</span></div>
-                    <div className="flex-1 p-4 md:p-6 overflow-y-auto">
+                  <div className="lg:col-span-1 panel flex flex-col min-h-[250px]">
+                    <div className="panel-header"><span className="panel-title">Interpretation</span></div>
+                    <div className="flex-1 p-4 overflow-y-auto">
                       {selectedLab ? (
-                        <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                           <div><h4 className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest mb-1">Component</h4><p className="text-lg font-bold">{selectedLab.name}</p></div>
-                           <div className="grid grid-cols-2 gap-4">
-                             <div className="bg-clinical-bg p-3 rounded"><h5 className="text-[9px] font-bold text-clinical-slate uppercase mb-1">Current</h5><p className="font-mono text-xl font-bold">{selectedLab.value}</p></div>
-                             <div className="bg-clinical-bg p-3 rounded"><h5 className="text-[9px] font-bold text-clinical-slate uppercase mb-1">Status</h5><p className={cn("text-[11px] font-bold uppercase", selectedLab.status === 'critical' ? "text-clinical-red" : selectedLab.status === 'abnormal' ? "text-clinical-amber" : "text-clinical-green")}>{selectedLab.status}</p></div>
-                           </div>
-                           <div><h4 className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest mb-3 border-b border-clinical-line pb-1">Pathologist / Tech Comments</h4><p className="text-xs text-clinical-ink italic leading-relaxed border-l-2 border-clinical-blue/20 pl-4">{selectedLab.clinicalNote || "No morphological abnormalities noted. Validated by automated analyzer."}</p></div>
-                           <div className="pt-4 space-y-2">
-                             <div className="flex justify-between text-[10px]"><span className="text-clinical-slate uppercase font-bold">Ordered:</span><span className="font-mono">T + {selectedLab.orderedAt}m</span></div>
-                             <div className="flex justify-between text-[10px]"><span className="text-clinical-slate uppercase font-bold">Verified:</span><span className="font-mono text-clinical-green font-bold">T + {selectedLab.availableAt}m</span></div>
-                           </div>
+                        <div className="space-y-4 animate-in fade-in">
+                          <div><h4 className="text-[10px] font-medium text-clinical-slate uppercase mb-1">Component</h4><p className="text-base font-semibold">{selectedLab.name}</p></div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-clinical-bg/50 p-3 rounded-md"><h5 className="text-[9px] font-medium text-clinical-slate uppercase mb-1">Current</h5><p className="font-mono text-lg font-semibold">{selectedLab.value}</p></div>
+                            <div className="bg-clinical-bg/50 p-3 rounded-md"><h5 className="text-[9px] font-medium text-clinical-slate uppercase mb-1">Status</h5><p className={cn("text-xs font-medium capitalize", selectedLab.status === 'critical' ? "text-clinical-red" : selectedLab.status === 'abnormal' ? "text-clinical-amber" : "text-clinical-green")}>{selectedLab.status}</p></div>
+                          </div>
+                          <div><h4 className="text-[10px] font-medium text-clinical-slate uppercase mb-2">Comments</h4><p className="text-xs text-clinical-ink leading-relaxed border-l-2 border-clinical-blue/20 pl-3">{selectedLab.clinicalNote || "No morphological abnormalities noted."}</p></div>
+                          <div className="pt-3 space-y-1.5 text-[10px] text-clinical-slate border-t border-clinical-line/50">
+                            <div className="flex justify-between"><span>Ordered:</span><span className="font-mono">T+{selectedLab.orderedAt}m</span></div>
+                            <div className="flex justify-between"><span>Verified:</span><span className="font-mono text-clinical-green">T+{selectedLab.availableAt}m</span></div>
+                          </div>
                         </div>
                       ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-clinical-slate/40 text-center italic">
-                          <FlaskConical className="w-12 h-12 mb-4 opacity-20" aria-hidden="true" />
-                          <p className="text-[10px] uppercase font-bold tracking-widest">Select Lab Row</p>
-                          <p className="text-[9px] mt-2">Click on a test to view professional interpretation.</p>
-                        </div>
+                        <EmptyState icon={<FlaskConical className="w-10 h-10" />} title="Select a lab result" description="Click on a test row to view interpretation." />
                       )}
                     </div>
                   </div>
@@ -616,56 +667,49 @@ function ClinicalSimulator() {
             )}
 
             {activeTab === 'imaging' && (
-              <motion.div key="imaging" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6 flex-1 min-h-0">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
-                  <div className="lg:col-span-1 bg-clinical-surface border border-clinical-line rounded flex flex-col overflow-hidden min-h-[200px] max-h-[500px] lg:max-h-none">
-                    <div className="bg-clinical-bg p-3 border-b border-clinical-line"><span className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest">Imaging Worklist</span></div>
-                    <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                       {medicalCase?.imaging.map((img, i) => {
-                         const isAvailable = img.orderedAt !== undefined && img.availableAt !== undefined && img.availableAt <= simTime;
-                         const isPending = img.orderedAt !== undefined && (img.availableAt === undefined || img.availableAt > simTime);
-                         return (
-                           <button key={i} onClick={() => isAvailable && setRevealedLabs(prev => [...prev, img.type])} aria-label={`${img.type} - ${isAvailable ? 'View results' : isPending ? 'Pending' : 'Not ordered'}`} className={cn("w-full text-left p-3 rounded border transition-all flex flex-col gap-1", revealedLabs.includes(img.type) ? "bg-clinical-blue text-white border-clinical-blue" : "bg-white border-clinical-line hover:border-clinical-blue", isPending && "bg-clinical-bg opacity-70 cursor-wait", !img.orderedAt && "opacity-50")}>
-                              <div className="flex justify-between items-center">
-                                <span className="text-[11px] font-bold uppercase">{img.type}</span>
-                                {isAvailable ? <div className="w-1.5 h-1.5 bg-clinical-green rounded-full" /> : isPending ? <Clock className="w-3 h-3 animate-spin text-clinical-amber" /> : <div className="w-1.5 h-1.5 bg-clinical-slate rounded-full opacity-30" />}
-                              </div>
-                              <div className="text-[9px] opacity-70 flex justify-between"><span>{isAvailable ? "COMPLETED" : isPending ? "PENDING..." : "UNORDERED"}</span>{img.orderedAt && <span>T + {img.orderedAt}m</span>}</div>
-                              {!img.orderedAt && <span onClick={(e) => { e.stopPropagation(); handleOrderDiagnostic('imaging', img.type); }} className="mt-2 text-[9px] text-clinical-blue font-bold uppercase hover:underline">Place Stat Order</span>}
-                           </button>
-                         );
-                       })}
+              <motion.div key="imaging" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4 flex-1 min-h-0">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
+                  <div className="lg:col-span-1 panel flex flex-col min-h-[200px] max-h-[500px] lg:max-h-none">
+                    <div className="panel-header"><span className="panel-title">Imaging Worklist</span></div>
+                    <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+                      {medicalCase?.imaging.map((img, i) => {
+                        const isAvailable = img.orderedAt !== undefined && img.availableAt !== undefined && img.availableAt <= simTime;
+                        const isPending = img.orderedAt !== undefined && (img.availableAt === undefined || img.availableAt > simTime);
+                        return (
+                          <button key={i} onClick={() => isAvailable && setRevealedLabs(prev => [...prev, img.type])} className={cn("w-full text-left p-3 rounded-md border transition-all flex flex-col gap-1", revealedLabs.includes(img.type) ? "bg-clinical-blue/10 text-clinical-blue border-clinical-blue/30" : "bg-white border-clinical-line hover:border-clinical-blue/30", isPending && "bg-clinical-bg opacity-70", !img.orderedAt && "opacity-50")}>
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs font-medium">{img.type}</span>
+                              {isAvailable ? <div className="w-1.5 h-1.5 bg-clinical-green rounded-full" /> : isPending ? <Clock className="w-3 h-3 text-clinical-amber animate-spin" /> : <div className="w-1.5 h-1.5 bg-clinical-slate/30 rounded-full" />}
+                            </div>
+                            <div className="text-[10px] text-clinical-slate/60 flex justify-between"><span>{isAvailable ? "Completed" : isPending ? "Pending..." : "Unordered"}</span>{img.orderedAt && <span>T+{img.orderedAt}m</span>}</div>
+                            {!img.orderedAt && <span onClick={(e) => { e.stopPropagation(); handleOrderDiagnostic('imaging', img.type); }} className="mt-1 text-[10px] text-clinical-blue font-medium hover:underline">Place Order</span>}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                  <div className="lg:col-span-2 bg-[#0f1115] border border-clinical-line rounded flex flex-col overflow-hidden text-[#d1d5db] min-h-[300px]">
-                    <div className="bg-[#1a1c23] p-2 border-b border-[#2d3139] flex items-center justify-between px-4">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#6b7280]">DICOM Viewer v4.2</span>
-                      <div className="flex gap-1.5"><div className="w-2 h-2 rounded-full bg-[#f87171] opacity-50" /><div className="w-2 h-2 rounded-full bg-[#fbbf24] opacity-50" /><div className="w-2 h-2 rounded-full bg-[#34d399] opacity-50" /></div>
+                  <div className="lg:col-span-2 bg-[var(--color-panel-dark)] border border-[var(--color-panel-dark-border)] rounded-lg flex flex-col overflow-hidden text-slate-300 min-h-[300px]">
+                    <div className="bg-[#161820] p-2.5 border-b border-[var(--color-panel-dark-border)] flex items-center justify-between px-4">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-slate-500">DICOM Viewer</span>
+                      <div className="flex gap-1.5"><div className="w-2 h-2 rounded-full bg-red-400/40" /><div className="w-2 h-2 rounded-full bg-amber-400/40" /><div className="w-2 h-2 rounded-full bg-green-400/40" /></div>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+                    <div className="flex-1 overflow-y-auto p-5 space-y-4">
                       {medicalCase?.imaging.find(img => revealedLabs.includes(img.type)) ? (
                         (() => {
-                           const img = medicalCase.imaging.find(img => revealedLabs.includes(img.type))!;
-                           return (
-                             <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                               <div className="border-b border-[#2d3139] pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-2">
-                                 <div><h1 className="text-xl font-bold tracking-tight uppercase text-white">{img.type}</h1><p className="text-[10px] text-[#9ca3af]">TECHNIQUE: {img.technique || 'Standard CT protocol with IV contrast'}</p></div>
-                                 <div className="text-left sm:text-right"><p className="text-[10px] font-mono text-[#4b5563]">ACCESSION: #{medicalCase.id.slice(0,6).toUpperCase()}</p><p className="text-[10px] font-mono text-[#4b5563]">STAMP: T + {img.availableAt}m</p></div>
-                               </div>
-                               <div className="space-y-6">
-                                 <section><h2 className="text-[9px] font-bold text-clinical-blue uppercase tracking-widest mb-3 border-b border-clinical-blue/20 pb-1">Clinical Findings</h2><p className="text-sm border-l-2 border-[#2d3139] pl-6 leading-relaxed text-[#9ca3af] whitespace-pre-line font-serif italic">{img.findings || "Reviewing voxel data sequences..."}</p></section>
-                                 <section className="bg-[#161a22] p-5 rounded-lg border border-clinical-blue/20 shadow-inner"><h2 className="text-[9px] font-bold text-clinical-red uppercase tracking-widest mb-3">Diagnostic Impression</h2><p className="text-sm font-bold text-white">{img.impression || "Final report pending clinician signature."}</p></section>
-                               </div>
-                               <div className="pt-12 border-t border-[#2d3139] flex justify-between items-center opacity-20 filter grayscale"><div className="text-[8px] uppercase">Digitally Verified: RAD_SYSTEM_8.0</div><div className="text-[8px] uppercase font-mono tracking-tighter">SECURE RECORD // DO NOT DISTRIBUTE</div></div>
-                             </div>
-                           );
+                          const img = medicalCase.imaging.find(img => revealedLabs.includes(img.type))!;
+                          return (
+                            <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in">
+                              <div className="border-b border-slate-700/50 pb-3">
+                                <h1 className="text-lg font-semibold text-white">{img.type}</h1>
+                                <p className="text-[10px] text-slate-500">TECHNIQUE: {img.technique || 'Standard protocol with IV contrast'}</p>
+                              </div>
+                              <section><h2 className="text-[10px] font-medium text-clinical-blue uppercase tracking-wide mb-2">Findings</h2><p className="text-sm border-l-2 border-slate-700 pl-4 leading-relaxed text-slate-400 whitespace-pre-line">{img.findings || "Reviewing data sequences..."}</p></section>
+                              <section className="bg-slate-800/50 p-4 rounded-lg border border-clinical-blue/20"><h2 className="text-[10px] font-medium text-clinical-red uppercase tracking-wide mb-2">Impression</h2><p className="text-sm font-medium text-white">{img.impression || "Final report pending."}</p></section>
+                            </div>
+                          );
                         })()
                       ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-[#374151] text-center italic">
-                          <FileSearch className="w-16 h-16 mb-4 opacity-10" aria-hidden="true" />
-                          <p className="text-[11px] font-bold uppercase tracking-widest opacity-40">Awaiting Image Selection</p>
-                          <p className="text-[10px] mt-2 opacity-30 max-w-[180px]">Select a completed diagnostic study from the worklist.</p>
-                        </div>
+                        <EmptyState icon={<FileSearch className="w-10 h-10" />} title="Awaiting selection" description="Select a completed study from the worklist." />
                       )}
                     </div>
                   </div>
@@ -674,25 +718,26 @@ function ClinicalSimulator() {
             )}
 
 
+
             {activeTab === 'pharmacy' && (
-              <motion.div key="pharmacy" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6 flex-1 min-h-0">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1">
-                  <div className="bg-clinical-surface border border-clinical-line rounded p-4 md:p-6 shadow-sm overflow-y-auto">
-                    <h4 className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest mb-4">Stat Medication Catalog</h4>
-                    <div className="space-y-6">
+              <motion.div key="pharmacy" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4 flex-1 min-h-0">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1">
+                  <div className="panel flex flex-col">
+                    <div className="panel-header"><span className="panel-title">Stat Medication Catalog</span></div>
+                    <div className="panel-body space-y-4 overflow-y-auto flex-1">
                       {[
                         { cat: 'Resuscitation', meds: ['Epinephrine 1mg', 'Amiodarone 300mg', 'Atropine 1mg'] },
                         { cat: 'Fluids / Volume', meds: ['NS 1L Bolus', 'LR 500mL', 'Albumin 25%'] },
                         { cat: 'Analgesia / Sedation', meds: ['Fentanyl 50mcg', 'Propofol 20mg', 'Morphine 4mg'] },
                         { cat: 'Cardiovascular', meds: ['Nitroglycerin 0.4mg SL', 'Aspirin 324mg PO', 'Heparin 5000u Bolus'] }
                       ].map((group, idx) => (
-                        <div key={idx} className="space-y-2">
-                          <label className="text-[8px] font-bold text-clinical-slate opacity-40 uppercase">{group.cat}</label>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
+                        <div key={idx} className="space-y-1.5">
+                          <label className="text-[10px] font-medium text-clinical-slate/60 uppercase">{group.cat}</label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-1.5">
                             {group.meds.map(med => (
-                              <button key={med} onClick={() => handlePerformIntervention(2, `Administer ${med}`)} disabled={intervening} aria-label={`Administer ${med}`} className="flex justify-between items-center p-3 bg-white border border-clinical-line rounded hover:border-clinical-blue hover:bg-clinical-blue/5 transition-all text-xs font-medium disabled:opacity-50">
+                              <button key={med} onClick={() => handlePerformIntervention(2, `Administer ${med}`)} disabled={intervening} className="flex justify-between items-center p-2.5 bg-clinical-bg/50 border border-clinical-line rounded-md hover:border-clinical-blue/30 hover:bg-clinical-blue/5 transition-all text-xs disabled:opacity-50">
                                 <span>{med}</span>
-                                <Plus className="w-3 h-3 text-clinical-blue" />
+                                <Plus className="w-3 h-3 text-clinical-blue/60" />
                               </button>
                             ))}
                           </div>
@@ -700,32 +745,15 @@ function ClinicalSimulator() {
                       ))}
                     </div>
                   </div>
-                  {/* Fix: replaced document.getElementById with React state */}
-                  <div className="bg-clinical-surface border border-clinical-line rounded p-4 md:p-6 shadow-sm flex flex-col">
-                    <h4 className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest mb-4">Current Order Workflow</h4>
-                    <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 border-2 border-dashed border-clinical-line rounded text-center">
-                      <StethIcon className="w-12 h-12 mb-4 opacity-40" aria-hidden="true" />
-                      <p className="text-xs font-bold uppercase mb-4">Custom Pharmacy Order</p>
+                  <div className="panel flex flex-col">
+                    <div className="panel-header"><span className="panel-title">Custom Order</span></div>
+                    <div className="panel-body flex-1 flex flex-col items-center justify-center">
+                      <Pill className="w-8 h-8 text-clinical-slate/20 mb-3" />
+                      <p className="text-xs font-medium text-clinical-slate mb-3">Custom Pharmacy Order</p>
                       <div className="w-full flex gap-2">
-                        <input
-                          type="text"
-                          value={customMedInput}
-                          onChange={(e) => setCustomMedInput(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter' && customMedInput) { handlePerformIntervention(2, `Administer ${customMedInput}`); setCustomMedInput(''); } }}
-                          placeholder="Drug Name (e.g. Norepinephrine)"
-                          aria-label="Custom medication name"
-                          className="flex-1 bg-white border border-clinical-line rounded p-2 text-xs focus:outline-none focus:border-clinical-blue focus:ring-1 focus:ring-clinical-blue"
-                        />
-                        <button
-                          onClick={() => { if (customMedInput) { handlePerformIntervention(2, `Administer ${customMedInput}`); setCustomMedInput(''); } }}
-                          disabled={!customMedInput || intervening}
-                          aria-label="Administer custom medication"
-                          className="bg-clinical-blue text-white px-4 py-2 rounded text-[10px] font-bold uppercase disabled:opacity-50"
-                        >
-                          GiveStat
-                        </button>
+                        <input type="text" value={customMedInput} onChange={(e) => setCustomMedInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && customMedInput) { handlePerformIntervention(2, `Administer ${customMedInput}`); setCustomMedInput(''); } }} placeholder="Drug name & dose..." className="flex-1 bg-clinical-bg border border-clinical-line rounded-md p-2 text-xs focus:outline-none focus:border-clinical-blue/50 focus:ring-1 focus:ring-clinical-blue/30" />
+                        <button onClick={() => { if (customMedInput) { handlePerformIntervention(2, `Administer ${customMedInput}`); setCustomMedInput(''); } }} disabled={!customMedInput || intervening} className="bg-clinical-blue text-white px-3 py-2 rounded-md text-xs font-medium disabled:opacity-50">Give</button>
                       </div>
-                      <p className="text-[9px] mt-4 max-w-[200px] text-clinical-slate">Select a preset medication or enter a custom drug and dose for immediate administration.</p>
                     </div>
                   </div>
                 </div>
@@ -733,45 +761,41 @@ function ClinicalSimulator() {
             )}
 
             {activeTab === 'comms' && (
-              <motion.div key="comms" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6 flex-1 min-h-0">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 shrink-0">
-                  <div className="md:col-span-1 bg-clinical-surface border border-clinical-line rounded p-4 flex flex-col gap-4">
-                    <h3 className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest border-b border-clinical-line pb-2">Hospital Directory</h3>
-                    <div className="space-y-1 overflow-y-auto max-h-[200px] pr-2" role="listbox" aria-label="Staff contacts">
+              <motion.div key="comms" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4 flex-1 min-h-0">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 shrink-0">
+                  <div className="md:col-span-1 panel">
+                    <div className="panel-header"><span className="panel-title">Directory</span></div>
+                    <div className="p-3 space-y-0.5 max-h-[200px] overflow-y-auto" role="listbox" aria-label="Staff contacts">
                       {STAFF_TARGETS.map(target => (
-                        <button key={target} onClick={() => setCallTarget(target)} role="option" aria-selected={callTarget === target} className={cn("w-full text-left px-3 py-2 rounded text-xs transition-colors flex items-center justify-between", callTarget === target ? "bg-clinical-blue text-white font-bold" : "text-clinical-slate hover:bg-clinical-bg")}>
+                        <button key={target} onClick={() => setCallTarget(target)} role="option" aria-selected={callTarget === target} className={cn("w-full text-left px-3 py-2 rounded-md text-xs transition-colors", callTarget === target ? "bg-clinical-blue/10 text-clinical-blue font-medium" : "text-clinical-slate hover:bg-clinical-bg")}>
                           {target}
-                          {callTarget === target && <Phone className="w-3 h-3" />}
                         </button>
                       ))}
                     </div>
                   </div>
-                  <div className="md:col-span-2 bg-clinical-surface border border-clinical-line rounded p-4 flex flex-col gap-4">
-                    <h3 className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest border-b border-clinical-line pb-2">Initiate Call: {callTarget}</h3>
-                    <div className="flex gap-2 md:gap-4">
-                      <input type="text" value={callMessage} onChange={(e) => setCallMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleStaffCall()} placeholder={`Message for ${callTarget}...`} aria-label={`Message for ${callTarget}`} className="flex-1 bg-clinical-bg border border-clinical-line rounded px-3 md:px-4 py-3 text-sm focus:outline-none focus:border-clinical-blue focus:ring-1 focus:ring-clinical-blue transition-all" />
-                      <button onClick={handleStaffCall} disabled={calling || !callMessage} aria-label="Send message" className="px-4 md:px-6 bg-clinical-blue text-white rounded font-bold uppercase text-[11px] tracking-widest hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2">
-                        {calling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                        <span className="hidden sm:inline">Send</span>
-                      </button>
+                  <div className="md:col-span-2 panel">
+                    <div className="panel-header"><span className="panel-title">Call: {callTarget}</span></div>
+                    <div className="p-4">
+                      <div className="flex gap-2">
+                        <input type="text" value={callMessage} onChange={(e) => setCallMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleStaffCall()} placeholder={`Message for ${callTarget}...`} className="flex-1 bg-clinical-bg border border-clinical-line rounded-md px-3 py-2.5 text-sm focus:outline-none focus:border-clinical-blue/50 focus:ring-1 focus:ring-clinical-blue/30 transition-all" />
+                        <button onClick={handleStaffCall} disabled={calling || !callMessage} className="px-4 bg-clinical-blue text-white rounded-md font-medium text-xs hover:bg-clinical-blue/90 transition-all disabled:opacity-50 flex items-center gap-2">
+                          {calling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
-                    <p className="text-[10px] text-clinical-slate italic">Note: Formal documentation will be added to patient EHR record automatically.</p>
                   </div>
                 </div>
-                <div className="flex-1 bg-clinical-surface border border-clinical-line rounded shadow-sm flex flex-col overflow-hidden min-h-[250px]">
-                  <div className="bg-clinical-bg p-3 border-b border-clinical-line flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-clinical-slate uppercase">Interaction History</span>
-                    <span className="text-[10px] text-clinical-slate italic select-none hidden sm:block">Secure Communication Line 582</span>
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 bg-[#f8f9fa]">
+                <div className="flex-1 panel flex flex-col min-h-[250px]">
+                  <div className="panel-header"><span className="panel-title">Interaction History</span></div>
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-clinical-bg/30">
                     {(medicalCase?.communicationLog || []).length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center opacity-20 italic"><MessageSquare className="w-12 h-12 mb-4" aria-hidden="true" /><p className="text-xs">No current active threads</p></div>
+                      <EmptyState icon={<MessageSquare className="w-10 h-10" />} title="No messages yet" description="Send a message to start communication." />
                     ) : (
                       medicalCase.communicationLog.map((msg, i) => (
-                        <div key={i} className={cn("max-w-[85%] md:max-w-[80%] flex flex-col gap-1", msg.from === 'You' || msg.from === 'Physician' ? "ml-auto items-end" : "mr-auto items-start")}>
-                          <div className="text-[9px] font-bold text-clinical-slate uppercase px-1">{msg.from} → {msg.to}</div>
-                          <div className={cn("p-3 rounded-lg text-sm shadow-sm", msg.from === 'You' || msg.from === 'Physician' ? "bg-clinical-blue text-white rounded-tr-none" : "bg-white border border-clinical-line rounded-tl-none text-clinical-ink")}>{msg.message}</div>
-                          <div className="text-[9px] text-clinical-slate font-mono px-1">T + {msg.timestamp} min</div>
+                        <div key={i} className={cn("max-w-[80%] flex flex-col gap-1", msg.from === 'You' || msg.from === 'Physician' ? "ml-auto items-end" : "mr-auto items-start")}>
+                          <div className="text-[9px] font-medium text-clinical-slate px-1">{msg.from} → {msg.to}</div>
+                          <div className={cn("p-3 rounded-lg text-sm", msg.from === 'You' || msg.from === 'Physician' ? "bg-clinical-blue text-white rounded-tr-sm" : "bg-white border border-clinical-line rounded-tl-sm text-clinical-ink")}>{msg.message}</div>
+                          <div className="text-[9px] text-clinical-slate/50 font-mono px-1">T+{msg.timestamp}m</div>
                         </div>
                       ))
                     )}
@@ -780,220 +804,238 @@ function ClinicalSimulator() {
               </motion.div>
             )}
 
-
             {activeTab === 'treatment' && (
-               <motion.div key="treatment" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
-                  <div className="space-y-6">
-                     <div className="bg-clinical-surface border border-clinical-line rounded p-4 md:p-6 shadow-sm">
-                        <label className="text-[10px] font-bold text-clinical-slate uppercase block mb-3 tracking-widest" htmlFor="cpoe-input">Electronic Order Entry (CPOE)</label>
-                        <textarea id="cpoe-input" value={interventionInput} onChange={(e) => setInterventionInput(e.target.value)} placeholder="Select med, dose, route, and frequency..." className="w-full h-28 md:h-32 bg-clinical-bg border border-clinical-line rounded p-4 text-sm font-medium focus:outline-none focus:border-clinical-blue focus:ring-1 focus:ring-clinical-blue transition-all resize-none" />
-                        <div className="mt-4 flex gap-3">
-                           <button onClick={() => handlePerformIntervention()} disabled={intervening || !interventionInput} className="flex-1 py-3 bg-clinical-ink text-white rounded font-bold text-[11px] uppercase tracking-widest hover:bg-clinical-slate transition-all disabled:opacity-30">Execute Order</button>
-                           <button onClick={() => handlePerformIntervention(10)} disabled={intervening} className="px-4 md:px-6 border border-clinical-line text-clinical-slate rounded font-bold text-[11px] uppercase hover:bg-clinical-bg transition-all">Wait 10m</button>
-                        </div>
-                     </div>
-                     <div className="bg-clinical-surface border border-clinical-line rounded p-4 md:p-6 shadow-sm">
-                        <label className="text-[10px] font-bold text-clinical-slate uppercase block mb-3 tracking-widest" htmlFor="soap-note">Assessment & Plan (Soap Note)</label>
-                        <textarea id="soap-note" placeholder="Enter clinical reasoning and long-term diagnostic plan..." className="w-full h-20 md:h-24 bg-clinical-bg border border-clinical-line rounded p-4 text-xs font-serif italic focus:outline-none focus:border-clinical-blue focus:ring-1 focus:ring-clinical-blue transition-all resize-none shadow-inner" />
-                        <p className="text-[9px] text-clinical-slate mt-2 opacity-60">Personal documentation only - does not trigger simulation changes.</p>
-                     </div>
-                     <div className="bg-clinical-surface border border-clinical-line rounded p-4 md:p-6 shadow-sm">
-                        <label className="text-[10px] font-bold text-clinical-slate uppercase block mb-3 tracking-widest">Medication Administration Record (MAR)</label>
-                        <div className="space-y-2 max-h-[150px] overflow-y-auto pr-2">
-                          {(medicalCase?.medications || []).length === 0 ? (
-                            <div className="py-8 text-center text-[10px] text-clinical-slate uppercase italic opacity-40 border border-dashed border-clinical-line rounded">No Meds Administered</div>
-                          ) : (
-                            medicalCase?.medications.map((med, i) => (
-                              <div key={i} className="flex items-center justify-between p-3 bg-clinical-bg border border-clinical-line rounded text-xs">
-                                <div className="flex items-center gap-3"><div className="w-2 h-2 bg-clinical-blue rounded-full" aria-hidden="true" /><span className="font-bold">{med.name}</span><span className="opacity-60">{med.dose || '-'} {med.route ? `via ${med.route}` : ''}</span></div>
-                                <span className="font-mono text-[9px] text-clinical-slate underline">T + {med.timestamp}m</span>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                     </div>
-                     <div className="bg-clinical-surface border border-clinical-line rounded p-4 md:p-6 shadow-sm">
-                        <label className="text-[10px] font-bold text-clinical-slate uppercase block mb-3 tracking-widest">Rapid Transfer / Admission</label>
-                        <div className="grid grid-cols-2 gap-2 md:gap-3 pb-4 md:pb-6 border-b border-clinical-line mb-4 md:mb-6">
-                           {['Intensive Care (ICU)', 'OR / Surgery', 'Cardiac Cath Lab', 'General Ward', 'Radiology (CT/MRI)'].map(dept => (
-                             <button key={dept} onClick={() => handlePerformIntervention(0, `Transfer to ${dept}`)} disabled={intervening} aria-label={`Transfer to ${dept}`} className="py-2 px-2 md:px-3 border border-clinical-line rounded text-[9px] md:text-[10px] font-bold text-clinical-slate uppercase hover:bg-clinical-blue hover:text-white hover:border-clinical-blue transition-all flex items-center gap-1 md:gap-2 disabled:opacity-50">
-                               <UserPlus className="w-3 h-3 shrink-0" /><span className="truncate">{dept}</span>
-                             </button>
-                           ))}
-                        </div>
-                        <label className="text-[10px] font-bold text-clinical-slate uppercase block mb-3 tracking-widest">Simulation Timeline</label>
-                        <div className="grid grid-cols-2 gap-3">
-                           <button onClick={() => handlePerformIntervention(15, 'Observe patient')} disabled={intervening} className="py-2 px-3 border border-clinical-line rounded text-[10px] font-bold text-clinical-slate uppercase hover:bg-clinical-ink hover:text-white transition-all flex items-center justify-center gap-2 disabled:opacity-50"><Clock className="w-3 h-3" />Wait 15m</button>
-                           <button onClick={() => handlePerformIntervention(60, 'Periodic monitoring')} disabled={intervening} className="py-2 px-3 border border-clinical-line rounded text-[10px] font-bold text-clinical-slate uppercase hover:bg-clinical-ink hover:text-white transition-all flex items-center justify-center gap-2 disabled:opacity-50"><Clock className="w-3 h-3" />Wait 1h</button>
-                        </div>
-                     </div>
-                     <div className="bg-clinical-ink text-clinical-green p-4 md:p-6 rounded shadow-lg font-mono">
-                        <div className="flex justify-between items-center mb-4 border-b border-clinical-green/20 pb-2">
-                           <span className="text-[10px] uppercase font-bold tracking-widest">Vital Stream</span>
-                           <div className="w-2 h-2 rounded-full bg-clinical-green animate-pulse" aria-hidden="true" />
-                        </div>
-                        <div className="h-32 md:h-40">
-                           <ResponsiveContainer width="100%" height="100%">
-                              <LineChart data={vitalsHistory}>
-                                 <Line type="stepAfter" dataKey="hr" stroke="#38A169" strokeWidth={2} dot={false} isAnimationActive={false} />
-                                 <YAxis hide domain={['dataMin - 5', 'dataMax + 5']} />
-                                 <Tooltip content={({ payload }) => <div className="text-[10px] text-zinc-400">{payload?.[0]?.value} BPM</div>} />
-                              </LineChart>
-                           </ResponsiveContainer>
-                        </div>
-                     </div>
+              <motion.div key="treatment" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <div className="panel">
+                    <div className="panel-header"><span className="panel-title">Electronic Order Entry (CPOE)</span></div>
+                    <div className="panel-body">
+                      <textarea value={interventionInput} onChange={(e) => setInterventionInput(e.target.value)} placeholder="Order: med, dose, route, frequency..." className="w-full h-24 bg-clinical-bg border border-clinical-line rounded-md p-3 text-sm focus:outline-none focus:border-clinical-blue/50 focus:ring-1 focus:ring-clinical-blue/30 transition-all resize-none" />
+                      <div className="mt-3 flex gap-2">
+                        <button onClick={() => handlePerformIntervention()} disabled={intervening || !interventionInput} className="flex-1 py-2.5 bg-clinical-ink text-white rounded-md font-medium text-xs hover:bg-clinical-slate transition-all disabled:opacity-30">Execute Order</button>
+                        <button onClick={() => handlePerformIntervention(10)} disabled={intervening} className="px-4 border border-clinical-line text-clinical-slate rounded-md text-xs font-medium hover:bg-clinical-bg transition-all">Wait 10m</button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-6">
-                      <div className="bg-clinical-surface border border-clinical-line rounded shadow-sm overflow-hidden flex flex-col">
-                        <div className="bg-clinical-bg p-3 border-b border-clinical-line flex justify-between items-center">
-                           <span className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest">Fluid Balance & I/O</span>
-                           <div className="flex items-center gap-1"><span className="text-[9px] text-clinical-slate uppercase">Net:</span><span className={cn("text-xs font-mono font-bold", (medicalCase?.medications.length || 0) * 200 > 500 ? "text-clinical-blue" : "text-clinical-ink")}>+{(medicalCase?.medications.length || 0) * 200} mL</span></div>
+                  <div className="panel">
+                    <div className="panel-header"><span className="panel-title">Medication Administration (MAR)</span></div>
+                    <div className="panel-body">
+                      <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
+                        {(medicalCase?.medications || []).length === 0 ? (
+                          <div className="py-6 text-center text-xs text-clinical-slate/50">No medications administered</div>
+                        ) : (
+                          medicalCase?.medications.map((med, i) => (
+                            <div key={i} className="flex items-center justify-between p-2.5 bg-clinical-bg/50 border border-clinical-line/50 rounded-md text-xs">
+                              <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-clinical-blue/60 rounded-full" /><span className="font-medium">{med.name}</span><span className="text-clinical-slate/60">{med.dose || '-'} {med.route ? `via ${med.route}` : ''}</span></div>
+                              <span className="font-mono text-[10px] text-clinical-slate">T+{med.timestamp}m</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  {/* Phase 3: Transfer section — progressive disclosure */}
+                  <div className="panel">
+                    <button onClick={() => toggleSection('transfer')} className="panel-header w-full cursor-pointer hover:bg-clinical-bg/60 transition-colors">
+                      <span className="panel-title">Transfer / Timing</span>
+                      <ChevronRight className={cn("w-4 h-4 text-clinical-slate/40 transition-transform", expandedSections['transfer'] && "rotate-90")} />
+                    </button>
+                    {expandedSections['transfer'] && (
+                      <div className="panel-body space-y-3">
+                        <div className="grid grid-cols-2 gap-2">
+                          {['ICU', 'OR / Surgery', 'Cath Lab', 'General Ward', 'Radiology'].map(dept => (
+                            <button key={dept} onClick={() => handlePerformIntervention(0, `Transfer to ${dept}`)} disabled={intervening} className="py-2 px-3 border border-clinical-line rounded-md text-[10px] font-medium text-clinical-slate hover:bg-clinical-blue hover:text-white hover:border-clinical-blue transition-all flex items-center gap-1.5 disabled:opacity-50">
+                              <UserPlus className="w-3 h-3 shrink-0" /><span className="truncate">{dept}</span>
+                            </button>
+                          ))}
                         </div>
-                        <div className="p-4 md:p-6 flex-1 flex flex-col gap-6">
-                            <div className="flex justify-between items-end gap-2 h-24" aria-hidden="true">
-                               <div className="flex-1 bg-clinical-bg border border-clinical-line rounded-t relative overflow-hidden"><div className="absolute bottom-0 left-0 right-0 bg-clinical-blue/20 transition-all duration-1000" style={{ height: `${Math.min(100, (medicalCase?.medications.length || 0) * 10 + 20)}%` }} /><div className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-clinical-slate uppercase tracking-tighter z-10 text-center px-1">Total Intake</div></div>
-                               <div className="flex-1 bg-clinical-bg border border-clinical-line rounded-t relative overflow-hidden"><div className="absolute bottom-0 left-0 right-0 bg-clinical-amber/20 transition-all duration-1000" style={{ height: '35%' }} /><div className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-clinical-slate uppercase tracking-tighter z-10 text-center px-1">Urine Output</div></div>
-                            </div>
-                            <div className="space-y-2 pt-2">
-                               <div className="flex justify-between text-[10px]"><span className="text-clinical-slate font-bold uppercase opacity-60">Maintenance Fluids:</span><span className="font-mono">NS @ 80 mL/hr</span></div>
-                               <div className="flex justify-between text-[10px]"><span className="text-clinical-slate font-bold uppercase opacity-60">Stat Boluses:</span><span className="font-mono text-clinical-blue">+{(medicalCase?.medications.filter(m => m.name.includes('Bolus') || m.name.includes('NS') || m.name.includes('LR')).length || 0) * 500} mL</span></div>
-                            </div>
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-clinical-line/50">
+                          <button onClick={() => handlePerformIntervention(15, 'Observe patient')} disabled={intervening} className="py-2 px-3 border border-clinical-line rounded-md text-[10px] font-medium text-clinical-slate hover:bg-clinical-ink hover:text-white transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"><Clock className="w-3 h-3" />Wait 15m</button>
+                          <button onClick={() => handlePerformIntervention(60, 'Periodic monitoring')} disabled={intervening} className="py-2 px-3 border border-clinical-line rounded-md text-[10px] font-medium text-clinical-slate hover:bg-clinical-ink hover:text-white transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"><Clock className="w-3 h-3" />Wait 1h</button>
                         </div>
                       </div>
-                      <div className="bg-clinical-surface border border-clinical-line rounded shadow-sm flex flex-col min-h-[300px] max-h-[400px]">
-                          <div className="bg-clinical-bg p-3 border-b border-clinical-line text-[11px] font-bold text-clinical-slate uppercase">Intervention Chronology</div>
-                          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                             {(medicalCase?.clinicalActions || []).length === 0 ? (
-                               <div className="h-full flex flex-col items-center justify-center opacity-20 italic"><History className="w-12 h-12 mb-4" aria-hidden="true" /><p className="text-xs">Timeline Empty</p></div>
-                             ) : (
-                               (medicalCase?.clinicalActions || []).map((a, i) => (
-                                 <div key={i} className="flex gap-4 group">
-                                    <div className="text-[10px] font-mono text-clinical-slate w-12 pt-1 border-r border-clinical-line shrink-0">T+{a.timestamp}</div>
-                                    <div className="flex-1 pb-4"><p className="text-xs font-bold text-clinical-ink leading-tight mb-1">{a.description}</p><p className="text-clinical-slate border-l-2 border-clinical-blue/30 pl-4 py-1 italic text-[10px]">{a.impact || a.result}</p></div>
-                                 </div>
-                               ))
-                             )}
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  {/* Vitals trend chart */}
+                  <div className="panel">
+                    <div className="panel-header"><span className="panel-title">HR Trend Monitor</span></div>
+                    <div className="p-4 h-36">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={vitalsHistory}>
+                          <Line type="monotone" dataKey="hr" stroke="var(--color-clinical-green)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+                          <YAxis hide domain={['dataMin - 5', 'dataMax + 5']} />
+                          <Tooltip content={({ payload }) => <div className="text-xs text-clinical-slate bg-white border border-clinical-line rounded px-2 py-1 shadow-sm">{payload?.[0]?.value ? `${Math.round(Number(payload[0].value))} BPM` : ''}</div>} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                  {/* Fluid Balance */}
+                  <div className="panel">
+                    <div className="panel-header">
+                      <span className="panel-title">Fluid Balance</span>
+                      <span className="text-xs font-mono text-clinical-blue">+{(medicalCase?.medications.length || 0) * 200} mL</span>
+                    </div>
+                    <div className="panel-body">
+                      <div className="flex justify-between items-end gap-3 h-20">
+                        <div className="flex-1 bg-clinical-bg border border-clinical-line rounded-t relative overflow-hidden h-full"><div className="absolute bottom-0 left-0 right-0 bg-clinical-blue/10 transition-all duration-1000" style={{ height: `${Math.min(100, (medicalCase?.medications.length || 0) * 10 + 20)}%` }} /><div className="absolute inset-0 flex items-center justify-center text-[9px] font-medium text-clinical-slate z-10">Intake</div></div>
+                        <div className="flex-1 bg-clinical-bg border border-clinical-line rounded-t relative overflow-hidden h-full"><div className="absolute bottom-0 left-0 right-0 bg-clinical-amber/10 transition-all duration-1000" style={{ height: '35%' }} /><div className="absolute inset-0 flex items-center justify-center text-[9px] font-medium text-clinical-slate z-10">Output</div></div>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Intervention Timeline */}
+                  <div className="panel flex flex-col min-h-[250px] max-h-[350px]">
+                    <div className="panel-header"><span className="panel-title">Timeline</span></div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                      {(medicalCase?.clinicalActions || []).length === 0 ? (
+                        <EmptyState icon={<History className="w-10 h-10" />} title="Timeline empty" description="Actions will appear here as you intervene." />
+                      ) : (
+                        (medicalCase?.clinicalActions || []).map((a, i) => (
+                          <div key={i} className="flex gap-3">
+                            <div className="text-[10px] font-mono text-clinical-slate w-10 pt-0.5 shrink-0">T+{a.timestamp}</div>
+                            <div className="flex-1 border-l border-clinical-line/50 pl-3 pb-2"><p className="text-xs font-medium text-clinical-ink mb-0.5">{a.description}</p>{(a.impact || a.result) && <p className="text-[10px] text-clinical-slate">{a.impact || a.result}</p>}</div>
                           </div>
-                      </div>
+                        ))
+                      )}
+                    </div>
                   </div>
-               </motion.div>
-            )}
-
-            {activeTab === 'archive' && (
-              <motion.div key="archive" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6">
-                <div className="bg-clinical-surface border border-clinical-line rounded shadow-sm overflow-hidden">
-                  <div className="bg-clinical-bg p-3 border-b border-clinical-line flex justify-between items-center">
-                    <span className="text-[11px] font-bold text-clinical-slate uppercase tracking-wider">Patient Simulation Archive</span>
-                    <span className="text-[9px] text-clinical-slate uppercase font-bold opacity-60 hidden sm:block">Records for {user?.email || 'Unauthorized'}</span>
-                  </div>
-                  <ArchiveView user={user} />
                 </div>
               </motion.div>
             )}
+
+
+
+            {/* Phase 1: Footer removed — Assessment is now its own tab */}
+            {activeTab === 'assess' && (
+              <motion.div key="assess" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4">
+                <div className="panel">
+                  <div className="panel-header">
+                    <span className="panel-title flex items-center gap-2"><Stethoscope className="w-3.5 h-3.5" /> Assessment & Plan</span>
+                    {feedback && <span className="text-[10px] font-medium text-clinical-blue bg-clinical-blue/10 px-2 py-0.5 rounded-full">CASE CLOSED</span>}
+                  </div>
+                  <div className="p-5">
+                    {!feedback ? (
+                      <div className="space-y-5">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                          <div>
+                            <label className="text-[10px] font-medium text-clinical-slate uppercase mb-2 block">Working Differential</label>
+                            <textarea placeholder={"1. Septic Shock\n2. PE\n3. Hypovolemic Shock"} className="w-full h-20 bg-clinical-bg border border-clinical-line rounded-md p-3 text-xs font-mono focus:outline-none focus:border-clinical-blue/50 focus:ring-1 focus:ring-clinical-blue/30 resize-none" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-medium text-clinical-slate uppercase mb-2 block">Confirmatory Findings</label>
+                            <div className="flex flex-wrap gap-1.5">
+                              {medicalCase?.labs.filter(l => l.status === 'critical').map(l => (
+                                <span key={l.name} className="px-2 py-1 bg-clinical-red/8 text-clinical-red text-[10px] font-medium rounded-full flex items-center gap-1"><AlertTriangle className="w-2.5 h-2.5" /> {l.name}: {l.value}</span>
+                              ))}
+                              {medicalCase?.imaging.filter(i => i.availableAt && i.availableAt <= simTime).map(i => (
+                                <span key={i.type} className="px-2 py-1 bg-clinical-blue/8 text-clinical-blue text-[10px] font-medium rounded-full">{i.type}</span>
+                              ))}
+                              {(medicalCase?.labs.filter(l => l.status === 'critical').length === 0 && medicalCase?.imaging.filter(i => i.availableAt && i.availableAt <= simTime).length === 0) && (
+                                <span className="text-xs text-clinical-slate/50 italic">No critical findings yet</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t border-clinical-line/50">
+                          <textarea value={userDiagnosis} onChange={(e) => setUserDiagnosis(e.target.value)} placeholder="Enter final working diagnosis and disposition plan..." className="flex-1 h-16 bg-clinical-bg border border-clinical-line rounded-md p-3 text-sm focus:outline-none focus:ring-1 focus:ring-clinical-blue/30 transition-all resize-none" />
+                          <button onClick={handleSubmitDiagnosis} disabled={submitting || !userDiagnosis} className="sm:h-16 px-6 py-3 bg-clinical-blue hover:bg-clinical-blue/90 text-white rounded-md flex items-center justify-center gap-2 transition-all disabled:opacity-50 shrink-0">
+                            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                            <span className="text-xs font-medium">Submit</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-5 animate-in fade-in">
+                        <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start">
+                          <div className="w-16 h-16 rounded-full border-2 border-clinical-line flex items-center justify-center relative shrink-0">
+                            <svg className="absolute inset-0 w-full h-full -rotate-90"><circle cx="32" cy="32" r="28" fill="none" stroke="#E8ECF1" strokeWidth="3" /><circle cx="32" cy="32" r="28" fill="none" stroke="var(--color-clinical-blue)" strokeWidth="3" strokeDasharray={`${feedback.score * 1.76} 176`} /></svg>
+                            <span className="text-lg font-semibold text-clinical-ink">{feedback.score}</span>
+                          </div>
+                          <div className="flex-1 text-center sm:text-left">
+                            <h4 className="text-xs font-semibold text-clinical-blue uppercase tracking-wide mb-2">{feedback.score >= 80 ? 'Success' : 'Review Required'}</h4>
+                            <div className="bg-clinical-bg p-4 rounded-lg border border-clinical-line text-sm text-clinical-ink leading-relaxed italic">"{feedback.feedback}"</div>
+                            <p className="text-xs text-clinical-slate mt-3">Correct Diagnosis: <span className="font-medium text-clinical-ink">{medicalCase?.correctDiagnosis}</span></p>
+                          </div>
+                        </div>
+                        {(medicalCase?.clinicalActions || []).length > 0 && (
+                          <div className="border-t border-clinical-line/50 pt-4">
+                            <h5 className="text-[10px] font-medium text-clinical-slate uppercase mb-3">Action Audit</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
+                              {medicalCase?.clinicalActions.map((action, i) => (
+                                <div key={i} className="flex gap-2 text-xs bg-clinical-bg/50 p-2 rounded-md border border-clinical-line/50"><span className="font-mono text-clinical-blue shrink-0">T+{action.timestamp}</span><span className="text-clinical-ink truncate">{action.description}</span></div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex justify-center pt-3">
+                          <button onClick={() => loadNewCase()} className="px-8 py-2.5 bg-clinical-blue text-white rounded-lg font-medium text-sm hover:bg-clinical-blue/90 transition-all">Next Patient</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'archive' && (
+              <motion.div key="archive" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="panel">
+                <div className="panel-header">
+                  <span className="panel-title">Simulation Archive</span>
+                  <span className="text-[10px] text-clinical-slate/50 hidden sm:block">{user?.email || 'Unauthorized'}</span>
+                </div>
+                <ArchiveView user={user} />
+              </motion.div>
+            )}
+
             {activeTab === 'notes' && (<motion.div key="notes" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 min-h-0"><ClinicalNotes /></motion.div>)}
             {activeTab === 'tools' && (<motion.div key="tools" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 min-h-0"><ClinicalGuidelines /></motion.div>)}
           </AnimatePresence>
-
-
-          {/* Diagnostic Console - Bottom Persistent */}
-          <footer className="mt-auto bg-clinical-surface border border-clinical-line rounded p-4 md:p-6 shadow-md shrink-0">
-             <div className="flex justify-between items-center mb-4 md:mb-6">
-                <h3 className="text-[11px] font-bold text-clinical-slate uppercase tracking-widest flex items-center gap-2">
-                  <Stethoscope className="w-3 h-3" aria-hidden="true" />
-                  Attending's Assessment & Plan
-                </h3>
-                {feedback && <div className="px-3 py-1 bg-clinical-blue text-white rounded text-[10px] font-bold">CASE TERMINATED</div>}
-             </div>
-
-             {!feedback && (
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 mb-4 md:mb-6">
-                 <div>
-                    <label className="text-[9px] font-bold text-clinical-slate uppercase mb-2 block" htmlFor="differential-input">Working Differential</label>
-                    <textarea id="differential-input" placeholder={"1. Septic Shock\n2. Pulmonary Embolism\n3. Hypovolemic Shock"} className="w-full h-20 bg-clinical-bg border border-clinical-line rounded p-4 text-xs font-mono focus:outline-none focus:border-clinical-blue focus:ring-1 focus:ring-clinical-blue transition-all resize-none shadow-inner" />
-                 </div>
-                 <div>
-                    <label className="text-[9px] font-bold text-clinical-slate uppercase mb-2 block">Confirmatory Findings</label>
-                    <div className="flex flex-wrap gap-2">
-                       {medicalCase?.labs.filter(l => l.status === 'critical').map(l => (
-                         <span key={l.name} className="px-2 py-1 bg-clinical-red/10 text-clinical-red text-[9px] font-bold rounded flex items-center gap-1"><AlertTriangle className="w-2 h-2" aria-hidden="true" /> {l.name}: {l.value}</span>
-                       ))}
-                       {medicalCase?.imaging.filter(i => i.availableAt && i.availableAt <= simTime).map(i => (
-                         <span key={i.type} className="px-2 py-1 bg-clinical-blue/10 text-clinical-blue text-[9px] font-bold rounded">{i.type} (+)</span>
-                       ))}
-                    </div>
-                 </div>
-               </div>
-             )}
-
-             {feedback ? (
-               <div className="flex flex-col gap-6 w-full animate-in fade-in slide-in-from-bottom-4">
-                  <div className="flex flex-col sm:flex-row gap-4 md:gap-8 items-center sm:items-start text-center sm:text-left">
-                    <div className="w-20 h-20 rounded-full border-4 border-clinical-bg flex items-center justify-center relative shrink-0" aria-label={`Score: ${feedback.score}%`}>
-                        <svg className="absolute inset-0 w-full h-full -rotate-90" aria-hidden="true"><circle cx="40" cy="40" r="36" fill="none" stroke="#EDF2F7" strokeWidth="4" /><circle cx="40" cy="40" r="36" fill="none" stroke="#2B6CB0" strokeWidth="4" strokeDasharray={`${feedback.score * 2.26} 226`} /></svg>
-                        <span className="text-xl font-black text-clinical-ink">{feedback.score}</span>
-                    </div>
-                    <div className="flex-1">
-                        <h4 className="text-xs font-black text-clinical-blue uppercase tracking-widest mb-2">Simulation Outcome: {feedback.score >= 80 ? 'Success' : 'Review Required'}</h4>
-                        <div className="bg-clinical-bg p-4 rounded-lg border border-clinical-line border-l-4 border-l-clinical-blue mb-4"><p className="text-[11px] leading-relaxed text-clinical-ink italic whitespace-pre-wrap">"{feedback.feedback}"</p></div>
-                        <p className="text-[10px] text-clinical-slate uppercase font-bold">Standard of Care Diagnosis: <span className="text-clinical-ink ml-1">{medicalCase?.correctDiagnosis}</span></p>
-                    </div>
-                  </div>
-                  <div className="border-t border-clinical-line pt-4 md:pt-6">
-                    <h5 className="text-[9px] font-black text-clinical-slate uppercase tracking-widest mb-4">Clinical Action Audit</h5>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-2">
-                      {medicalCase?.clinicalActions.map((action, i) => (
-                        <div key={i} className="flex gap-3 text-[10px] bg-white p-2 rounded border border-clinical-line shadow-sm"><span className="font-mono text-clinical-blue font-bold">T+{action.timestamp}</span><span className="text-clinical-ink leading-tight">{action.description}</span></div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex justify-center pt-2">
-                    <button onClick={() => loadNewCase()} className="px-8 md:px-10 py-3 bg-clinical-blue text-white rounded font-bold uppercase text-[10px] tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-clinical-blue/20">Admit Next Patient</button>
-                  </div>
-               </div>
-             ) : (
-               <div className="flex flex-col sm:flex-row gap-4">
-                  <textarea value={userDiagnosis} onChange={(e) => setUserDiagnosis(e.target.value)} placeholder="Enter final working diagnosis and disposition plan..." aria-label="Final diagnosis input" className="flex-1 h-20 bg-clinical-bg border border-clinical-line rounded p-4 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-clinical-blue transition-all" />
-                  <button onClick={handleSubmitDiagnosis} disabled={submitting || !userDiagnosis} aria-label="Submit diagnosis" className="h-14 sm:h-20 px-8 bg-clinical-blue hover:bg-blue-700 text-white rounded flex flex-row sm:flex-col items-center justify-center gap-2 sm:gap-1 transition-all disabled:opacity-50 shrink-0">
-                    <CheckCircle2 className="w-5 h-5" /><span className="text-[10px] font-bold uppercase tracking-widest">Commit</span>
-                  </button>
-               </div>
-             )}
-          </footer>
         </main>
+      </div>
+
+      {/* Phase 4: Mobile bottom navigation */}
+      <div className="mobile-bottom-nav lg:hidden">
+        {mobileNavTabs.map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={cn("mobile-bottom-nav-item", activeTab === tab.id && "active")}>
+            {tab.icon}
+            <span>{tab.label}</span>
+          </button>
+        ))}
       </div>
 
       {/* AI Consultant Slide-over */}
       <AnimatePresence>
         {isConsultOpen && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsConsultOpen(false)} className="fixed inset-0 bg-clinical-ink/40 backdrop-blur-sm z-[100]" aria-hidden="true" />
-            <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }} role="dialog" aria-modal="true" aria-label="AI Consultant Panel" className="fixed top-0 right-0 bottom-0 w-full max-w-lg bg-white border-l border-clinical-line z-[101] shadow-2xl flex flex-col">
-              <div className="h-16 bg-clinical-ink text-white px-4 md:px-6 flex items-center justify-between shrink-0">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsConsultOpen(false)} className="fixed inset-0 bg-clinical-ink/30 backdrop-blur-sm z-[100]" aria-hidden="true" />
+            <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }} role="dialog" aria-modal="true" aria-label="AI Consultant" className="fixed top-0 right-0 bottom-0 w-full max-w-md bg-white border-l border-clinical-line z-[101] shadow-xl flex flex-col">
+              <div className="h-14 bg-clinical-ink text-white px-5 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded bg-clinical-amber/20 flex items-center justify-center" aria-hidden="true"><Brain className="w-5 h-5 text-clinical-amber" /></div>
-                  <div><h3 className="text-sm font-black uppercase tracking-widest">Medical Board Consult</h3><p className="text-[10px] opacity-60 uppercase font-bold">Specialist Clinical Reasoning</p></div>
+                  <Brain className="w-5 h-5 text-clinical-amber" />
+                  <div><h3 className="text-sm font-semibold">AI Consultant</h3><p className="text-[10px] text-white/50">Specialist reasoning</p></div>
                 </div>
-                <button onClick={() => setIsConsultOpen(false)} className="p-2 hover:bg-white/10 rounded transition-colors" aria-label="Close consultant panel"><X className="w-5 h-5" /></button>
+                <button onClick={() => setIsConsultOpen(false)} className="p-2 hover:bg-white/10 rounded-md" aria-label="Close"><X className="w-4 h-4" /></button>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8">
+              <div className="flex-1 overflow-y-auto p-5 space-y-6">
                 {isConsulting ? (
-                  <div className="h-full flex flex-col items-center justify-center gap-6 text-clinical-slate" role="status">
-                    <div className="relative"><div className="w-20 h-20 rounded-full border-t-2 border-clinical-blue animate-spin" /><Brain className="absolute inset-0 m-auto w-10 h-10 opacity-20 animate-pulse" /></div>
-                    <div className="text-center"><p className="text-[10px] font-black uppercase tracking-[0.2em] mb-2">Analyzing Clinical Patterns</p><p className="text-xs italic opacity-60">"Retrieving latest clinical guidelines..."</p></div>
+                  <div className="h-full flex flex-col items-center justify-center gap-4" role="status">
+                    <Loader2 className="w-8 h-8 animate-spin text-clinical-blue" />
+                    <p className="text-xs text-clinical-slate">Analyzing clinical patterns...</p>
                   </div>
                 ) : consultantAdvice ? (
                   <>
-                    <section className="space-y-4"><label className="text-[10px] font-black text-clinical-blue uppercase tracking-widest flex items-center gap-2"><Sparkles className="w-3 h-3" /> Expert Impression</label><div className="p-4 md:p-6 bg-clinical-bg border-l-4 border-clinical-blue rounded-r-xl shadow-sm italic text-sm font-serif leading-relaxed text-clinical-ink">"{consultantAdvice.advice}"</div></section>
-                    <section className="space-y-4"><label className="text-[10px] font-black text-clinical-slate uppercase tracking-widest">Diagnostic Reasoning</label><p className="text-[13px] text-clinical-ink leading-relaxed font-medium">{consultantAdvice.reasoning}</p></section>
-                    <section className="space-y-4"><label className="text-[10px] font-black text-clinical-amber uppercase tracking-widest flex items-center gap-2"><Zap className="w-3 h-3" /> Recommended Priorities</label><div className="space-y-2">{consultantAdvice.recommendedActions.map((action, i) => (<div key={i} className="flex items-start gap-4 p-4 bg-clinical-amber/5 border border-clinical-amber/10 rounded-lg group"><div className="w-6 h-6 rounded-full bg-clinical-amber text-white flex items-center justify-center text-[10px] font-black shrink-0 shadow-sm">{i + 1}</div><p className="text-xs font-bold text-clinical-ink mt-1 group-hover:translate-x-1 transition-transform">{action}</p></div>))}</div></section>
-                    <div className="p-4 md:p-6 bg-blue-50 border border-blue-100 rounded-xl"><p className="text-[10px] text-blue-800 leading-relaxed font-medium"><strong className="uppercase tracking-widest block mb-1">Disclaimer:</strong>This simulation advice is AI-generated for educational purposes. Always correlate with bedside presentation and institutional protocols.</p></div>
+                    <section><label className="text-[10px] font-medium text-clinical-blue uppercase tracking-wide flex items-center gap-1.5 mb-2"><Sparkles className="w-3 h-3" /> Expert Impression</label><div className="p-4 bg-clinical-bg border-l-3 border-clinical-blue rounded-r-lg text-sm leading-relaxed text-clinical-ink italic">"{consultantAdvice.advice}"</div></section>
+                    <section><label className="text-[10px] font-medium text-clinical-slate uppercase tracking-wide mb-2 block">Reasoning</label><p className="text-sm text-clinical-ink leading-relaxed">{consultantAdvice.reasoning}</p></section>
+                    <section><label className="text-[10px] font-medium text-clinical-amber uppercase tracking-wide flex items-center gap-1.5 mb-2"><Zap className="w-3 h-3" /> Recommended Actions</label><div className="space-y-2">{consultantAdvice.recommendedActions.map((action, i) => (<div key={i} className="flex items-start gap-3 p-3 bg-clinical-amber/5 border border-clinical-amber/10 rounded-lg"><div className="w-5 h-5 rounded-full bg-clinical-amber text-white flex items-center justify-center text-[10px] font-medium shrink-0">{i + 1}</div><p className="text-xs text-clinical-ink mt-0.5">{action}</p></div>))}</div></section>
+                    <div className="p-4 bg-clinical-blue/5 border border-clinical-blue/10 rounded-lg"><p className="text-[10px] text-clinical-blue leading-relaxed"><strong className="block mb-0.5">Disclaimer:</strong>AI-generated for educational purposes. Always correlate with bedside presentation.</p></div>
                   </>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center gap-4 text-clinical-slate opacity-40"><AlertCircle className="w-12 h-12 mb-2" aria-hidden="true" /><p className="text-xs uppercase font-black tracking-widest">No Advice Generated</p></div>
+                  <EmptyState icon={<AlertCircle className="w-10 h-10" />} title="No advice generated" description="Request a consultation to get expert guidance." />
                 )}
               </div>
-              <div className="p-4 md:p-6 bg-clinical-bg border-t border-clinical-line">
-                <button onClick={() => setIsConsultOpen(false)} className="w-full h-12 bg-clinical-ink text-white rounded font-black uppercase text-[10px] tracking-widest hover:bg-clinical-blue transition-all">Return to Patient Bedside</button>
+              <div className="p-4 bg-clinical-bg border-t border-clinical-line">
+                <button onClick={() => setIsConsultOpen(false)} className="w-full h-10 bg-clinical-ink text-white rounded-lg font-medium text-xs hover:bg-clinical-slate transition-all">Return to Patient</button>
               </div>
             </motion.div>
           </>
