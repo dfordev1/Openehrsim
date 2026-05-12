@@ -1,15 +1,22 @@
 import "dotenv/config";
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import OpenAI from "openai";
-import { MedicalCase } from "./src/types";
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-  app.use(express.json());
+  // Security: limit request body size to prevent abuse
+  app.use(express.json({ limit: "1mb" }));
+
+  // Security headers
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    next();
+  });
 
   const openai = new OpenAI({
     apiKey: process.env.DEEPSEEK_API_KEY,
@@ -93,17 +100,28 @@ async function startServer() {
     }
   `;
 
+  // Helper: validate that required fields exist in request body
+  function validateBody(body: Record<string, unknown>, requiredFields: string[]): string | null {
+    for (const field of requiredFields) {
+      if (body[field] === undefined || body[field] === null) {
+        return `Missing required field: ${field}`;
+      }
+    }
+    return null;
+  }
+
   // API Routes
-  app.post("/api/generate-case", async (req, res) => {
+  app.post("/api/generate-case", async (req: Request, res: Response) => {
     try {
       const { category, difficulty, history } = req.body;
 
       if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY.includes("MY_")) {
-        return res.status(500).json({ error: "DEEPSEEK_API_KEY is not configured in Secrets." });
+        res.status(500).json({ error: "DEEPSEEK_API_KEY is not configured in Secrets." });
+        return;
       }
 
-      const historyContext = history && history.length > 0 
-        ? `User's Recent Case History: ${history.map((h: any) => `${h.category} (${h.score}%)`).join(", ")}. Avoid repeating the exact clinical presentation from these cases.`
+      const historyContext = history && Array.isArray(history) && history.length > 0 
+        ? `User's Recent Case History: ${history.map((h: { category?: string; score?: number }) => `${h.category || 'unknown'} (${h.score ?? 0}%)`).join(", ")}. Avoid repeating the exact clinical presentation from these cases.`
         : "";
 
       const response = await openai.chat.completions.create({
@@ -133,19 +151,27 @@ async function startServer() {
         response_format: { type: 'json_object' }
       });
 
-      const content = response.choices[0].message.content;
+      const content = response.choices[0]?.message?.content;
       if (!content) throw new Error("Empty response from AI");
       
-      res.json(JSON.parse(content));
-    } catch (error: any) {
-      console.error("DeepSeek Error:", error);
-      res.status(500).json({ error: error.message || "Failed to generate case" });
+      const parsed = JSON.parse(content);
+      res.json(parsed);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to generate case";
+      console.error("DeepSeek Error:", message);
+      res.status(500).json({ error: message });
     }
   });
 
-  app.post("/api/perform-intervention", async (req, res) => {
+  app.post("/api/perform-intervention", async (req: Request, res: Response) => {
     try {
       const { intervention, medicalCase, waitTime } = req.body;
+
+      const validationError = validateBody(req.body, ["intervention", "medicalCase"]);
+      if (validationError) {
+        res.status(400).json({ error: validationError });
+        return;
+      }
       
       const response = await openai.chat.completions.create({
         model: "deepseek-chat",
@@ -179,7 +205,7 @@ async function startServer() {
         response_format: { type: 'json_object' }
       });
 
-      const content = response.choices[0].message.content;
+      const content = response.choices[0]?.message?.content;
       if (!content) throw new Error("Empty response from AI");
       
       const updatedCase = JSON.parse(content);
@@ -188,16 +214,22 @@ async function startServer() {
       }
       
       res.json(updatedCase);
-    } catch (error: any) {
-      console.error("Intervention Error:", error);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Simulator failed to process intervention.";
+      console.error("Intervention Error:", message);
       res.status(500).json({ error: "Simulator failed to process intervention." });
     }
   });
 
-  // NEW: Direct Communication API
-  app.post("/api/staff-call", async (req, res) => {
+  app.post("/api/staff-call", async (req: Request, res: Response) => {
     try {
       const { target, message, medicalCase } = req.body;
+
+      const validationError = validateBody(req.body, ["target", "message", "medicalCase"]);
+      if (validationError) {
+        res.status(400).json({ error: validationError });
+        return;
+      }
       
       const response = await openai.chat.completions.create({
         model: "deepseek-chat",
@@ -221,22 +253,30 @@ async function startServer() {
         response_format: { type: 'json_object' }
       });
 
-      const content = response.choices[0].message.content;
+      const content = response.choices[0]?.message?.content;
       if (!content) throw new Error("Empty response from AI");
       
       res.json(JSON.parse(content));
-    } catch (error: any) {
-      console.error("Call Error:", error);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Communication failed.";
+      console.error("Call Error:", message);
       res.status(500).json({ error: "Communication failed." });
     }
   });
 
-  app.post("/api/evaluate-diagnosis", async (req, res) => {
+  app.post("/api/evaluate-diagnosis", async (req: Request, res: Response) => {
     try {
       const { userDiagnosis, medicalCase } = req.body;
+
+      const validationError = validateBody(req.body, ["userDiagnosis", "medicalCase"]);
+      if (validationError) {
+        res.status(400).json({ error: validationError });
+        return;
+      }
       
       if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY.includes("MY_")) {
-        return res.status(500).json({ error: "DEEPSEEK_API_KEY is not configured." });
+        res.status(500).json({ error: "DEEPSEEK_API_KEY is not configured." });
+        return;
       }
 
       const response = await openai.chat.completions.create({
@@ -254,20 +294,21 @@ async function startServer() {
         response_format: { type: 'json_object' }
       });
 
-      const content = response.choices[0].message.content;
+      const content = response.choices[0]?.message?.content;
       if (!content) throw new Error("Empty response from AI");
       
       res.json(JSON.parse(content));
-    } catch (error: any) {
-      console.error("DeepSeek Evaluation Error:", error);
-      res.status(500).json({ error: error.message || "Failed to evaluate diagnosis" });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to evaluate diagnosis";
+      console.error("DeepSeek Evaluation Error:", message);
+      res.status(500).json({ error: message });
     }
   });
 
   // Global Error Handler for API
-  app.use("/api", (err: any, req: any, res: any, next: any) => {
-    console.error("API error:", err);
-    res.status(500).json({ error: "API Internal Error", details: err.message });
+  app.use("/api", (err: Error, _req: Request, res: Response, _next: NextFunction) => {
+    console.error("API error:", err.message);
+    res.status(500).json({ error: "API Internal Error" });
   });
 
   // Vite middleware for development
@@ -280,7 +321,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
