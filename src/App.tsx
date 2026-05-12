@@ -463,21 +463,47 @@ function ClinicalSimulator() {
 
   if (loading || error) {
     return (
-      <div className="min-h-screen bg-clinical-bg flex items-center justify-center font-sans">
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center gap-6 max-w-md text-center">
+      <div className="min-h-screen bg-clinical-bg flex items-center justify-center font-sans relative overflow-hidden">
+        {/* Background decoration */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-clinical-blue/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-1/4 right-1/4 w-72 h-72 bg-clinical-green/5 rounded-full blur-3xl" />
+        </div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="flex flex-col items-center gap-8 max-w-md text-center relative z-10">
           {error ? (
-            <div className="p-8 bg-clinical-surface border border-clinical-line rounded-lg shadow-sm">
-              <AlertCircle className="w-10 h-10 text-clinical-red mx-auto mb-4" />
-              <h2 className="text-lg font-bold mb-2 text-clinical-ink">System Fault</h2>
-              <p className="text-sm text-clinical-slate mb-6 leading-relaxed">{error}</p>
-              <button onClick={() => loadNewCase()} className="w-full py-2 bg-clinical-blue text-white rounded font-medium text-sm flex items-center justify-center gap-2">
+            <div className="p-10 bg-clinical-surface border border-clinical-line rounded-2xl shadow-elevated w-full">
+              <div className="w-16 h-16 bg-clinical-red/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <AlertCircle className="w-8 h-8 text-clinical-red" />
+              </div>
+              <h2 className="text-xl font-bold mb-2 text-clinical-ink">System Fault</h2>
+              <p className="text-sm text-clinical-slate mb-8 leading-relaxed">{error}</p>
+              <button onClick={() => loadNewCase()} className="w-full py-3 bg-clinical-blue hover:bg-clinical-blue/90 text-white rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-clinical-blue/20">
                 <RefreshCw className="w-4 h-4" /> Restart Station
               </button>
             </div>
           ) : (
-            <div className="flex flex-col items-center">
-              <Loader2 className="w-8 h-8 animate-spin text-clinical-blue mb-4" />
-              <p className="text-xs uppercase tracking-widest font-bold text-clinical-slate">Synchronizing Clinic Data...</p>
+            <div className="flex flex-col items-center gap-6">
+              {/* ECG-style loading animation */}
+              <div className="relative">
+                <div className="w-20 h-20 rounded-2xl bg-clinical-surface border border-clinical-line shadow-elevated flex items-center justify-center">
+                  <Activity className="w-8 h-8 text-clinical-blue animate-pulse" />
+                </div>
+                <div className="absolute -top-1 -right-1 w-4 h-4 bg-clinical-green rounded-full border-2 border-clinical-bg animate-ping" />
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-clinical-ink">Initializing Clinical Station</p>
+                <p className="text-xs text-clinical-slate">Generating patient scenario via AI engine...</p>
+              </div>
+              {/* Progress bar */}
+              <div className="w-48 h-1 bg-clinical-line rounded-full overflow-hidden">
+                <motion.div 
+                  className="h-full bg-clinical-blue rounded-full"
+                  initial={{ width: "0%" }}
+                  animate={{ width: "70%" }}
+                  transition={{ duration: 3, ease: "easeInOut" }}
+                />
+              </div>
             </div>
           )}
         </motion.div>
