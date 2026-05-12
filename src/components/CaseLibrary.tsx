@@ -35,14 +35,21 @@ export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps)
     { id: 'cardiology', label: 'Cardiology', icon: <Heart className="w-4 h-4" /> },
     { id: 'pulmonology', label: 'Pulmonology', icon: <Wind className="w-4 h-4" /> },
     { id: 'sepsis', label: 'Sepsis/Shock', icon: <AlertTriangle className="w-4 h-4" /> },
-    { id: 'trauma', label: 'Trauma/surgical', icon: <Droplets className="w-4 h-4" /> },
+    { id: 'trauma', label: 'Trauma/Surgical', icon: <Droplets className="w-4 h-4" /> },
     { id: 'neurology', label: 'Neurology', icon: <Activity className="w-4 h-4" /> },
     { id: 'toxicology', label: 'Toxicology', icon: <FlaskIcon className="w-4 h-4" /> },
     { id: 'pediatrics', label: 'Pediatrics', icon: <Baby className="w-4 h-4" /> },
     { id: 'obgyn', label: 'OB/GYN', icon: <Microscope className="w-4 h-4" /> },
     { id: 'gi_hepatology', label: 'GI & Hepatology', icon: <StethoscopeIcon className="w-4 h-4" /> },
     { id: 'endocrinology', label: 'Endocrinology', icon: <Syringe className="w-4 h-4" /> },
-    { id: 'psychiatry', label: 'Psychiatry', icon: <Brain className="w-4 h-4 text-clinical-amber" /> },
+    { id: 'psychiatry', label: 'Psychiatry', icon: <Brain className="w-4 h-4" /> },
+    { id: 'renal', label: 'Renal/Nephrology', icon: <Droplets className="w-4 h-4" /> },
+    { id: 'heme_onc', label: 'Heme/Onc', icon: <Microscope className="w-4 h-4" /> },
+    { id: 'musculoskeletal', label: 'MSK/Rheum', icon: <Activity className="w-4 h-4" /> },
+    { id: 'infectious_disease', label: 'Infectious Disease', icon: <AlertTriangle className="w-4 h-4" /> },
+    { id: 'dermatology', label: 'Dermatology', icon: <StethoscopeIcon className="w-4 h-4" /> },
+    { id: 'ent', label: 'ENT', icon: <StethoscopeIcon className="w-4 h-4" /> },
+    { id: 'palliative', label: 'Palliative/Goals of Care', icon: <Heart className="w-4 h-4" /> },
   ];
 
   const difficulties = [
@@ -55,6 +62,8 @@ export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps)
     { id: 'tertiary', label: 'Tertiary Care', icon: <Building2 className="w-4 h-4" />, desc: 'Full resources, Level 1 Trauma.' },
     { id: 'rural', label: 'Rural Clinic', icon: <Crosshair className="w-4 h-4" />, desc: 'Limited labs/imaging, slow results.' },
     { id: 'prehospital', label: 'EMS Environment', icon: <Truck className="w-4 h-4" />, desc: 'Field setting, monitor only.' },
+    { id: 'outpatient', label: 'Outpatient Clinic', icon: <Building2 className="w-4 h-4" />, desc: 'Office visit. Labs take hours/days.' },
+    { id: 'urgent_care', label: 'Urgent Care', icon: <Crosshair className="w-4 h-4" />, desc: 'Walk-in, basic labs, no CT/MRI.' },
   ];
 
   return (

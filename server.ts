@@ -71,6 +71,10 @@ async function startServer() {
           ? "SETTING: Rural Critical Access Hospital. Limited resources. CT takes 60 mins. Specialized labs (Troponin, Lactate) available but slow. No MRI."
           : environment === "prehospital"
           ? "SETTING: Pre-hospital (Ambulance). Only portable monitor and BASIC meds. No labs or imaging available in the field."
+          : environment === "outpatient"
+          ? "SETTING: Outpatient Clinic. Office visit. Basic exam, point-of-care UA/glucose only. Labs sent out (results in hours). No imaging on-site — must refer. Patient ambulatory."
+          : environment === "urgent_care"
+          ? "SETTING: Urgent Care Center. Walk-in visit. Basic labs (CBC, BMP, UA, rapid strep/flu) available in 30 min. X-ray available. No CT, MRI, or advanced imaging. Limited formulary."
           : "SETTING: Level 1 Tertiary Trauma Center. All resources available.";
 
       const historyContext =
@@ -97,7 +101,7 @@ ${historyContext}
 CRITICAL REQUIREMENTS:
 - You MUST generate a unique "id" field (e.g. "case-a1b2c3"). Do NOT omit it.
 - Initialize simulationTime at 0.
-- Initialize currentLocation as ${environment === "prehospital" ? '"Ambulance Rescue 1"' : '"Emergency Room (ER) Bay 1"'}.
+- Initialize currentLocation as ${environment === "prehospital" ? '"Ambulance Rescue 1"' : environment === "outpatient" ? '"Primary Care Clinic Room 3"' : environment === "urgent_care" ? '"Urgent Care Bay 2"' : '"Emergency Room (ER) Bay 1"'}.
 - Initialize communicationLog, medications, and activeAlarms as empty arrays.
 - Initialize physiologicalTrend as 'stable' or 'declining' based on acuity.
 - ALL labs and imaging should NOT have orderedAt or availableAt yet.

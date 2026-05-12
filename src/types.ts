@@ -91,7 +91,9 @@ export interface MedicalCase {
   currentLocation: string;
   communicationLog: CommunicationMessage[];
   difficulty?: 'intern' | 'resident' | 'attending';
-  category?: 'cardiology' | 'pulmonology' | 'sepsis' | 'trauma' | 'neurology' | 'toxicology';
+  category?: 'cardiology' | 'pulmonology' | 'sepsis' | 'trauma' | 'neurology' | 'toxicology'
+    | 'pediatrics' | 'obgyn' | 'psychiatry' | 'musculoskeletal' | 'renal' | 'gi_hepatology'
+    | 'heme_onc' | 'endocrinology' | 'dermatology' | 'ent' | 'infectious_disease' | 'palliative';
   patientOutcome?: 'alive' | 'deceased' | 'critical_deterioration';
 
   // Server-side only — will be undefined on the client during an active case
