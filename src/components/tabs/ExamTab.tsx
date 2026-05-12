@@ -107,6 +107,14 @@ export function ExamTab({
   const examinedCount = Object.keys(revealedFindings).length;
   const totalSystems  = examEntries.length;
 
+  /** Sequentially examine all unexamined systems */
+  const handleExamineAll = async () => {
+    for (const [key, finding] of examEntries) {
+      if (revealedFindings[key]) continue;
+      await handleExamine(key, finding as string);
+    }
+  };
+
   return (
     <motion.div key="exam" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4">
 
@@ -166,9 +174,21 @@ export function ExamTab({
             <Stethoscope className="w-3.5 h-3.5" />
             Physical Examination
           </span>
-          <span className="text-[10px] text-clinical-slate font-mono">
-            {examinedCount}/{totalSystems} systems examined
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-clinical-slate font-mono">
+              {examinedCount}/{totalSystems} systems examined
+            </span>
+            {examinedCount < totalSystems && (
+              <button
+                onClick={handleExamineAll}
+                disabled={!!loadingSystem}
+                className="text-[10px] font-medium text-clinical-blue bg-clinical-blue/10 hover:bg-clinical-blue/20 px-2.5 py-1 rounded-md transition-all disabled:opacity-50 flex items-center gap-1"
+              >
+                <Stethoscope className="w-3 h-3" />
+                Examine All
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Progress bar */}

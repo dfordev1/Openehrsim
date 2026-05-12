@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { FileSearch, Clock } from 'lucide-react';
+import { FileSearch, Clock, Plus, ChevronDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { EmptyState } from '../EmptyState';
 import { MedicalCase } from '../../types';
@@ -20,10 +20,46 @@ export function ImagingTab({
   onRevealStudy,
   onOrderImaging,
 }: ImagingTabProps) {
+  const [orderPanelOpen, setOrderPanelOpen] = useState(false);
+
+  const availableImaging = medicalCase.availableTests?.imaging ?? [];
+  const orderedTypes = new Set((medicalCase.imaging || []).map(i => i.type));
+  const unorderedImaging = availableImaging.filter(name => !orderedTypes.has(name));
+
   const activeStudy = medicalCase.imaging.find((img) => revealedStudies.includes(img.type));
 
   return (
     <motion.div key="imaging" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4 flex-1 min-h-0">
+
+      {/* ── Quick Order Panel ─────────────────────────────────────────── */}
+      {unorderedImaging.length > 0 && (
+        <div className="panel">
+          <button
+            onClick={() => setOrderPanelOpen(p => !p)}
+            className="panel-header w-full cursor-pointer hover:bg-clinical-bg/60 transition-colors"
+          >
+            <span className="panel-title flex items-center gap-2">
+              <Plus className="w-3.5 h-3.5 text-clinical-blue" />
+              Order Imaging
+              <span className="ml-1 text-[9px] bg-clinical-blue text-white rounded-full px-1.5 py-0.5">{unorderedImaging.length}</span>
+            </span>
+            <ChevronDown className={cn('w-4 h-4 text-clinical-slate/40 transition-transform', orderPanelOpen && 'rotate-180')} />
+          </button>
+          {orderPanelOpen && (
+            <div className="p-3 flex flex-wrap gap-1.5">
+              {unorderedImaging.map(name => (
+                <button
+                  key={name}
+                  onClick={() => onOrderImaging(name)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-clinical-bg border border-clinical-line rounded-md text-xs font-medium hover:border-clinical-blue/50 hover:bg-clinical-blue/5 hover:text-clinical-blue transition-all"
+                >
+                  <Plus className="w-3 h-3" />{name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
         {/* Worklist */}
         <div className="lg:col-span-1 panel flex flex-col min-h-[200px] max-h-[500px] lg:max-h-none">

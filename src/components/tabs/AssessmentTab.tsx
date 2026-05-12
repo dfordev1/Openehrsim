@@ -16,6 +16,9 @@ interface AssessmentTabProps {
   submitting: boolean;
   logs: { time: string; text: string }[];
   onNotesChange: (val: string) => void;
+  /** Separate scratchpad differential state */
+  differential: string;
+  onDifferentialChange: (val: string) => void;
   /** CCS: end case & score management */
   onEndCase: () => void;
   onNewCase: () => void;
@@ -40,7 +43,7 @@ function ScoreRing({ score }: { score: number }) {
 
 export function AssessmentTab({
   medicalCase, simTime, userNotes, evaluation, feedback,
-  submitting, logs, onNotesChange, onEndCase, onNewCase,
+  submitting, logs, onNotesChange, differential, onDifferentialChange, onEndCase, onNewCase,
 }: AssessmentTabProps) {
   const closed    = !!(evaluation || feedback);
   const score     = evaluation?.score     ?? feedback?.score     ?? 0;
@@ -81,6 +84,8 @@ export function AssessmentTab({
                     Working Differential (scratch-pad)
                   </label>
                   <textarea
+                    value={differential}
+                    onChange={(e) => onDifferentialChange(e.target.value)}
                     placeholder={'1. Septic Shock\n2. PE\n3. Hypovolemic Shock'}
                     className="w-full h-20 bg-clinical-bg border border-clinical-line rounded-md p-3 text-xs font-mono focus:outline-none focus:border-clinical-blue/50 resize-none"
                   />

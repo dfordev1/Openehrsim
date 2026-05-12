@@ -144,6 +144,7 @@ function ClinicalSimulator() {
   const [evaluation, setEvaluation]     = useState<CaseEvaluation | null>(null);
   const [feedback, setFeedback]         = useState<{ score: number; feedback: string } | null>(null);
   const [submitting, setSubmitting]     = useState(false);
+  const [differential, setDifferential] = useState('');
 
   // ── Comms ─────────────────────────────────────────────────────────────────
   const [callTarget, setCallTarget] = useState('Nursing Station');
@@ -250,6 +251,7 @@ function ClinicalSimulator() {
     setEvaluation(null);
     setFeedback(null);
     setUserNotes('');
+    setDifferential('');
     setRevealedStudies([]);
     setPatientOutcome(null);
     setSelectedLab(null);
@@ -324,7 +326,9 @@ function ClinicalSimulator() {
       setInterventionInput('');
       addToast(`Intervention executed: ${action}`, 'success');
     } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Intervention failed';
       console.error('Intervention failed:', err);
+      addToast(msg, 'error');
     } finally {
       setIntervening(false);
     }
@@ -339,7 +343,9 @@ function ClinicalSimulator() {
       setMedicalCase(updated);
       addToast(`${type === 'lab' ? 'Lab' : 'Imaging'} ordered: ${name}`, 'success');
     } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Order failed';
       console.error(err);
+      addToast(msg, 'error');
     } finally {
       setIntervening(false);
     }
@@ -360,7 +366,9 @@ function ClinicalSimulator() {
       ]);
       addToast(`Staff call to ${callTarget} completed`, 'success');
     } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Staff call failed';
       console.error(err);
+      addToast(msg, 'error');
     } finally {
       setCalling(false);
     }
@@ -379,7 +387,7 @@ function ClinicalSimulator() {
       setLogs((prev) => [{ time: `T + ${updated.simulationTime}`, text: 'Expert Consultation requested (+10 min)' }, ...prev]);
     } catch (err: any) {
       console.error(err);
-      addToast('Consultant is currently unavailable.', 'error');
+      addToast(err?.message || 'Consultant is currently unavailable.', 'error');
     } finally {
       setIsConsulting(false);
     }
@@ -544,7 +552,15 @@ function ClinicalSimulator() {
             <Command className="w-3 h-3" />
             <span className="font-mono text-[10px]">K</span>
           </button>
-          <span className="text-xs font-mono text-clinical-blue/80">T+{simTime}m</span>
+          <span className={cn(
+            'text-xs font-mono px-2 py-0.5 rounded-md font-semibold transition-colors',
+            simTime === 0 ? 'text-clinical-slate/60' :
+            simTime < 30  ? 'text-clinical-green bg-green-50/80' :
+            simTime < 60  ? 'text-clinical-amber bg-amber-50/80' :
+                            'text-clinical-red bg-red-50/80 animate-pulse'
+          )} title="Simulation elapsed time — faster decisions score better">
+            T+{simTime}m
+          </span>
           <button onClick={() => setIsLibraryOpen(true)} className="text-clinical-slate/50 hover:text-clinical-blue transition-colors" aria-label="New case">
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
@@ -771,6 +787,8 @@ function ClinicalSimulator() {
                 feedback={feedback}
                 submitting={submitting}
                 logs={logs}
+                differential={differential}
+                onDifferentialChange={setDifferential}
                 onNotesChange={setUserNotes}
                 onEndCase={handleEndCase}
                 onNewCase={() => loadNewCase()}
@@ -832,7 +850,7 @@ function ClinicalSimulator() {
         {isConsultOpen && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsConsultOpen(false)} className="fixed inset-0 bg-clinical-ink/30 backdrop-blur-sm z-[100]" aria-hidden="true" />
-            <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }} role="dialog" aria-modal="true" aria-label="AI Consultant" className="fixed top-0 right-0 bottom-0 w-full max-w-md bg-white border-l border-clinical-line z-[101] shadow-xl flex flex-col">
+            <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }} role="dialog" aria-modal="true" aria-label="AI Consultant" className="fixed top-0 right-0 bottom-0 w-full max-w-md bg-clinical-surface border-l border-clinical-line z-[101] shadow-xl flex flex-col">
               <div className="h-14 bg-clinical-ink text-white px-5 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
                   <Brain className="w-5 h-5 text-clinical-amber" />
