@@ -18,8 +18,10 @@ async function startServer() {
     next();
   });
 
+  const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || "sk-b79bd35ec3064714bdce2306ebb38369";
+
   const openai = new OpenAI({
-    apiKey: process.env.DEEPSEEK_API_KEY,
+    apiKey: DEEPSEEK_KEY,
     baseURL: "https://api.deepseek.com",
   });
 
@@ -114,11 +116,6 @@ async function startServer() {
   app.post("/api/generate-case", async (req: Request, res: Response) => {
     try {
       const { category, difficulty, history } = req.body;
-
-      if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY.includes("MY_")) {
-        res.status(500).json({ error: "DEEPSEEK_API_KEY is not configured in Secrets." });
-        return;
-      }
 
       const historyContext = history && Array.isArray(history) && history.length > 0 
         ? `User's Recent Case History: ${history.map((h: { category?: string; score?: number }) => `${h.category || 'unknown'} (${h.score ?? 0}%)`).join(", ")}. Avoid repeating the exact clinical presentation from these cases.`
@@ -271,11 +268,6 @@ async function startServer() {
       const validationError = validateBody(req.body, ["userDiagnosis", "medicalCase"]);
       if (validationError) {
         res.status(400).json({ error: validationError });
-        return;
-      }
-      
-      if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY.includes("MY_")) {
-        res.status(500).json({ error: "DEEPSEEK_API_KEY is not configured." });
         return;
       }
 
