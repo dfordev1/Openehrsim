@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { MedicalCase } from '../types';
 
 interface UndoEntry {
@@ -10,6 +10,8 @@ interface UndoEntry {
 
 export function useUndoStack() {
   const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
+  // Mirror state in a ref so popUndo can synchronously return the popped entry
+  const stackRef = useRef<UndoEntry[]>([]);
 
   const pushUndo = useCallback((label: string, caseSnapshot: MedicalCase) => {
     const entry: UndoEntry = {
@@ -18,16 +20,20 @@ export function useUndoStack() {
       caseSnapshot: JSON.parse(JSON.stringify(caseSnapshot)), // deep clone
       timestamp: Date.now(),
     };
-    setUndoStack(prev => [...prev.slice(-19), entry]); // keep last 20
+    setUndoStack(prev => {
+      const next = [...prev.slice(-19), entry]; // keep last 20
+      stackRef.current = next;
+      return next;
+    });
   }, []);
 
   const popUndo = useCallback((): UndoEntry | null => {
-    let popped: UndoEntry | null = null;
-    setUndoStack(prev => {
-      if (prev.length === 0) return prev;
-      popped = prev[prev.length - 1];
-      return prev.slice(0, -1);
-    });
+    const current = stackRef.current;
+    if (current.length === 0) return null;
+    const popped = current[current.length - 1];
+    const next = current.slice(0, -1);
+    stackRef.current = next;
+    setUndoStack(next);
     return popped;
   }, []);
 

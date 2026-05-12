@@ -341,23 +341,6 @@ function ClinicalSimulator() {
     }
   };
 
-  const handleOrderDiagnostic = async (type: 'lab' | 'imaging', name: string) => {
-    if (!medicalCase || intervening) return;
-    setIntervening(true);
-    setLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), text: `ORDERED: ${name}` }]);
-    try {
-      const updated = await performIntervention(`Order ${type}: ${name}`, medicalCase, 1);
-      setMedicalCase(updated);
-      addToast(`${type === 'lab' ? 'Lab' : 'Imaging'} ordered: ${name}`, 'success');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Order failed';
-      console.error(err);
-      addToast(msg, 'error');
-    } finally {
-      setIntervening(false);
-    }
-  };
-
   // ── Staff call handler ────────────────────────────────────────────────────
   const handleStaffCall = async () => {
     if (!medicalCase || !callMessage) return;

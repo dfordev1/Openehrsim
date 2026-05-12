@@ -24,9 +24,8 @@ export default defineConfig(({ mode }) => {
           ]
         : []),
     ],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-    },
+    // NOTE: GEMINI_API_KEY is server-side only. Never expose it to the client bundle.
+    // The /api/consult endpoint handles Gemini calls securely on the server.
     resolve: {
       alias: { '@': path.resolve(__dirname, '.') },
     },

@@ -7,6 +7,10 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { MEDICAL_CASE_SCHEMA } from "./src/lib/schema";
 import { MedicalCase } from "./src/types";
 
+// ── In-memory case store for dev mode ─────────────────────────────────────────
+// Mirrors api/_supabase.ts fallback so order-test / end-case work locally.
+const casesStore = new Map<string, any>();
+
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
 /** Trim the MedicalCase payload to avoid unbounded growth in request size */
@@ -99,6 +103,9 @@ CRITICAL REQUIREMENTS:
 - ALL labs and imaging should NOT have orderedAt or availableAt yet.
 - For any IV fluid medications, set isIVFluid: true and volumeML to the appropriate volume in mL.
 - Set patientOutcome to "alive".
+- Include correctDiagnosis, explanation, and underlyingPathology in the response.
+- Include availableTests with labs[] and imaging[] arrays listing orderable tests.
+- Include initialAppearance (vivid 1-sentence bedside impression).
 Output MUST be valid JSON adhering to: ${MEDICAL_CASE_SCHEMA}`,
           },
           {
@@ -112,13 +119,30 @@ Output MUST be valid JSON adhering to: ${MEDICAL_CASE_SCHEMA}`,
       const content = response.choices[0].message.content;
       if (!content) throw new Error("Empty response from AI");
 
-      const parsed = JSON.parse(content);
+      const fullCase = JSON.parse(content);
       // Fallback id if AI omits it
-      if (!parsed.id) {
-        parsed.id = `case-${Math.random().toString(36).slice(2, 9)}`;
+      if (!fullCase.id) {
+        fullCase.id = `case-${Math.random().toString(36).slice(2, 9)}`;
       }
 
-      res.json(parsed);
+      // ── Store full case server-side (in-memory for dev) ──────────────────
+      casesStore.set(fullCase.id, fullCase);
+
+      // ── Strip answer key before sending to client (CCS design) ───────────
+      const { correctDiagnosis, explanation, underlyingPathology, ...clientCase } = fullCase;
+
+      // Clear lab/imaging results — user must ORDER them
+      clientCase.labs = [];
+      clientCase.imaging = [];
+
+      // Physical exam starts locked
+      if (fullCase.physicalExam) {
+        clientCase.physicalExam = Object.fromEntries(
+          Object.keys(fullCase.physicalExam).map((k) => [k, "Not yet examined"])
+        );
+      }
+
+      res.json(clientCase);
     } catch (error: any) {
       console.error("DeepSeek Error:", error);
       res.status(500).json({ error: error.message || "Failed to generate case" });
@@ -132,45 +156,60 @@ Output MUST be valid JSON adhering to: ${MEDICAL_CASE_SCHEMA}`,
       const medicalCase = req.body?.medicalCase;
       const waitTimeRaw = req.body?.waitTime;
 
-      requireString(interventionRaw, "intervention");
+      if (typeof interventionRaw !== "string") {
+        return res.status(400).json({ error: "Missing or invalid field: intervention." });
+      }
       requireObject(medicalCase, "medicalCase");
       const waitTime = waitTimeRaw !== undefined ? Number(waitTimeRaw) : 5;
       if (isNaN(waitTime) || waitTime < 0 || waitTime > 1440) {
         return res.status(400).json({ error: "Invalid waitTime." });
       }
 
+      const newSimTime = (medicalCase.simulationTime || 0) + waitTime;
+
+      // Pull server-side pathology context for realistic evolution
+      const fullCase = casesStore.get(medicalCase.id) || null;
+      const pathologyCtx = fullCase
+        ? `HIDDEN PATHOLOGY (use ONLY to drive realistic evolution — NEVER reveal to user):
+Correct Diagnosis: ${fullCase.correctDiagnosis}
+Underlying Pathology: ${fullCase.underlyingPathology || "not specified"}
+Explanation: ${fullCase.explanation || ""}`
+        : "No server-side context available — evolve realistically based on current vitals.";
+
       const response = await openai.chat.completions.create({
         model: "deepseek-chat",
         messages: [
           {
             role: "system",
-            content: `You are a clinical simulator. Analyze the intervention/wait-time.
-Update the MedicalCase state based on the following rules:
-1. Advance simulationTime by ${waitTime} minutes.
-2. Update physiologicalTrend based on interventions (Fluids/Vasopressors move it towards 'improving').
-3. Update vitals realistically. If trend is 'declining', vitals should drift towards disaster (HR up, BP down, etc.).
-4. If action is "Transfer to [Dept]", update currentLocation accordingly.
-5. If intervention involves medication (e.g. "Administer [Drug] [Dose]"), add to 'medications' array.
-   - If the medication is an IV fluid (NS, LR, Albumin, colloids, crystalloids), set isIVFluid: true and volumeML to the appropriate volume in mL.
-6. If vitals are critical, add descriptive strings to 'activeAlarms' (e.g. "Low SpO2", "Bradycardia").
-7. If an intervention was "Order lab: [name]" or "Order imaging: [type]", handle orderedAt/availableAt.
-8. Lab "clinicalNote" should include relevant path/tech comments.
-9. Imaging 'findings' and 'impression' MUST be professional radiologic reports.
-10. If the patient is transferred, update 'currentLocation'.
-11. Add a log entry to clinicalActions.
-12. PATIENT OUTCOME: Set patientOutcome:
-    - "deceased" if HR < 20 or HR > 200 or SBP < 50 or SpO2 < 60 or temp < 32 or temp > 42.
-    - "critical_deterioration" if physiologicalTrend is 'critical'.
-    - Otherwise "alive".
+            content: `You are a CCS clinical simulator. Advance the patient state.
 
-CRITICAL: Return the ENTIRE MedicalCase object. Preserve the original id field.
-Output MUST be valid JSON adhering to: ${MEDICAL_CASE_SCHEMA}`,
+${pathologyCtx}
+
+RULES:
+1. Set simulationTime = ${newSimTime}.
+2. Evolve vitals realistically based on the hidden pathology + interventions given.
+   - Correct treatment → improving trend
+   - No/wrong treatment → worsening; untreated sepsis/shock WILL deteriorate
+3. If intervention is a medication, add to medications[] (with timestamp ${newSimTime}).
+   IV fluids → isIVFluid:true, volumeML:[appropriate].
+4. Update activeAlarms based on current vitals (e.g. "Hypotension", "Tachycardia").
+5. Update physiologicalTrend: improving | stable | declining | critical.
+6. If "Transfer to X", update currentLocation.
+7. Append one entry to clinicalActions (timestamp: ${newSimTime}).
+8. patientOutcome:
+   - "deceased" if HR<20 or HR>200 or SBP<50 or SpO2<60 or temp<32 or temp>42
+   - "critical_deterioration" if trend is 'critical' and vitals worsening
+   - otherwise "alive"
+9. DO NOT modify labs or imaging arrays — those are managed separately.
+10. DO NOT include correctDiagnosis or explanation in the response.
+
+Return the ENTIRE updated MedicalCase JSON. Schema: ${MEDICAL_CASE_SCHEMA}`,
           },
           {
             role: "user",
-            content: `Current Case State: ${JSON.stringify(trimCase(medicalCase))}.
-Action Taken: ${interventionRaw}.
-Wait Time: ${waitTime} min.`,
+            content: `Current state: ${JSON.stringify(trimCase(medicalCase))}
+${interventionRaw ? `Intervention: ${interventionRaw}` : "Time advancement only — no active intervention."}
+Time advances by ${waitTime} min (${medicalCase.simulationTime} → ${newSimTime}).`,
           },
         ],
         response_format: { type: "json_object" },
@@ -180,17 +219,210 @@ Wait Time: ${waitTime} min.`,
       if (!content) throw new Error("Empty response from AI");
 
       const updatedCase = JSON.parse(content);
-      if (!updatedCase.vitals || !updatedCase.labs || !updatedCase.imaging) {
+      if (!updatedCase.vitals) {
         throw new Error("AI returned an incomplete medical case object.");
       }
 
-      // Preserve id
-      if (!updatedCase.id && medicalCase.id) updatedCase.id = medicalCase.id;
+      // Safety: preserve id & availableTests, merge ordered tests back
+      updatedCase.id = medicalCase.id;
+      updatedCase.availableTests = medicalCase.availableTests || updatedCase.availableTests;
+      updatedCase.labs = medicalCase.labs || [];
+      updatedCase.imaging = medicalCase.imaging || [];
 
-      res.json(updatedCase);
+      // Update the server-side full case
+      if (fullCase) {
+        Object.assign(fullCase, {
+          vitals: updatedCase.vitals,
+          physiologicalTrend: updatedCase.physiologicalTrend,
+          currentLocation: updatedCase.currentLocation,
+          simulationTime: updatedCase.simulationTime,
+          activeAlarms: updatedCase.activeAlarms,
+          medications: updatedCase.medications,
+          clinicalActions: updatedCase.clinicalActions,
+          patientOutcome: updatedCase.patientOutcome,
+          currentCondition: updatedCase.currentCondition,
+        });
+        casesStore.set(medicalCase.id, fullCase);
+      }
+
+      // Strip server-only fields before sending to client
+      const { correctDiagnosis, explanation, underlyingPathology, ...clientCase } = updatedCase;
+      res.json(clientCase);
     } catch (error: any) {
       console.error("Intervention Error:", error);
       res.status(500).json({ error: "Simulator failed to process intervention." });
+    }
+  });
+
+  // ── POST /api/order-test ────────────────────────────────────────────────────
+  app.post("/api/order-test", async (req, res) => {
+    try {
+      const { caseId, testType, testName: rawName, currentSimTime, priority: rawPriority } = req.body ?? {};
+
+      if (!caseId || typeof caseId !== "string") return res.status(400).json({ error: "Missing: caseId" });
+      if (!["lab", "imaging"].includes(testType)) return res.status(400).json({ error: "Invalid testType" });
+      if (!rawName || typeof rawName !== "string") return res.status(400).json({ error: "Missing: testName" });
+      if (typeof currentSimTime !== "number") return res.status(400).json({ error: "Missing: currentSimTime" });
+
+      const priority = rawPriority === "routine" ? "routine" : "stat";
+
+      // Dynamic import of normalise utility
+      const { normaliseTestName, TURNAROUND } = await import("./src/utils/normaliseTestName");
+      const testName = normaliseTestName(rawName);
+
+      const delays = TURNAROUND[testName];
+      if (!delays) {
+        return res.status(400).json({
+          error: `Unknown test "${rawName}". Available: ${Object.keys(TURNAROUND).join(", ")}`,
+        });
+      }
+
+      const orderedAt = currentSimTime;
+      const availableAt = currentSimTime + delays[priority];
+
+      const fullCase = casesStore.get(caseId) || null;
+      if (!fullCase) {
+        return res.status(404).json({ error: "Case not found. Please start a new case." });
+      }
+
+      let result: any;
+      if (testType === "lab") {
+        const match = (fullCase.labs || []).find(
+          (l: any) => normaliseTestName(l.name) === testName
+        );
+        result = match
+          ? { ...match, orderedAt, availableAt }
+          : { name: rawName, value: "Pending", unit: "", normalRange: "", status: "normal", orderedAt, availableAt };
+      } else {
+        const match = (fullCase.imaging || []).find(
+          (i: any) => normaliseTestName(i.type) === testName
+        );
+        result = match
+          ? { ...match, orderedAt, availableAt }
+          : { type: rawName, findings: "Pending read", impression: "Pending", orderedAt, availableAt };
+      }
+
+      const action = {
+        id: `action-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: currentSimTime,
+        type: "order",
+        description: `Ordered ${testName}${rawName !== testName ? ` (${rawName})` : ""} (${priority.toUpperCase()})`,
+        result: `Results expected at T+${availableAt} min`,
+      };
+
+      res.json({ success: true, testResult: result, action, message: `${testName} ordered. Results available at T+${availableAt} min.` });
+    } catch (err: any) {
+      console.error("order-test error:", err);
+      res.status(500).json({ error: err.message || "Failed to order test." });
+    }
+  });
+
+  // ── POST /api/examine-system ────────────────────────────────────────────────
+  app.post("/api/examine-system", async (req, res) => {
+    try {
+      const { caseId, system } = req.body ?? {};
+      const SYSTEM_KEYS = ['heent', 'cardiac', 'respiratory', 'abdomen', 'extremities', 'neurological'];
+
+      if (!caseId || typeof caseId !== "string") return res.status(400).json({ error: "Missing: caseId" });
+      if (!system || !SYSTEM_KEYS.includes(system)) return res.status(400).json({ error: `Invalid system. Must be one of: ${SYSTEM_KEYS.join(", ")}` });
+
+      const fullCase = casesStore.get(caseId) || null;
+      if (!fullCase) return res.status(404).json({ error: "Case not found. Please start a new case." });
+
+      const finding = fullCase.physicalExam?.[system];
+      if (!finding || finding === "Not yet examined") {
+        return res.status(404).json({ error: `No finding for system "${system}" in this case.` });
+      }
+
+      res.json({ system, finding });
+    } catch (err: any) {
+      console.error("examine-system error:", err);
+      res.status(500).json({ error: err.message || "Failed to retrieve examination finding." });
+    }
+  });
+
+  // ── POST /api/end-case ──────────────────────────────────────────────────────
+  app.post("/api/end-case", async (req, res) => {
+    try {
+      const { caseId, medicalCase, userNotes } = req.body ?? {};
+      if (!caseId || typeof caseId !== "string") return res.status(400).json({ error: "Missing: caseId" });
+      if (!medicalCase || typeof medicalCase !== "object") return res.status(400).json({ error: "Missing: medicalCase" });
+
+      const fullCase = casesStore.get(caseId) || null;
+      if (!fullCase) return res.status(404).json({ error: "Case not found or already scored." });
+
+      if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY.includes("MY_"))
+        return res.status(500).json({ error: "DEEPSEEK_API_KEY is not configured." });
+
+      const actionLog = (medicalCase.clinicalActions || [])
+        .map((a: any) => `T+${a.timestamp}: [${a.type}] ${a.description}`)
+        .join("\n") || "No actions recorded.";
+
+      const medLog = (medicalCase.medications || [])
+        .map((m: any) => `T+${m.timestamp}: ${m.name} ${m.dose} ${m.route}`)
+        .join("\n") || "No medications administered.";
+
+      const labsOrdered = (medicalCase.labs || [])
+        .map((l: any) => `${l.name} (ordered T+${l.orderedAt ?? "?"})`)
+        .join(", ") || "None";
+
+      const imagingOrdered = (medicalCase.imaging || [])
+        .map((i: any) => `${i.type} (ordered T+${i.orderedAt ?? "?"})`)
+        .join(", ") || "None";
+
+      const aiRes = await openai.chat.completions.create({
+        model: "deepseek-chat",
+        messages: [
+          {
+            role: "system",
+            content: `You are a USMLE Step 3 CCS examiner. Score management quality.
+
+ANSWER KEY:
+  Correct Diagnosis: ${fullCase.correctDiagnosis}
+  Explanation: ${fullCase.explanation || ""}
+
+SCORING (100 pts total):
+  initialManagement (0-25), diagnosticWorkup (0-25), therapeuticInterventions (0-30), patientOutcome (0-20).
+  Subtract efficiency penalties if warranted.
+
+Return JSON ONLY:
+{
+  "score": number,
+  "breakdown": { "initialManagement": number, "diagnosticWorkup": number, "therapeuticInterventions": number, "patientOutcome": number, "efficiencyPenalty": number },
+  "feedback": "3-4 sentence narrative",
+  "correctDiagnosis": "${fullCase.correctDiagnosis}",
+  "explanation": "brief teaching point",
+  "keyActions": ["description", ...],
+  "criticalMissed": ["missed action", ...],
+  "clinicalPearl": "one memorable teaching point"
+}`,
+          },
+          {
+            role: "user",
+            content: `CASE: ${medicalCase.chiefComplaint} | ${medicalCase.age}y ${medicalCase.gender}
+LABS ORDERED: ${labsOrdered}
+IMAGING ORDERED: ${imagingOrdered}
+ACTIONS:\n${actionLog}
+MEDICATIONS:\n${medLog}
+FINAL STATE: T+${medicalCase.simulationTime} min | Outcome: ${medicalCase.patientOutcome || "alive"} | Trend: ${medicalCase.physiologicalTrend}
+USER NOTES: ${userNotes || "none"}`,
+          },
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      const content = aiRes.choices[0].message.content;
+      if (!content) throw new Error("Empty response from AI evaluator");
+
+      const evaluation = JSON.parse(content);
+
+      // Clean up active case
+      casesStore.delete(caseId);
+
+      res.json({ ...evaluation, caseId, totalSimulationTime: medicalCase.simulationTime });
+    } catch (err: any) {
+      console.error("end-case error:", err);
+      res.status(500).json({ error: err.message || "Failed to score case." });
     }
   });
 
@@ -249,7 +481,6 @@ Message: ${message}.`,
         return res.status(500).json({ error: "DEEPSEEK_API_KEY is not configured." });
       }
 
-      // Only send clinically relevant fields for evaluation
       const trimmedForEval = {
         patientName: medicalCase.patientName,
         age: medicalCase.age,
@@ -296,12 +527,10 @@ Message: ${message}.`,
   });
 
   // ── POST /api/consult ───────────────────────────────────────────────────────
-  // Uses Gemini if GEMINI_API_KEY is set, otherwise falls back to DeepSeek.
   app.post("/api/consult", async (req, res) => {
     try {
       const medicalCase = requireObject(req.body?.medicalCase, "medicalCase") as any;
 
-      // Trim to only clinically relevant fields to keep prompt lean
       const trimmedCase = {
         patientName: medicalCase.patientName,
         age: medicalCase.age,
@@ -335,7 +564,6 @@ Case: ${JSON.stringify(trimmedCase)}`;
         process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes("MY_");
 
       if (geminiAvailable) {
-        // ── Gemini path ──────────────────────────────────────────────────────
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
         const response = await ai.models.generateContent({
           model: "gemini-2.0-flash-lite",
@@ -358,7 +586,7 @@ Case: ${JSON.stringify(trimmedCase)}`;
         return res.json(JSON.parse(text));
       }
 
-      // ── DeepSeek fallback ────────────────────────────────────────────────
+      // DeepSeek fallback
       if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY.includes("MY_")) {
         return res.status(500).json({ error: "No AI API key is configured. Set DEEPSEEK_API_KEY or GEMINI_API_KEY." });
       }
@@ -386,8 +614,8 @@ Case: ${JSON.stringify(trimmedCase)}`;
     }
   });
 
-  // ── Global API error handler ────────────────────────────────────────────────
-  app.use("/api", (err: any, req: any, res: any, next: any) => {
+  // ── Global API error handler (must be BEFORE vite/static) ──────────────────
+  app.use("/api", (err: any, _req: any, res: any, _next: any) => {
     console.error("API error:", err);
     res.status(500).json({ error: "API Internal Error", details: err.message });
   });
