@@ -38,6 +38,132 @@ const TURNAROUND: Record<string, { stat: number; routine: number }> = {
   "MRI Brain":          { stat: 45, routine: 90 },
 };
 
+/**
+ * AI models sometimes generate test name variants (e.g. "Troponin I", "Trop I",
+ * "PT/INR", "Chest XR", "EKG"). This map normalises them to the canonical keys
+ * in TURNAROUND so ordering never fails due to a naming mismatch.
+ */
+const ALIASES: Record<string, string> = {
+  // Troponin variants
+  "troponin i":               "Troponin",
+  "troponin t":               "Troponin",
+  "trop i":                   "Troponin",
+  "trop t":                   "Troponin",
+  "high-sensitivity troponin":"Troponin",
+  "hs-troponin":              "Troponin",
+  "hs troponin":              "Troponin",
+  "cardiac troponin":         "Troponin",
+  // BMP / CMP variants
+  "basic metabolic panel":    "BMP",
+  "comprehensive metabolic":  "CMP",
+  "comprehensive metabolic panel": "CMP",
+  "chem 7":                   "BMP",
+  "chem7":                    "BMP",
+  // CBC variants
+  "complete blood count":     "CBC",
+  "complete blood cell count":"CBC",
+  // Coagulation
+  "coagulation":              "Coagulation Panel",
+  "pt/inr":                   "Coagulation Panel",
+  "pt inr":                   "Coagulation Panel",
+  "inr":                      "Coagulation Panel",
+  "ptt":                      "Coagulation Panel",
+  "aptt":                     "Coagulation Panel",
+  "prothrombin":              "Coagulation Panel",
+  // LFTs
+  "liver function":           "LFTs",
+  "liver function tests":     "LFTs",
+  "hepatic function":         "LFTs",
+  // BNP/NT-proBNP
+  "nt-probnp":                "BNP",
+  "nt probnp":                "BNP",
+  "pro-bnp":                  "BNP",
+  "brain natriuretic peptide":"BNP",
+  // ABG
+  "arterial blood gas":       "ABG",
+  "blood gas":                "ABG",
+  // Lactate
+  "lactic acid":              "Lactate",
+  "serum lactate":            "Lactate",
+  // Urinalysis
+  "ua":                       "Urinalysis",
+  "urine analysis":           "Urinalysis",
+  // D-Dimer
+  "d dimer":                  "D-Dimer",
+  // Drug screen
+  "toxicology screen":        "Drug Screen",
+  "urine drug screen":        "Drug Screen",
+  "uds":                      "Drug Screen",
+  // ECG variants
+  "ekg":                      "ECG",
+  "electrocardiogram":        "ECG",
+  "12-lead ecg":              "ECG",
+  "12 lead ecg":              "ECG",
+  // Chest X-ray variants
+  "cxr":                      "Chest X-ray",
+  "chest x ray":              "Chest X-ray",
+  "chest xray":               "Chest X-ray",
+  "chest radiograph":         "Chest X-ray",
+  "chest pa":                 "Chest X-ray",
+  // CT variants
+  "ct scan head":             "CT Head",
+  "ct brain":                 "CT Head",
+  "ct of head":               "CT Head",
+  "ct scan chest":            "CT Chest",
+  "ct of chest":              "CT Chest",
+  "ct pulmonary angiography": "CT PE Protocol",
+  "ctpa":                     "CT PE Protocol",
+  "ct angiography chest":     "CT PE Protocol",
+  "ct abdomen":               "CT Abdomen/Pelvis",
+  "ct pelvis":                "CT Abdomen/Pelvis",
+  "ct ab/pelvis":             "CT Abdomen/Pelvis",
+  // Echo
+  "echo":                     "Echocardiogram",
+  "cardiac echo":             "Echocardiogram",
+  "transthoracic echo":       "Echocardiogram",
+  "tte":                      "Echocardiogram",
+  // MRI
+  "mri head":                 "MRI Brain",
+  "mri of the brain":         "MRI Brain",
+  // Ultrasound
+  "us":                       "Ultrasound",
+  "bedside us":               "Ultrasound",
+  "point of care ultrasound": "Ultrasound",
+  "pocus":                    "Ultrasound",
+  "renal ultrasound":         "Ultrasound",
+  "abdominal ultrasound":     "Ultrasound",
+  // Blood culture
+  "blood cultures":           "Blood Culture",
+};
+
+/**
+ * Normalise any test name (from AI or OrderPanel) to a canonical TURNAROUND key.
+ * Strategy:
+ *  1. Exact match (case-insensitive)
+ *  2. Alias map lookup
+ *  3. Prefix/contains match against canonical keys
+ */
+function normaliseName(raw: string): string {
+  const lower = raw.trim().toLowerCase();
+
+  // 1. Exact match
+  const exact = Object.keys(TURNAROUND).find(k => k.toLowerCase() === lower);
+  if (exact) return exact;
+
+  // 2. Alias map
+  if (ALIASES[lower]) return ALIASES[lower];
+
+  // 3. Prefix or contains match
+  const partial = Object.keys(TURNAROUND).find(k => {
+    const kl = k.toLowerCase();
+    return lower.startsWith(kl) || kl.startsWith(lower) || lower.includes(kl) || kl.includes(lower);
+  });
+  if (partial) return partial;
+
+  // Return the raw name; the caller will return a 400 with the available list
+  return raw;
+}
+
 function validateRequest(body: any) {
   if (!body || typeof body !== "object") throw new Error("Request body must be a JSON object.");
   if (!body.caseId || typeof body.caseId !== "string") throw new Error("Missing: caseId");
@@ -57,13 +183,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    const { caseId, testType, testName, currentSimTime, priority } = validateRequest(req.body);
+    const { caseId, testType, testName: rawName, currentSimTime, priority } = validateRequest(req.body);
+
+    // Normalise: "Troponin I" → "Troponin", "EKG" → "ECG", etc.
+    const testName = normaliseName(rawName);
 
     // Turnaround lookup
     const delays = TURNAROUND[testName];
     if (!delays) {
       return res.status(400).json({
-        error: `Unknown test "${testName}". Available: ${Object.keys(TURNAROUND).join(", ")}`,
+        error: `Unknown test "${rawName}". Available: ${Object.keys(TURNAROUND).join(", ")}`,
       });
     }
 
@@ -78,13 +207,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let result: any;
     if (testType === "lab") {
+      // Match by normalised name so "Troponin I" in fullCase still finds "Troponin"
       const match = (fullCase.labs || []).find(
-        (l: any) => l.name.toLowerCase() === testName.toLowerCase()
+        (l: any) => normaliseName(l.name) === testName
       );
       if (!match) {
-        // AI may have used a slightly different name — return a pending placeholder
+        // AI used a name we don't have a result for — return pending placeholder
         result = {
-          name: testName, value: "Pending", unit: "", normalRange: "", status: "normal",
+          name: rawName, value: "Pending", unit: "", normalRange: "", status: "normal",
           orderedAt, availableAt,
         };
       } else {
@@ -92,11 +222,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     } else {
       const match = (fullCase.imaging || []).find(
-        (i: any) => i.type.toLowerCase() === testName.toLowerCase()
+        (i: any) => normaliseName(i.type) === testName
       );
       if (!match) {
         result = {
-          type: testName, findings: "Pending read", impression: "Pending",
+          type: rawName, findings: "Pending read", impression: "Pending",
           orderedAt, availableAt,
         };
       } else {
@@ -108,7 +238,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       id:          `action-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       timestamp:   currentSimTime,
       type:        "order",
-      description: `Ordered ${testName} (${priority.toUpperCase()})`,
+      description: `Ordered ${testName}${rawName !== testName ? ` (${rawName})` : ""} (${priority.toUpperCase()})`,
       result:      `Results expected at T+${availableAt} min`,
     };
 
