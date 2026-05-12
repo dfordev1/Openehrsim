@@ -25,9 +25,10 @@ export function WorkflowProgress({ currentStage, onStageClick, completedStages, 
     <div className="flex items-center w-full" role="navigation" aria-label="Clinical workflow stages">
       {STAGES.map((stage, idx) => {
         const isActive = stage.id === currentStage;
-        const isCompleted = completedStages.includes(stage.id);
-        const isPast = idx < currentIdx;
-        const isFuture = idx > currentIdx && !isCompleted;
+        // A stage only counts as "done" in the visual when it is both marked
+        // completed AND is not the one the learner is currently on.
+        const isCompleted = !isActive && completedStages.includes(stage.id);
+        const isPast = idx < currentIdx && !isCompleted;
 
         return (
           <div key={stage.id} className="flex items-center flex-1 last:flex-initial">
@@ -41,17 +42,21 @@ export function WorkflowProgress({ currentStage, onStageClick, completedStages, 
                 disabled && 'cursor-not-allowed opacity-60'
               )}
               aria-current={isActive ? 'step' : undefined}
-              aria-label={`${stage.label}${isCompleted ? ' (completed)' : ''}`}
+              aria-label={`${stage.label}${isActive ? ' (current)' : isCompleted ? ' (completed)' : ''}`}
             >
               {/* Circle indicator */}
               <div className={cn(
                 'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border-2 transition-colors',
-                isActive ? 'bg-teal-600 border-teal-600 text-white' :
+                isActive ? 'bg-teal-600 border-teal-600 text-white shadow-sm shadow-teal-600/30' :
                 isCompleted ? 'bg-teal-100 border-teal-400 text-teal-700' :
                 isPast ? 'bg-clinical-bg border-clinical-slate/30 text-clinical-slate' :
                 'bg-white border-clinical-line text-clinical-slate/50'
               )}>
-                {isCompleted ? <CheckCircle2 className="w-3.5 h-3.5" /> : idx + 1}
+                {isActive
+                  ? idx + 1
+                  : isCompleted
+                  ? <CheckCircle2 className="w-3.5 h-3.5" />
+                  : idx + 1}
               </div>
               {/* Label */}
               <span className={cn(

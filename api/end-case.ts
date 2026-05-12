@@ -2,7 +2,8 @@
  * CCS case-completion & management-based scoring endpoint.
  *
  * Retrieves the hidden correctDiagnosis from Supabase,
- * scores the user's management, persists results, and deletes the active case.
+ * scores the user's management + clinical reasoning quality,
+ * persists results, and deletes the active case.
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import OpenAI from "openai";
@@ -13,17 +14,17 @@ function validateRequest(body: any) {
   if (!body.caseId || typeof body.caseId !== "string") throw new Error("Missing: caseId");
   if (!body.medicalCase || typeof body.medicalCase !== "object") throw new Error("Missing: medicalCase");
   return {
-    caseId:      body.caseId      as string,
-    medicalCase: body.medicalCase as any,
-    userNotes:   body.userNotes   as string | undefined,
-  };
-}
-
-function trimCase(mc: any) {
-  return {
-    ...mc,
-    clinicalActions:  (mc.clinicalActions  || []).slice(-20),
-    communicationLog: (mc.communicationLog || []).slice(-10),
+    caseId:                 body.caseId                 as string,
+    medicalCase:            body.medicalCase            as any,
+    userNotes:              body.userNotes              as string | undefined,
+    problemRepresentation:  body.problemRepresentation  as string | undefined,
+    differentials:          body.differentials          as any[] | undefined,
+    findingsCount:          body.findingsCount          as number | undefined,
+    positiveFindings:       body.positiveFindings       as string[] | undefined,
+    negativeFindings:       body.negativeFindings       as string[] | undefined,
+    prHistory:              body.prHistory              as any[] | undefined,
+    stageCommitments:       body.stageCommitments       as any[] | undefined,
+    findingsByDx:           body.findingsByDx           as any[] | undefined,
   };
 }
 
@@ -31,7 +32,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    const { caseId, medicalCase, userNotes } = validateRequest(req.body);
+    const {
+      caseId,
+      medicalCase,
+      userNotes,
+      problemRepresentation,
+      differentials,
+      findingsCount,
+      positiveFindings,
+      negativeFindings,
+      prHistory,
+      stageCommitments,
+      findingsByDx,
+    } = validateRequest(req.body);
 
     // ── Fetch answer key ──────────────────────────────────────────────────────
     const fullCase = await getCaseServerSide(caseId);
@@ -60,41 +73,92 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .map((i: any) => `${i.type} (ordered T+${i.orderedAt ?? "?"})`)
       .join(", ") || "None";
 
+    // ── Clinical reasoning context (Healer-style) ──────────────────────
+    const differentialsList = (differentials || []).map((d: any) => {
+      const base = `${d.diagnosis} (${d.confidence}${d.isLead ? ', LEAD' : ''})`;
+      if (!d.illnessScript) return base;
+      const is = d.illnessScript;
+      const scriptBits = [
+        is.typicalDemographics && `demo: ${is.typicalDemographics}`,
+        is.typicalTimeline && `timeline: ${is.typicalTimeline}`,
+        (is.keyFeatures || []).length > 0 && `key: [${is.keyFeatures.join('; ')}]`,
+        (is.discriminatingFeatures || []).length > 0 && `discriminating: [${is.discriminatingFeatures.join('; ')}]`,
+        (is.expectedLabs || []).length > 0 && `expected labs: [${is.expectedLabs.join('; ')}]`,
+      ].filter(Boolean).join(' | ');
+      return `${base} — script: ${scriptBits}`;
+    });
+
+    const prEvolution = (prHistory || [])
+      .map((s: any, i: number) => `  v${i + 1} @ ${s.stage} (T+${s.simTime}m): "${s.text}"`)
+      .join('\n');
+
+    const commitLog = (stageCommitments || [])
+      .map((c: any) => `  ${c.stage} @ T+${c.simTime}m — ${c.differentialCount} ddx${c.leadDiagnosis ? `, lead: ${c.leadDiagnosis}` : ''}`)
+      .join('\n');
+
+    const findingsByDxBlock = (findingsByDx || [])
+      .map((f: any) => {
+        const assignments = Object.entries(f.relevanceByDx || {})
+          .map(([dxId, r]) => {
+            const dx = (differentials || []).find((d: any) => d.id === dxId) || {};
+            return `${dx.diagnosis || dxId}=${r}`;
+          })
+          .join(', ');
+        return `  [${f.source}] "${f.findingText}" → ${assignments}`;
+      })
+      .join('\n');
+
+    const reasoningContext =
+      problemRepresentation || differentials || prHistory || stageCommitments
+        ? `
+CLINICAL REASONING DATA:
+  Final Problem Representation: "${problemRepresentation || 'Not provided'}"
+  Differentials with illness scripts:
+${differentialsList.length ? differentialsList.map((s: string) => `    - ${s}`).join('\n') : '    (none)'}
+  Findings tracked: ${findingsCount || 0}
+  Pertinent Positives: ${(positiveFindings || []).join(', ') || 'None'}
+  Pertinent Negatives: ${(negativeFindings || []).join(', ') || 'None'}
+${prEvolution ? `  PR evolution across stages:\n${prEvolution}\n` : ''}${commitLog ? `  Stage commitments:\n${commitLog}\n` : ''}${findingsByDxBlock ? `  Findings linked to specific differentials:\n${findingsByDxBlock}\n` : ''}`
+        : '';
+
     const aiRes = await openai.chat.completions.create({
       model: "deepseek-chat",
       messages: [
         {
           role: "system",
-          content: `You are a USMLE Step 3 CCS examiner. Score management quality — NOT just diagnosis.
+          content: `You are a clinical reasoning assessor combining USMLE Step 3 CCS scoring with Healer-style clinical reasoning evaluation.
 
 ANSWER KEY:
   Correct Diagnosis: ${fullCase.correctDiagnosis}
   Explanation: ${fullCase.explanation || ""}
 
-SCORING (100 pts total):
-  initialManagement (0-25):
-    - Did they place appropriate initial orders (vitals, O2, IV access, basic workup)?
-    - Did they recognise acuity and act quickly?
-  diagnosticWorkup (0-25):
-    - Ordered the right tests at the right time?
-    - Avoided unnecessary / expensive / harmful tests?
-  therapeuticInterventions (0-30):
-    - Correct treatment for the underlying condition?
-    - Critical interventions (antibiotics <1h for sepsis, fluids for shock, PCI for STEMI) done on time?
-    - Appropriate doses / routes?
-  patientOutcome (0-20):
-    - alive with improving trend: 20
-    - alive stable:               12
-    - critical deterioration:      5
-    - deceased:                    0
+SCORING (100 pts total — 2 dimensions):
 
-EFFICIENCY PENALTIES (subtract from total):
-  - >5 unnecessary tests:   -10
-  - Key intervention >30 min late: -10
+A) MANAGEMENT QUALITY (60 pts):
+  initialManagement (0-15): Appropriate initial orders, acuity recognition
+  diagnosticWorkup (0-15): Right tests at right time, efficiency
+  therapeuticInterventions (0-20): Correct treatment, timing, doses
+  patientOutcome (0-10): Patient status at end
+
+B) CLINICAL REASONING QUALITY (40 pts):
+  dataAcquisitionThoroughness (0-10): How many pertinent findings were gathered
+  dataAcquisitionEfficiency (0-10): How focused was data gathering (few irrelevant tests)
+  problemRepresentation (0-10): Quality of PR — includes key demographics, timeline, discriminating features.
+    BONUS: If PR evolved across stages (multiple snapshots with increasing
+    specificity), score higher. Premature finalization or a PR that never
+    changes should score lower.
+  differentialAccuracy (0-10): Lead diagnosis correct? Differential reasonable?
+    BONUS: Credit breadth early (>=3 dxs at triage/history) and
+    convergence late (narrowed to 1-3 with a committed lead by dxpause).
+    If illness scripts were recorded for the lead, score higher.
+    If findings were linked to specific differentials as pertinent +/-,
+    score higher.
+
+EFFICIENCY PENALTIES (subtract from total): >5 unnecessary tests: -5, Key intervention >30 min late: -5
 
 Return JSON ONLY:
 {
-  "score": number,
+  "score": number (0-100),
   "breakdown": {
     "initialManagement": number,
     "diagnosticWorkup": number,
@@ -102,12 +166,21 @@ Return JSON ONLY:
     "patientOutcome": number,
     "efficiencyPenalty": number
   },
-  "feedback": "3-4 sentence narrative of overall performance",
+  "reasoningScore": {
+    "dataAcquisitionThoroughness": number (0-100 scale),
+    "dataAcquisitionEfficiency": number (0-100 scale),
+    "problemRepresentation": number (0-100 scale),
+    "differentialAccuracy": number (0-100 scale),
+    "finalLeadDiagnosis": number (0-100 scale),
+    "managementPlan": number (0-100 scale),
+    "overall": number (0-100 scale)
+  },
+  "feedback": "3-4 sentence narrative covering both management AND reasoning quality. If the PR evolved, comment on how it evolved. If illness scripts were written, comment on their accuracy.",
   "correctDiagnosis": "${fullCase.correctDiagnosis}",
   "explanation": "brief teaching point",
-  "keyActions": ["✓ or ✗ + description", ...],
-  "criticalMissed": ["missed or delayed critical action", ...],
-  "clinicalPearl": "one memorable teaching point from this case"
+  "keyActions": ["description", ...],
+  "criticalMissed": ["missed action", ...],
+  "clinicalPearl": "one memorable teaching point"
 }`,
         },
         {
@@ -127,7 +200,7 @@ ${medLog}
 FINAL STATE: T+${medicalCase.simulationTime} min | Outcome: ${medicalCase.patientOutcome || "alive"} | Trend: ${medicalCase.physiologicalTrend}
 FINAL VITALS: HR ${medicalCase.vitals?.heartRate}, BP ${medicalCase.vitals?.bloodPressure}, SpO2 ${medicalCase.vitals?.oxygenSaturation}%
 
-USER NOTES: ${userNotes || "none"}`,
+USER NOTES: ${userNotes || "none"}${reasoningContext}`,
         },
       ],
       response_format: { type: "json_object" },

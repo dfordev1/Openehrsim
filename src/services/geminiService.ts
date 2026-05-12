@@ -85,23 +85,41 @@ export interface EndCasePayload {
   userNotes?: string;
   // Clinical reasoning data (Healer-style)
   problemRepresentation?: string;
-  differentials?: { diagnosis: string; confidence: string; isLead?: boolean }[];
+  differentials?: {
+    diagnosis: string;
+    confidence: string;
+    isLead?: boolean;
+    illnessScript?: {
+      typicalDemographics?: string;
+      typicalTimeline?: string;
+      keyFeatures: string[];
+      discriminatingFeatures: string[];
+      expectedLabs: string[];
+    };
+  }[];
   findingsCount?: number;
   positiveFindings?: string[];
   negativeFindings?: string[];
+  // Extended clinical reasoning history
+  prHistory?: { stage: string; text: string; simTime: number }[];
+  stageCommitments?: {
+    stage: string;
+    simTime: number;
+    differentialCount: number;
+    leadDiagnosis?: string;
+  }[];
+  findingsByDx?: {
+    findingText: string;
+    source: string;
+    relevanceByDx: Record<string, 'positive' | 'negative' | 'none'>;
+  }[];
 }
 
 export async function endCase(
   caseId: string,
   medicalCase: MedicalCase,
   userNotes?: string,
-  reasoningData?: {
-    problemRepresentation: string;
-    differentials: { diagnosis: string; confidence: string; isLead?: boolean }[];
-    findingsCount: number;
-    positiveFindings: string[];
-    negativeFindings: string[];
-  }
+  reasoningData?: Omit<EndCasePayload, 'caseId' | 'medicalCase' | 'userNotes'>,
 ): Promise<CaseEvaluation> {
   try {
     return await post("/api/end-case", {
