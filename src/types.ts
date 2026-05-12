@@ -66,6 +66,8 @@ export interface MedicationRecord {
   dose: string;
   route: string;
   timestamp: number;
+  isIVFluid?: boolean;  // true for NS, LR, albumin, colloids, etc.
+  volumeML?: number;    // mL administered — used for fluid balance tracking
 }
 
 export interface MedicalCase {
@@ -92,6 +94,7 @@ export interface MedicalCase {
   communicationLog: CommunicationMessage[];
   difficulty?: 'intern' | 'resident' | 'attending';
   category?: 'cardiology' | 'pulmonology' | 'sepsis' | 'trauma' | 'neurology' | 'toxicology';
+  patientOutcome?: 'alive' | 'deceased' | 'critical_deterioration';
 }
 
 export interface ConsultantAdvice {

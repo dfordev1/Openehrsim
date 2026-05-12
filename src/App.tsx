@@ -151,7 +151,7 @@ function ClinicalSimulator() {
   const [callMessage, setCallMessage] = useState('');
   const [vitalsHistory, setVitalsHistory] = useState<{ time: string; hr: number; sbp: number; rr: number; spo2: number }[]>([]);
   const [gcsState, setGcsState] = useState({ eyes: 4, verbal: 5, motor: 6 });
-  const [revealedLabs, setRevealedLabs] = useState<string[]>([]);
+  const [revealedStudies, setRevealedStudies] = useState<string[]>([]);
   const [selectedLab, setSelectedLab] = useState<LabResult | null>(null);
   const [logs, setLogs] = useState<{ time: string; text: string }[]>([]);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
@@ -163,6 +163,9 @@ function ClinicalSimulator() {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [vitalsExpanded, setVitalsExpanded] = useState(false);
+
+  // Patient outcome state
+  const [patientOutcome, setPatientOutcome] = useState<'alive' | 'deceased' | 'critical_deterioration' | null>(null);
 
   // Dark mode
   const [isDark, toggleDark] = useDarkMode();
@@ -266,7 +269,8 @@ function ClinicalSimulator() {
   const STAFF_TARGETS = ['Nursing Station', 'Radiology Desk', 'Laboratory Tech', 'Cardiology Consult', 'Surgery Resident', 'ICU Attending', 'Pharmacy', 'Social Work'];
 
   const loadNewCase = useCallback(async (difficulty?: string, category?: string, environment?: string) => {
-    setLoading(true); setError(null); setFeedback(null); setUserDiagnosis(''); setRevealedLabs([]);
+    setLoading(true); setError(null); setFeedback(null); setUserDiagnosis(''); setRevealedStudies([]);
+    setPatientOutcome(null);
     setLogs([{ time: new Date().toLocaleTimeString(), text: 'ADMIT: Patient registered in system.' }]);
     try {
       const history = await getRecentSimulations();
@@ -309,6 +313,8 @@ function ClinicalSimulator() {
 
   const handlePerformIntervention = async (customWait?: number, directIntervention?: string) => {
     if (!medicalCase) return;
+    // Global lock: block all concurrent intervention requests
+    if (intervening) return;
     const interventionToExecute = directIntervention || interventionInput || "Observation";
     pushUndo(`Intervention: ${interventionToExecute}`, medicalCase);
     setIntervening(true);
@@ -319,6 +325,16 @@ function ClinicalSimulator() {
         if (!prev) return updatedCase;
         return { ...prev, ...updatedCase, labs: updatedCase.labs || prev.labs, imaging: updatedCase.imaging || prev.imaging, clinicalActions: updatedCase.clinicalActions || prev.clinicalActions, vitals: { ...prev.vitals, ...(updatedCase.vitals || {}) } };
       });
+      // Detect and surface patient outcome
+      if (updatedCase.patientOutcome && updatedCase.patientOutcome !== 'alive') {
+        setPatientOutcome(updatedCase.patientOutcome);
+        addToast(
+          updatedCase.patientOutcome === 'deceased'
+            ? '⚠️ Patient has expired. Case concluded.'
+            : '🔴 Critical deterioration — patient is unstable.',
+          'error'
+        );
+      }
       setInterventionInput('');
       addToast(`Intervention executed: ${interventionToExecute}`, 'success');
     } catch (error) { console.error("Intervention failed:", error); }
@@ -480,6 +496,38 @@ function ClinicalSimulator() {
           )}
         </div>
       </header>
+
+      {/* Patient Outcome Banner */}
+      <AnimatePresence>
+        {patientOutcome && patientOutcome !== 'alive' && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className={cn(
+              "border-b py-2 px-4 flex items-center gap-3 shrink-0",
+              patientOutcome === 'deceased'
+                ? "bg-gray-900 border-gray-700"
+                : "bg-red-900/80 border-red-700"
+            )}
+            role="alert"
+            aria-live="assertive"
+          >
+            <div className={cn("w-2 h-2 rounded-full shrink-0", patientOutcome === 'deceased' ? "bg-gray-400" : "bg-red-400 animate-pulse")} />
+            <span className={cn("text-xs font-semibold", patientOutcome === 'deceased' ? "text-gray-200" : "text-red-200")}>
+              {patientOutcome === 'deceased'
+                ? '🕊 Patient Expired — Time of death logged. Submit final diagnosis or start a new case.'
+                : '🔴 Critical Deterioration — Immediate escalation required.'}
+            </span>
+            <button
+              onClick={() => loadNewCase()}
+              className="ml-auto text-[10px] font-medium underline text-white/70 hover:text-white"
+            >
+              New Case
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Alarm Banner */}
       <AnimatePresence>
@@ -717,7 +765,7 @@ function ClinicalSimulator() {
                         const isAvailable = img.orderedAt !== undefined && img.availableAt !== undefined && img.availableAt <= simTime;
                         const isPending = img.orderedAt !== undefined && (img.availableAt === undefined || img.availableAt > simTime);
                         return (
-                          <button key={i} onClick={() => isAvailable && setRevealedLabs(prev => [...prev, img.type])} className={cn("w-full text-left p-3 rounded-md border transition-all flex flex-col gap-1", revealedLabs.includes(img.type) ? "bg-clinical-blue/10 text-clinical-blue border-clinical-blue/30" : "bg-clinical-surface border-clinical-line hover:border-clinical-blue/30", isPending && "bg-clinical-bg opacity-70", !img.orderedAt && "opacity-50")}>
+                          <button key={i} onClick={() => isAvailable && setRevealedStudies(prev => [...prev, img.type])} className={cn("w-full text-left p-3 rounded-md border transition-all flex flex-col gap-1", revealedStudies.includes(img.type) ? "bg-clinical-blue/10 text-clinical-blue border-clinical-blue/30" : "bg-clinical-surface border-clinical-line hover:border-clinical-blue/30", isPending && "bg-clinical-bg opacity-70", !img.orderedAt && "opacity-50")}>
                             <div className="flex justify-between items-center">
                               <span className="text-xs font-medium">{img.type}</span>
                               {isAvailable ? <div className="w-1.5 h-1.5 bg-clinical-green rounded-full" /> : isPending ? <Clock className="w-3 h-3 text-clinical-amber animate-spin" /> : <div className="w-1.5 h-1.5 bg-clinical-slate/30 rounded-full" />}
@@ -735,9 +783,9 @@ function ClinicalSimulator() {
                       <div className="flex gap-1.5"><div className="w-2 h-2 rounded-full bg-red-400/40" /><div className="w-2 h-2 rounded-full bg-amber-400/40" /><div className="w-2 h-2 rounded-full bg-green-400/40" /></div>
                     </div>
                     <div className="flex-1 overflow-y-auto p-5 space-y-4">
-                      {medicalCase?.imaging.find(img => revealedLabs.includes(img.type)) ? (
+                      {medicalCase?.imaging.find(img => revealedStudies.includes(img.type)) ? (
                         (() => {
-                          const img = medicalCase.imaging.find(img => revealedLabs.includes(img.type))!;
+                          const img = medicalCase.imaging.find(img => revealedStudies.includes(img.type))!;
                           return (
                             <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in">
                               <div className="border-b border-slate-700/50 pb-3">
@@ -917,13 +965,38 @@ function ClinicalSimulator() {
                   <div className="panel">
                     <div className="panel-header">
                       <span className="panel-title">Fluid Balance</span>
-                      <span className="text-xs font-mono text-clinical-blue">+{(medicalCase?.medications.length || 0) * 200} mL</span>
+                      <span className="text-xs font-mono text-clinical-blue">
+                        +{(medicalCase?.medications || [])
+                          .filter(m => m.isIVFluid)
+                          .reduce((sum, m) => sum + (m.volumeML || 0), 0)} mL
+                      </span>
                     </div>
                     <div className="panel-body">
-                      <div className="flex justify-between items-end gap-3 h-20">
-                        <div className="flex-1 bg-clinical-bg border border-clinical-line rounded-t relative overflow-hidden h-full"><div className="absolute bottom-0 left-0 right-0 bg-clinical-blue/10 transition-all duration-1000" style={{ height: `${Math.min(100, (medicalCase?.medications.length || 0) * 10 + 20)}%` }} /><div className="absolute inset-0 flex items-center justify-center text-[9px] font-medium text-clinical-slate z-10">Intake</div></div>
-                        <div className="flex-1 bg-clinical-bg border border-clinical-line rounded-t relative overflow-hidden h-full"><div className="absolute bottom-0 left-0 right-0 bg-clinical-amber/10 transition-all duration-1000" style={{ height: '35%' }} /><div className="absolute inset-0 flex items-center justify-center text-[9px] font-medium text-clinical-slate z-10">Output</div></div>
-                      </div>
+                      {(() => {
+                        const ivFluids = (medicalCase?.medications || []).filter(m => m.isIVFluid);
+                        const totalIntake = ivFluids.reduce((sum, m) => sum + (m.volumeML || 0), 0);
+                        // Estimated output: ~0.5 mL/kg/hr, rough approx for display
+                        const estimatedOutput = Math.round(medicalCase?.simulationTime ? medicalCase.simulationTime * 0.5 * ((medicalCase.age || 70) * 0.8 / 60) : 0);
+                        const maxVal = Math.max(totalIntake, estimatedOutput, 500);
+                        return (
+                          <div className="flex justify-between items-end gap-3 h-20">
+                            <div className="flex-1 bg-clinical-bg border border-clinical-line rounded-t relative overflow-hidden h-full">
+                              <div className="absolute bottom-0 left-0 right-0 bg-clinical-blue/20 transition-all duration-1000" style={{ height: `${Math.min(100, (totalIntake / maxVal) * 100)}%` }} />
+                              <div className="absolute inset-0 flex flex-col items-center justify-center text-[9px] font-medium text-clinical-slate z-10">
+                                <span>Intake</span>
+                                <span className="font-mono text-clinical-blue">{totalIntake} mL</span>
+                              </div>
+                            </div>
+                            <div className="flex-1 bg-clinical-bg border border-clinical-line rounded-t relative overflow-hidden h-full">
+                              <div className="absolute bottom-0 left-0 right-0 bg-clinical-amber/20 transition-all duration-1000" style={{ height: `${Math.min(100, (estimatedOutput / maxVal) * 100)}%` }} />
+                              <div className="absolute inset-0 flex flex-col items-center justify-center text-[9px] font-medium text-clinical-slate z-10">
+                                <span>Est. Output</span>
+                                <span className="font-mono text-clinical-amber">{estimatedOutput} mL</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                   {/* Intervention Timeline */}
