@@ -1,13 +1,44 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Pill, BookOpen, X, AlertTriangle } from 'lucide-react';
+import { Plus, Pill, BookOpen, X, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { MedicalCase } from '../../types';
 
 interface PharmacyTabProps {
   customMedInput: string;
   onCustomMedChange: (val: string) => void;
   onAdminister: (med: string) => void;
   intervening: boolean;
+  medicalCase?: MedicalCase;
+}
+
+// ── Drug interaction pairs ───────────────────────────────────────────────────
+// [drugA_keyword, drugB_keyword, severity, message]
+type InteractionTuple = [string, string, 'high' | 'moderate', string];
+const INTERACTIONS: InteractionTuple[] = [
+  ['nitroglycerin', 'heparin',      'moderate', 'NTG may reduce heparin anticoagulant effect — monitor PTT closely.'],
+  ['nitroglycerin', 'epinephrine',  'moderate', 'Opposing vasoactive effects — NTG vasodilates, Epi vasoconstricts. Monitor BP carefully.'],
+  ['amiodarone',    'heparin',      'moderate', 'Amiodarone may potentiate anticoagulant effect of heparin — bleeding risk ↑.'],
+  ['amiodarone',    'propofol',     'high',     'Both prolong QT and cause hypotension — high risk of arrhythmia and cardiovascular collapse.'],
+  ['propofol',      'fentanyl',     'high',     'Synergistic CNS/respiratory depression — titrate carefully, have reversal agents ready.'],
+  ['morphine',      'propofol',     'high',     'Synergistic respiratory depression — monitor airway closely.'],
+  ['morphine',      'fentanyl',     'high',     'Additive opioid effects — risk of respiratory arrest.'],
+  ['atropine',      'epinephrine',  'moderate', 'Both increase HR — monitor for tachyarrhythmia.'],
+  ['amiodarone',    'atropine',     'moderate', 'Atropine increases HR; amiodarone slows conduction — conflicting effects on arrhythmia.'],
+  ['heparin',       'aspirin',      'high',     'Dual anticoagulant/antiplatelet therapy — major bleeding risk. Indicated in ACS but requires monitoring.'],
+];
+
+function checkInteractions(meds: string[]): Array<{ severity: 'high' | 'moderate'; message: string; drugs: string }> {
+  const alerts: Array<{ severity: 'high' | 'moderate'; message: string; drugs: string }> = [];
+  const lower = meds.map(m => m.toLowerCase());
+  for (const [a, b, sev, msg] of INTERACTIONS) {
+    const hasA = lower.some(m => m.includes(a));
+    const hasB = lower.some(m => m.includes(b));
+    if (hasA && hasB) {
+      alerts.push({ severity: sev, message: msg, drugs: `${a} + ${b}` });
+    }
+  }
+  return alerts;
 }
 
 interface DrugInfo {
@@ -126,9 +157,13 @@ const STAT_MEDS = [
   { cat: 'Cardiovascular',        meds: ['Nitroglycerin 0.4mg SL', 'Aspirin 324mg PO', 'Heparin 5000u Bolus'] },
 ];
 
-export function PharmacyTab({ customMedInput, onCustomMedChange, onAdminister, intervening }: PharmacyTabProps) {
+export function PharmacyTab({ customMedInput, onCustomMedChange, onAdminister, intervening, medicalCase }: PharmacyTabProps) {
   const [selectedDrug, setSelectedDrug] = useState<DrugInfo | null>(null);
   const [refOpen, setRefOpen] = useState(false);
+
+  // Compute interactions from administered meds
+  const administeredMeds = (medicalCase?.medications || []).map(m => m.name);
+  const interactions = checkInteractions(administeredMeds);
 
   return (
     <motion.div key="pharmacy" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4 flex-1 min-h-0">
@@ -296,6 +331,43 @@ export function PharmacyTab({ customMedInput, onCustomMedChange, onAdminister, i
 
         </div>
       </div>
+
+      {/* ── Drug Interaction Alerts ────────────────────────────────────── */}
+      <AnimatePresence>
+        {interactions.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className="panel border-clinical-amber/30"
+          >
+            <div className="panel-header bg-clinical-amber/5 border-b border-clinical-amber/20">
+              <span className="panel-title flex items-center gap-2 text-clinical-amber">
+                <ShieldAlert className="w-3.5 h-3.5" />
+                Drug Interaction Alerts
+              </span>
+              <span className="text-[10px] font-bold text-clinical-amber">{interactions.length} detected</span>
+            </div>
+            <div className="divide-y divide-clinical-line/50">
+              {interactions.map((ix, i) => (
+                <div key={i} className={cn(
+                  'flex items-start gap-3 px-4 py-3',
+                  ix.severity === 'high' ? 'bg-clinical-red/5' : 'bg-clinical-amber/5'
+                )}>
+                  <AlertTriangle className={cn('w-4 h-4 shrink-0 mt-0.5', ix.severity === 'high' ? 'text-clinical-red' : 'text-clinical-amber')} />
+                  <div>
+                    <p className={cn('text-[10px] font-bold uppercase mb-0.5', ix.severity === 'high' ? 'text-clinical-red' : 'text-clinical-amber')}>
+                      {ix.severity === 'high' ? '⚠ High Severity' : 'Moderate'} — {ix.drugs}
+                    </p>
+                    <p className="text-xs text-clinical-ink">{ix.message}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </motion.div>
   );
 }

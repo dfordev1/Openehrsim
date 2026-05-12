@@ -743,6 +743,7 @@ function ClinicalSimulator() {
                 onCustomMedChange={setCustomMedInput}
                 onAdminister={(med) => handlePerformIntervention(2, `Administer ${med}`)}
                 intervening={intervening}
+                medicalCase={medicalCase ?? undefined}
               />
             )}
 

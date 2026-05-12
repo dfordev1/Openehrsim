@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { AlertTriangle, CheckCircle2, Lightbulb, Loader2, Stethoscope, XCircle } from 'lucide-react';
+import {
+  AlertTriangle, CheckCircle2, Lightbulb, Loader2, Stethoscope, XCircle,
+  ClipboardList, Copy, Check, Zap, Clock,
+} from 'lucide-react';
 import { cn } from '../../lib/utils';
 import CaseExport from '../CaseExport';
 import { CaseEvaluation, MedicalCase } from '../../types';
@@ -9,21 +12,64 @@ interface AssessmentTabProps {
   medicalCase: MedicalCase;
   simTime: number;
   userNotes: string;
-  /** CCS evaluation returned by /api/end-case */
   evaluation: CaseEvaluation | null;
-  /** Legacy simple feedback (evaluate-diagnosis fallback) */
   feedback: { score: number; feedback: string } | null;
   submitting: boolean;
   logs: { time: string; text: string }[];
   onNotesChange: (val: string) => void;
-  /** Separate scratchpad differential state */
   differential: string;
   onDifferentialChange: (val: string) => void;
-  /** CCS: end case & score management */
   onEndCase: () => void;
   onNewCase: () => void;
 }
 
+// ── Score benchmarks by category + difficulty ────────────────────────────────
+// Based on typical USMLE Step 3 CCS passing/failing ranges
+const BENCHMARKS: Record<string, Record<string, { avg: number; top: number }>> = {
+  cardiology:   { intern: { avg: 68, top: 82 }, resident: { avg: 72, top: 86 }, attending: { avg: 76, top: 90 } },
+  pulmonology:  { intern: { avg: 65, top: 80 }, resident: { avg: 70, top: 84 }, attending: { avg: 74, top: 88 } },
+  sepsis:       { intern: { avg: 62, top: 78 }, resident: { avg: 68, top: 83 }, attending: { avg: 73, top: 87 } },
+  trauma:       { intern: { avg: 60, top: 76 }, resident: { avg: 66, top: 81 }, attending: { avg: 71, top: 86 } },
+  neurology:    { intern: { avg: 63, top: 79 }, resident: { avg: 69, top: 84 }, attending: { avg: 74, top: 88 } },
+  toxicology:   { intern: { avg: 58, top: 75 }, resident: { avg: 64, top: 80 }, attending: { avg: 70, top: 85 } },
+};
+const DEFAULT_BENCH = { avg: 65, top: 80 };
+
+function getBenchmark(cat?: string, diff?: string) {
+  const c = cat?.toLowerCase() ?? '';
+  const d = diff?.toLowerCase() ?? 'resident';
+  return BENCHMARKS[c]?.[d] ?? DEFAULT_BENCH;
+}
+
+function getBenchmarkLabel(score: number, cat?: string, diff?: string) {
+  const { avg, top } = getBenchmark(cat, diff);
+  if (score >= top)  return { label: `Top performer · above ${top}%ile`, color: 'text-clinical-green' };
+  if (score >= avg)  return { label: `Above average · ${cat ?? 'general'} ${diff ?? 'resident'}`, color: 'text-clinical-blue' };
+  if (score >= avg - 10) return { label: `Average range · ${cat ?? 'general'} ${diff ?? 'resident'}`, color: 'text-clinical-amber' };
+  return { label: 'Below average · review management', color: 'text-clinical-red' };
+}
+
+// ── Time efficiency ──────────────────────────────────────────────────────────
+function getTimeLabel(simTime: number) {
+  if (simTime <= 25)  return { label: '⚡ Fast', color: 'text-clinical-green bg-green-50/80',  tip: 'Excellent decisiveness' };
+  if (simTime <= 50)  return { label: '⏱ Average', color: 'text-clinical-amber bg-amber-50/80', tip: 'On target pace' };
+  return { label: '🐢 Slow', color: 'text-clinical-red bg-red-50/80', tip: 'Efficiency penalty applied' };
+}
+
+// ── SBAR generator ───────────────────────────────────────────────────────────
+function buildSBAR(mc: MedicalCase, differential: string): string {
+  const vitals = mc.vitals;
+  const meds   = (mc.medications || []).map(m => `${m.name} ${m.dose}`).join(', ') || 'None';
+  const labs   = (mc.labs || []).filter(l => l.availableAt !== undefined).map(l => `${l.name} ${l.value} ${l.unit} (${l.status})`).join(', ') || 'Pending';
+  return [
+    `SITUATION: ${mc.patientName}, ${mc.age}y ${mc.gender}. CC: ${mc.chiefComplaint}. Currently at ${mc.currentLocation}. Physiological trend: ${mc.physiologicalTrend?.toUpperCase()}.`,
+    `\nBACKGROUND: ${mc.historyOfPresentIllness} PMH: ${(mc.pastMedicalHistory || []).join(', ') || 'None documented'}.`,
+    `\nASSESSMENT: HR ${vitals?.heartRate}, BP ${vitals?.bloodPressure}, RR ${vitals?.respiratoryRate}, SpO₂ ${vitals?.oxygenSaturation}%, Temp ${vitals?.temperature}°C. Labs: ${labs}. Medications given: ${meds}.${differential ? `\nDifferential: ${differential}` : ''}`,
+    `\nRECOMMENDATION: [STATE YOUR PLAN / ESCALATION REQUEST HERE]`,
+  ].join('');
+}
+
+// ── Score ring ───────────────────────────────────────────────────────────────
 function ScoreRing({ score }: { score: number }) {
   const colour =
     score >= 80 ? 'var(--color-clinical-green)' :
@@ -41,14 +87,29 @@ function ScoreRing({ score }: { score: number }) {
   );
 }
 
+// ── Component ────────────────────────────────────────────────────────────────
 export function AssessmentTab({
   medicalCase, simTime, userNotes, evaluation, feedback,
   submitting, logs, onNotesChange, differential, onDifferentialChange, onEndCase, onNewCase,
 }: AssessmentTabProps) {
-  const closed    = !!(evaluation || feedback);
-  const score     = evaluation?.score     ?? feedback?.score     ?? 0;
-  const feedbackText = evaluation?.feedback ?? feedback?.feedback ?? '';
-  const correctDx = evaluation?.correctDiagnosis ?? medicalCase.correctDiagnosis;
+  const [sbarOpen, setSbarOpen] = useState(false);
+  const [sbarCopied, setSbarCopied] = useState(false);
+
+  const closed       = !!(evaluation || feedback);
+  const score        = evaluation?.score     ?? feedback?.score     ?? 0;
+  const feedbackText = evaluation?.feedback  ?? feedback?.feedback  ?? '';
+  const correctDx    = evaluation?.correctDiagnosis ?? medicalCase.correctDiagnosis;
+
+  const bench     = getBenchmarkLabel(score, medicalCase.category, medicalCase.difficulty);
+  const timeLabel = getTimeLabel(simTime);
+  const sbarText  = buildSBAR(medicalCase, differential);
+
+  function copySBAR() {
+    navigator.clipboard.writeText(sbarText).then(() => {
+      setSbarCopied(true);
+      setTimeout(() => setSbarCopied(false), 2000);
+    });
+  }
 
   return (
     <motion.div key="assess" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4">
@@ -66,7 +127,6 @@ export function AssessmentTab({
 
         <div className="p-5">
           {!closed ? (
-            /* ── Active case ── */
             <div className="space-y-5">
               {/* CCS mode notice */}
               <div className="flex gap-2.5 bg-clinical-blue/5 border border-clinical-blue/20 rounded-lg p-4 text-xs text-clinical-blue">
@@ -78,7 +138,7 @@ export function AssessmentTab({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* Scratch-pad differential */}
+                {/* Differential scratchpad */}
                 <div>
                   <label className="text-[10px] font-medium text-clinical-slate uppercase mb-2 block">
                     Working Differential (scratch-pad)
@@ -103,11 +163,9 @@ export function AssessmentTab({
                         <span key={l.name}
                           className={cn(
                             'px-2 py-1 text-[10px] font-medium rounded-full flex items-center gap-1',
-                            l.status === 'critical'
-                              ? 'bg-clinical-red/8 text-clinical-red'
-                              : l.status === 'abnormal'
-                              ? 'bg-amber-50 text-amber-700'
-                              : 'bg-clinical-bg text-clinical-slate'
+                            l.status === 'critical' ? 'bg-clinical-red/8 text-clinical-red' :
+                            l.status === 'abnormal' ? 'bg-amber-50 text-amber-700' :
+                            'bg-clinical-bg text-clinical-slate'
                           )}>
                           {l.status === 'critical' && <AlertTriangle className="w-2.5 h-2.5" />}
                           {l.name}: {l.value}
@@ -116,8 +174,7 @@ export function AssessmentTab({
                     {medicalCase.imaging
                       .filter((i) => i.availableAt !== undefined && i.availableAt <= simTime)
                       .map((i) => (
-                        <span key={i.type}
-                          className="px-2 py-1 bg-clinical-blue/8 text-clinical-blue text-[10px] font-medium rounded-full">
+                        <span key={i.type} className="px-2 py-1 bg-clinical-blue/8 text-clinical-blue text-[10px] font-medium rounded-full">
                           {i.type} ✓
                         </span>
                       ))}
@@ -127,6 +184,36 @@ export function AssessmentTab({
                       )}
                   </div>
                 </div>
+              </div>
+
+              {/* SBAR generator */}
+              <div className="border border-clinical-line/60 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setSbarOpen(p => !p)}
+                  className="w-full flex items-center justify-between px-4 py-2.5 bg-clinical-bg/50 hover:bg-clinical-bg transition-colors"
+                >
+                  <span className="flex items-center gap-2 text-[10px] font-semibold text-clinical-slate uppercase tracking-wide">
+                    <ClipboardList className="w-3.5 h-3.5 text-clinical-blue" />
+                    SBAR Handoff Generator
+                  </span>
+                  <span className="text-[10px] text-clinical-slate/50">{sbarOpen ? 'Hide ▲' : 'Show ▼'}</span>
+                </button>
+                {sbarOpen && (
+                  <div className="p-4 space-y-3">
+                    <pre className="text-[11px] text-clinical-ink font-mono whitespace-pre-wrap leading-relaxed bg-clinical-bg border border-clinical-line rounded-md p-3 max-h-52 overflow-y-auto">
+                      {sbarText}
+                    </pre>
+                    <button
+                      onClick={copySBAR}
+                      className="flex items-center gap-2 text-xs font-medium text-clinical-blue hover:text-clinical-blue/80 transition-colors"
+                    >
+                      {sbarCopied
+                        ? <><Check className="w-3.5 h-3.5 text-clinical-green" /><span className="text-clinical-green">Copied!</span></>
+                        : <><Copy className="w-3.5 h-3.5" />Copy to clipboard</>
+                      }
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Final notes + complete */}
@@ -153,26 +240,40 @@ export function AssessmentTab({
             /* ── Post-case feedback ── */
             <div className="space-y-5 animate-in fade-in">
 
-              {/* Score + summary */}
+              {/* Score + benchmark + time efficiency */}
               <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start">
                 <ScoreRing score={score} />
-                <div className="flex-1 text-center sm:text-left">
+                <div className="flex-1 text-center sm:text-left space-y-2">
                   <h4 className={cn(
-                    'text-xs font-semibold uppercase tracking-wide mb-2',
+                    'text-xs font-semibold uppercase tracking-wide',
                     score >= 80 ? 'text-clinical-green' : score >= 60 ? 'text-clinical-blue' : 'text-clinical-red'
                   )}>
                     {score >= 80 ? '✓ Excellent Management' : score >= 60 ? 'Adequate — Room to Improve' : 'Review Required'}
                   </h4>
+
+                  {/* Benchmark + time row */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={cn('text-[10px] font-medium', bench.color)}>
+                      {bench.label}
+                    </span>
+                    <span className="text-clinical-slate/30">·</span>
+                    <span className={cn('text-[10px] font-medium px-2 py-0.5 rounded-full', timeLabel.color)}>
+                      {timeLabel.label} · {simTime}m
+                    </span>
+                    <span className="text-[10px] text-clinical-slate/50">{timeLabel.tip}</span>
+                  </div>
+
+                  {/* Feedback quote */}
                   <div className="bg-clinical-bg p-4 rounded-lg border border-clinical-line text-sm text-clinical-ink leading-relaxed italic">
                     "{feedbackText}"
                   </div>
                   {correctDx && (
-                    <p className="text-xs text-clinical-slate mt-2">
+                    <p className="text-xs text-clinical-slate">
                       Diagnosis: <span className="font-semibold text-clinical-ink">{correctDx}</span>
                     </p>
                   )}
                   {evaluation?.explanation && (
-                    <p className="text-xs text-clinical-slate/80 mt-1 leading-relaxed">{evaluation.explanation}</p>
+                    <p className="text-xs text-clinical-slate/80 leading-relaxed">{evaluation.explanation}</p>
                   )}
                 </div>
               </div>
@@ -181,15 +282,22 @@ export function AssessmentTab({
               {evaluation?.breakdown && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
-                    { label: 'Initial Mgmt',   val: evaluation.breakdown.initialManagement,       max: 25 },
-                    { label: 'Diagnostics',    val: evaluation.breakdown.diagnosticWorkup,         max: 25 },
-                    { label: 'Treatment',      val: evaluation.breakdown.therapeuticInterventions, max: 30 },
-                    { label: 'Outcome',        val: evaluation.breakdown.patientOutcome,           max: 20 },
+                    { label: 'Initial Mgmt', val: evaluation.breakdown.initialManagement,       max: 25 },
+                    { label: 'Diagnostics',  val: evaluation.breakdown.diagnosticWorkup,         max: 25 },
+                    { label: 'Treatment',    val: evaluation.breakdown.therapeuticInterventions, max: 30 },
+                    { label: 'Outcome',      val: evaluation.breakdown.patientOutcome,           max: 20 },
                   ].map(({ label, val, max }) => (
                     <div key={label} className="bg-clinical-bg border border-clinical-line rounded-lg p-3 text-center">
                       <div className="text-[10px] text-clinical-slate uppercase mb-1">{label}</div>
                       <div className="text-lg font-bold text-clinical-ink">{val}</div>
                       <div className="text-[10px] text-clinical-slate/60">/ {max}</div>
+                      {/* progress bar */}
+                      <div className="mt-1.5 h-1 bg-clinical-line rounded-full overflow-hidden">
+                        <div
+                          className={cn('h-full rounded-full transition-all', val / max >= 0.8 ? 'bg-clinical-green' : val / max >= 0.6 ? 'bg-clinical-blue' : 'bg-clinical-amber')}
+                          style={{ width: `${(val / max) * 100}%` }}
+                        />
+                      </div>
                     </div>
                   ))}
                   {(evaluation.breakdown.efficiencyPenalty ?? 0) < 0 && (
@@ -252,8 +360,7 @@ export function AssessmentTab({
                   <h5 className="text-[10px] font-medium text-clinical-slate uppercase mb-3">Full Action Audit</h5>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
                     {medicalCase.clinicalActions.map((a, i) => (
-                      <div key={i}
-                        className="flex gap-2 text-xs bg-clinical-bg/50 p-2 rounded-md border border-clinical-line/50">
+                      <div key={i} className="flex gap-2 text-xs bg-clinical-bg/50 p-2 rounded-md border border-clinical-line/50">
                         <span className="font-mono text-clinical-blue shrink-0">T+{a.timestamp}</span>
                         <span className="text-clinical-ink truncate">{a.description}</span>
                       </div>
@@ -267,8 +374,7 @@ export function AssessmentTab({
                   className="px-8 py-2.5 bg-clinical-blue text-white rounded-lg font-medium text-sm hover:bg-clinical-blue/90 transition-all">
                   Next Patient
                 </button>
-                <CaseExport medicalCase={medicalCase}
-                  feedback={{ score, feedback: feedbackText }} logs={logs} />
+                <CaseExport medicalCase={medicalCase} feedback={{ score, feedback: feedbackText }} logs={logs} />
               </div>
             </div>
           )}
