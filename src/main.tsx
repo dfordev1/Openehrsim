@@ -6,7 +6,10 @@ import './index.css';
 
 // ── Sentry ────────────────────────────────────────────────────────────────────
 Sentry.init({
-  dsn: "https://7c330590e8ef398a2ba6cf908aefed9e@o4511376830038016.ingest.us.sentry.io/4511376836591616",
+  // Read DSN from env so the build doesn't fail when VITE_SENTRY_DSN is empty
+  // (e.g. in CI / local dev).  Falls back to the real DSN for production.
+  dsn: import.meta.env.VITE_SENTRY_DSN ||
+    "https://7c330590e8ef398a2ba6cf908aefed9e@o4511376830038016.ingest.us.sentry.io/4511376836591616",
 
   // Send default PII (IP address, user agent, etc.)
   sendDefaultPii: true,

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import * as Sentry from '@sentry/react';
 import React, { useState, useEffect, useCallback, Component, ErrorInfo, ReactNode } from 'react';
 import {
   Activity,
@@ -75,7 +76,10 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     this.state = { hasError: false };
   }
   static getDerivedStateFromError(_: Error): ErrorBoundaryState { return { hasError: true }; }
-  componentDidCatch(error: Error, info: ErrorInfo) { console.error('UI Crash:', error, info); }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('UI Crash:', error, info);
+    Sentry.captureException(error, { extra: { componentStack: info.componentStack } });
+  }
   render() {
     if (this.state.hasError) {
       return (
