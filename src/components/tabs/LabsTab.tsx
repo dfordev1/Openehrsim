@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { FlaskConical, ChevronRight } from 'lucide-react';
+import { FlaskConical, ChevronRight, Plus, ChevronDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { EmptyState } from '../EmptyState';
 import { MedicalCase, LabResult } from '../../types';
@@ -14,8 +14,44 @@ interface LabsTabProps {
 }
 
 export function LabsTab({ medicalCase, simTime, selectedLab, onSelectLab, onOrderLab }: LabsTabProps) {
+  const [orderPanelOpen, setOrderPanelOpen] = useState(false);
+
+  const availableLabs = medicalCase.availableTests?.labs ?? [];
+  const orderedLabNames = new Set((medicalCase.labs || []).map(l => l.name));
+  const unorderedLabs = availableLabs.filter(name => !orderedLabNames.has(name));
+
   return (
     <motion.div key="labs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4 flex-1 min-h-0">
+
+      {/* ── Quick Order Panel ─────────────────────────────────────────── */}
+      {unorderedLabs.length > 0 && (
+        <div className="panel">
+          <button
+            onClick={() => setOrderPanelOpen(p => !p)}
+            className="panel-header w-full cursor-pointer hover:bg-clinical-bg/60 transition-colors"
+          >
+            <span className="panel-title flex items-center gap-2">
+              <Plus className="w-3.5 h-3.5 text-clinical-blue" />
+              Order Labs
+              <span className="ml-1 text-[9px] bg-clinical-blue text-white rounded-full px-1.5 py-0.5">{unorderedLabs.length}</span>
+            </span>
+            <ChevronDown className={cn('w-4 h-4 text-clinical-slate/40 transition-transform', orderPanelOpen && 'rotate-180')} />
+          </button>
+          {orderPanelOpen && (
+            <div className="p-3 flex flex-wrap gap-1.5">
+              {unorderedLabs.map(name => (
+                <button
+                  key={name}
+                  onClick={() => onOrderLab(name)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-clinical-bg border border-clinical-line rounded-md text-xs font-medium hover:border-clinical-blue/50 hover:bg-clinical-blue/5 hover:text-clinical-blue transition-all"
+                >
+                  <Plus className="w-3 h-3" />{name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
         {/* Lab Table */}
         <div className="lg:col-span-2 panel flex flex-col min-h-[300px]">
