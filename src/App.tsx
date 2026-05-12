@@ -58,6 +58,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useUndoStack } from './hooks/useUndoStack';
 import { useDarkMode } from './hooks/useDarkMode';
 import { useClinicalReasoning } from './hooks/useClinicalReasoning';
+import { useAppRouter } from './hooks/useAppRouter';
 import type { WorkflowStage } from './types';
 
 // ── Tab components ────────────────────────────────────────────────────────────
@@ -71,6 +72,11 @@ import { CommsTab } from './components/tabs/CommsTab';
 import { AssessmentTab } from './components/tabs/AssessmentTab';
 import { TriageTab } from './components/tabs/TriageTab';
 import { DxPauseTab } from './components/tabs/DxPauseTab';
+
+// ── Pre-case screens ──────────────────────────────────────────────────────────
+import { Dashboard } from './components/screens/Dashboard';
+import { PracticeList } from './components/screens/PracticeList';
+import { CaseWelcome } from './components/screens/CaseWelcome';
 
 // ── Error Boundary ────────────────────────────────────────────────────────────
 interface ErrorBoundaryProps { children: ReactNode; }
@@ -106,7 +112,55 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 }
 
 export default function App() {
-  return <ToastProvider><ErrorBoundary><ClinicalSimulator /></ErrorBoundary></ToastProvider>;
+  return <ToastProvider><ErrorBoundary><AppRouter /></ErrorBoundary></ToastProvider>;
+}
+
+// ── AppRouter — manages pre-case screens vs active case ───────────────────────
+function AppRouter() {
+  const router = useAppRouter();
+
+  // Dashboard view
+  if (router.currentView === 'dashboard') {
+    return (
+      <Dashboard
+        onStartPractice={router.goToPractice}
+        onNavigate={(view) => {
+          if (view === 'practice') router.goToPractice();
+        }}
+        activeView="dashboard"
+        completedCases={0}
+        assignedCases={0}
+      />
+    );
+  }
+
+  // Practice list view
+  if (router.currentView === 'practice') {
+    return (
+      <PracticeList
+        onStartCase={(caseId, difficulty, category) => router.goToWelcome(caseId, difficulty, category)}
+        onBack={router.goToDashboard}
+      />
+    );
+  }
+
+  // Welcome / case intro view
+  if (router.currentView === 'welcome') {
+    return (
+      <CaseWelcome
+        patientName={router.caseContext.patientName}
+        chiefConcern={router.caseContext.chiefConcern}
+        difficulty={router.caseContext.difficulty}
+        category={router.caseContext.category}
+        onStartWithGuidance={() => router.startCase(true)}
+        onStartWithoutGuidance={() => router.startCase(false)}
+        onBack={router.goToPractice}
+      />
+    );
+  }
+
+  // Active case (existing ClinicalSimulator)
+  return <ClinicalSimulator />;
 }
 
 // ── ClinicalSimulator (orchestration only) ────────────────────────────────────
