@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import OpenAI from "openai";
 
-const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || "sk-b79bd35ec3064714bdce2306ebb38369";
+const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY!;
 
 const openai = new OpenAI({
   apiKey: DEEPSEEK_KEY,
