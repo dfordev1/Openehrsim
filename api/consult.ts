@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import OpenAI from "openai";
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Validate required request fields
 function validateRequest(body: any): { medicalCase: any } {
   if (!body || typeof body !== "object") {
     throw new Error("Request body must be a JSON object.");
@@ -20,13 +20,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const { medicalCase } = validateRequest(req.body);
 
-    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY.includes("MY_")) {
-      return res.status(500).json({ error: "GEMINI_API_KEY is not configured in environment variables." });
-    }
-
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-    // Trim payload: only send relevant clinical info, not full history arrays
     const trimmedCase = {
       patientName: medicalCase.patientName,
       age: medicalCase.age,
@@ -45,46 +38,72 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       currentLocation: medicalCase.currentLocation,
       difficulty: medicalCase.difficulty,
       category: medicalCase.category,
-      // Only last 5 actions/comms to keep prompt lean
       clinicalActions: (medicalCase.clinicalActions || []).slice(-5),
       communicationLog: (medicalCase.communicationLog || []).slice(-5),
     };
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-lite",
-      contents: `Analyze the following medical case and provide consultant-level advice.
-State the current most likely differential diagnosis, reasoning, and suggest the top 3 immediate next steps.
+    const consultPrompt = `Analyze the following medical case and provide consultant-level advice.
+State the current most likely differential diagnosis, the underlying clinical reasoning, and suggest the top 3 immediate next steps.
+Return ONLY a JSON object with this exact shape:
+{ "advice": string, "reasoning": string, "recommendedActions": string[] }
 
-Case: ${JSON.stringify(trimmedCase)}`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            advice: {
-              type: Type.STRING,
-              description: "A high-level clinical summary and recommendation.",
+Case: ${JSON.stringify(trimmedCase)}`;
+
+    const geminiAvailable =
+      process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes("MY_");
+
+    if (geminiAvailable) {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.0-flash-lite",
+        contents: consultPrompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              advice: { type: Type.STRING },
+              reasoning: { type: Type.STRING },
+              recommendedActions: { type: Type.ARRAY, items: { type: Type.STRING } },
             },
-            reasoning: {
-              type: Type.STRING,
-              description:
-                "The underlying pathophysiological or clinical reasoning for the advice.",
-            },
-            recommendedActions: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: "A list of urgent next steps or orders.",
-            },
+            required: ["advice", "reasoning", "recommendedActions"],
           },
-          required: ["advice", "reasoning", "recommendedActions"],
         },
-      },
+      });
+      const text = response.text;
+      if (!text) throw new Error("Consultant was unable to provide advice.");
+      return res.json(JSON.parse(text));
+    }
+
+    // DeepSeek fallback
+    if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY.includes("MY_")) {
+      return res.status(500).json({
+        error: "No AI API key configured. Set DEEPSEEK_API_KEY or GEMINI_API_KEY.",
+      });
+    }
+
+    const openai = new OpenAI({
+      apiKey: process.env.DEEPSEEK_API_KEY,
+      baseURL: "https://api.deepseek.com",
     });
 
-    const text = response.text;
-    if (!text) throw new Error("Consultant was unable to provide advice.");
+    const dsResponse = await openai.chat.completions.create({
+      model: "deepseek-chat",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a senior specialist consultant. Analyze the medical case provided and return ONLY a valid JSON object with keys: advice (string), reasoning (string), recommendedActions (array of strings).",
+        },
+        { role: "user", content: consultPrompt },
+      ],
+      response_format: { type: "json_object" },
+    });
 
-    res.json(JSON.parse(text));
+    const dsContent = dsResponse.choices[0].message.content;
+    if (!dsContent) throw new Error("Consultant was unable to provide advice.");
+
+    res.json(JSON.parse(dsContent));
   } catch (error: any) {
     console.error("Consult Error:", error);
     res.status(500).json({ error: error.message || "Consultant is currently unavailable." });
