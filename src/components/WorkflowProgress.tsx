@@ -25,8 +25,8 @@ export function WorkflowProgress({ currentStage, onStageClick, completedStages, 
     <div className="flex items-center w-full" role="navigation" aria-label="Clinical workflow stages">
       {STAGES.map((stage, idx) => {
         const isActive = stage.id === currentStage;
-        // A stage only counts as "done" in the visual when it is both marked
-        // completed AND is not the one the learner is currently on.
+        // A stage only counts as "done" in the visual if it is both marked
+        // completed AND is not the one the user is currently standing on.
         const isCompleted = !isActive && completedStages.includes(stage.id);
         const isPast = idx < currentIdx && !isCompleted;
 
