@@ -31,7 +31,11 @@ import {
   Zap,
   BookOpen,
   Pill,
-  Command
+  Command,
+  Undo2,
+  Moon,
+  Sun,
+  Maximize2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -59,6 +63,13 @@ import { CommandPalette } from './components/CommandPalette';
 import { EmptyState } from './components/EmptyState';
 import { SkeletonCard, SkeletonVitals } from './components/Skeleton';
 import { cn } from './lib/utils';
+import { ToastProvider, useToast } from './components/Toast';
+import VitalsExpanded from './components/VitalsExpanded';
+import CaseExport from './components/CaseExport';
+import { useUrlTab } from './hooks/useUrlTab';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useUndoStack } from './hooks/useUndoStack';
+import { useDarkMode } from './hooks/useDarkMode';
 
 // --- Error Boundary ---
 interface ErrorBoundaryProps { children: ReactNode; }
@@ -91,7 +102,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 }
 
 export default function App() {
-  return <ErrorBoundary><ClinicalSimulator /></ErrorBoundary>;
+  return <ToastProvider><ErrorBoundary><ClinicalSimulator /></ErrorBoundary></ToastProvider>;
 }
 
 const GCS_MAPPING = {
@@ -120,11 +131,13 @@ const GCS_MAPPING = {
 
 
 
+
 function ClinicalSimulator() {
+  const { addToast } = useToast();
   const [medicalCase, setMedicalCase] = useState<MedicalCase | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'hpi' | 'exam' | 'labs' | 'imaging' | 'pharmacy' | 'treatment' | 'comms' | 'archive' | 'notes' | 'tools' | 'assess'>('hpi');
+  const [activeTab, setActiveTab] = useUrlTab();
   const [userDiagnosis, setUserDiagnosis] = useState('');
   const [consultantAdvice, setConsultantAdvice] = useState<ConsultantAdvice | null>(null);
   const [isConsulting, setIsConsulting] = useState(false);
@@ -147,10 +160,33 @@ function ClinicalSimulator() {
   const [user, setUser] = useState<User | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [customMedInput, setCustomMedInput] = useState('');
-  // Phase 4: Command Palette
   const [isCommandOpen, setIsCommandOpen] = useState(false);
-  // Phase 3: Progressive disclosure — collapsed sections
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [vitalsExpanded, setVitalsExpanded] = useState(false);
+
+  // Dark mode
+  const [isDark, toggleDark] = useDarkMode();
+
+  // Undo/redo
+  const { pushUndo, popUndo, canUndo, lastAction } = useUndoStack();
+
+  const handleUndo = useCallback(() => {
+    const entry = popUndo();
+    if (entry) {
+      setMedicalCase(entry.caseSnapshot);
+      addToast(`Undid: ${entry.label}`, 'info');
+    }
+  }, [popUndo, addToast]);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onTabChange: setActiveTab,
+    onNewCase: () => setIsLibraryOpen(true),
+    onDiagnosis: () => setActiveTab('assess'),
+    onCommandPalette: () => setIsCommandOpen(prev => !prev),
+    onUndo: handleUndo,
+    enabled: !isCommandOpen && !isLibraryOpen && !isConsultOpen,
+  });
 
   const toggleSection = (id: string) => setExpandedSections(prev => ({ ...prev, [id]: !prev[id] }));
 
@@ -164,18 +200,6 @@ function ClinicalSimulator() {
       });
       return () => subscription.unsubscribe();
     }
-  }, []);
-
-  // Phase 4: Global keyboard shortcut for command palette
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setIsCommandOpen(prev => !prev);
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
   }, []);
 
   const handleLogout = async () => {
@@ -285,8 +309,9 @@ function ClinicalSimulator() {
 
   const handlePerformIntervention = async (customWait?: number, directIntervention?: string) => {
     if (!medicalCase) return;
-    setIntervening(true);
     const interventionToExecute = directIntervention || interventionInput || "Observation";
+    pushUndo(`Intervention: ${interventionToExecute}`, medicalCase);
+    setIntervening(true);
     setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: directIntervention ? `ACTION: ${directIntervention}` : (customWait ? `WAIT ${customWait} min` : `ORDER: ${interventionInput}`) }]);
     try {
       const updatedCase = await performIntervention(interventionToExecute, medicalCase, customWait || 5);
@@ -295,6 +320,7 @@ function ClinicalSimulator() {
         return { ...prev, ...updatedCase, labs: updatedCase.labs || prev.labs, imaging: updatedCase.imaging || prev.imaging, clinicalActions: updatedCase.clinicalActions || prev.clinicalActions, vitals: { ...prev.vitals, ...(updatedCase.vitals || {}) } };
       });
       setInterventionInput('');
+      addToast(`Intervention executed: ${interventionToExecute}`, 'success');
     } catch (error) { console.error("Intervention failed:", error); }
     finally { setIntervening(false); }
   };
@@ -307,18 +333,21 @@ function ClinicalSimulator() {
       setFeedback(result);
       setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: `DIAGNOSIS FILED: ${userDiagnosis}` }]);
       saveSimulationResult(medicalCase, userDiagnosis, result.score, result.feedback).catch(err => console.error("Persistence failed:", err));
+      addToast(`Diagnosis submitted — Score: ${result.score}/100`, 'success');
     } catch (error) { console.error("Failed to evaluate diagnosis:", error); }
     finally { setSubmitting(false); }
   };
 
   const handleStaffCall = async () => {
     if (!medicalCase || !callMessage) return;
+    pushUndo(`Call: ${callTarget}`, medicalCase);
     setCalling(true);
     try {
       const { reply, updatedCase } = await staffCall(callTarget, callMessage, medicalCase);
       setMedicalCase(updatedCase);
       setCallMessage('');
       setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: `COMM: Call to ${callTarget} - "${reply.slice(0, 30)}..."` }]);
+      addToast(`Staff call to ${callTarget} completed`, 'success');
     } catch (err) { console.error(err); }
     finally { setCalling(false); }
   };
@@ -330,11 +359,12 @@ function ClinicalSimulator() {
     try {
       const updatedCase = await performIntervention(`Order ${type}: ${name}`, medicalCase, 1);
       setMedicalCase(updatedCase);
+      addToast(`Lab ordered: ${name}`, 'success');
     } catch (err) { console.error(err); }
     finally { setIntervening(false); }
   };
 
-  // --- Loading / Error States with Skeletons (Phase 4) ---
+  // --- Loading / Error States with Skeletons ---
   if (loading || error) {
     return (
       <div className="min-h-screen bg-clinical-bg flex items-center justify-center font-sans">
@@ -365,7 +395,6 @@ function ClinicalSimulator() {
 
   const simTime = medicalCase?.simulationTime || 0;
 
-  // Phase 3: Consolidated navigation — group tabs into categories
   const primaryTabs = [
     { id: 'hpi', icon: <Clipboard className="w-4 h-4" />, label: 'History' },
     { id: 'exam', icon: <Stethoscope className="w-4 h-4" />, label: 'Exam' },
@@ -386,7 +415,6 @@ function ClinicalSimulator() {
     ...(user ? [{ id: 'archive', icon: <History className="w-4 h-4" />, label: 'Archive' }] : [])
   ];
 
-  // Phase 4: Mobile bottom nav tabs (abbreviated)
   const mobileNavTabs = [
     { id: 'hpi', icon: <Clipboard className="w-4 h-4" />, label: 'HPI' },
     { id: 'labs', icon: <FlaskConical className="w-4 h-4" />, label: 'Labs' },
@@ -398,15 +426,20 @@ function ClinicalSimulator() {
 
 
   return (
-    <div className="h-screen bg-clinical-bg flex flex-col overflow-hidden text-clinical-ink">
+    <div className="h-screen bg-clinical-bg flex flex-col overflow-hidden text-clinical-ink" role="application" aria-label="Clinical Simulator">
+      {/* Vitals Expanded Modal */}
+      <VitalsExpanded isOpen={vitalsExpanded} onClose={() => setVitalsExpanded(false)} vitalsHistory={vitalsHistory} />
+
       {!isSupabaseConfigured && (
         <div className="bg-amber-50/80 border-b border-amber-100 py-1.5 px-4 text-xs text-amber-700 z-50">
           History disabled — Supabase not configured
         </div>
       )}
 
+      {/* Focus trap handled internally by CaseLibrary */}
       <CaseLibrary isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} onSelectCase={(diff, cat, env) => loadNewCase(diff, cat, env)} />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
+      {/* Focus trap handled internally by CommandPalette */}
       <CommandPalette
         isOpen={isCommandOpen}
         onClose={() => setIsCommandOpen(false)}
@@ -416,7 +449,7 @@ function ClinicalSimulator() {
         hasArchive={!!user}
       />
 
-      {/* Header — Phase 1: Softer, reduced weight */}
+      {/* Header */}
       <header className="h-11 bg-white border-b border-clinical-line flex items-center px-4 shrink-0 z-30" role="banner">
         <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-1.5 hover:bg-clinical-bg rounded-md mr-3" aria-label="Menu">
           <Menu className="w-4 h-4 text-clinical-slate" />
@@ -427,7 +460,11 @@ function ClinicalSimulator() {
           <span className="text-xs text-clinical-slate/50 hidden md:inline">{medicalCase?.currentLocation}</span>
         </div>
         <div className="flex items-center gap-3 ml-auto">
-          {/* Phase 4: Command palette trigger */}
+          {/* Dark mode toggle */}
+          <button onClick={toggleDark} className="p-1.5 hover:bg-clinical-bg rounded-md transition-colors" aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
+            {isDark ? <Sun className="w-3.5 h-3.5 text-clinical-slate" /> : <Moon className="w-3.5 h-3.5 text-clinical-slate" />}
+          </button>
+          {/* Command palette trigger */}
           <button onClick={() => setIsCommandOpen(true)} className="hidden sm:flex items-center gap-1.5 text-xs text-clinical-slate/60 hover:text-clinical-slate bg-clinical-bg border border-clinical-line rounded-md px-2.5 py-1 transition-colors" aria-label="Command palette">
             <Command className="w-3 h-3" />
             <span className="font-mono text-[10px]">K</span>
@@ -444,10 +481,10 @@ function ClinicalSimulator() {
         </div>
       </header>
 
-      {/* Alarm Banner — Phase 1: Softer colors */}
+      {/* Alarm Banner */}
       <AnimatePresence>
         {(medicalCase?.activeAlarms || []).length > 0 && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-red-50/60 border-b border-red-100/80 py-1.5 px-4 flex items-center gap-3 overflow-hidden shrink-0" role="alert">
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-red-50/60 border-b border-red-100/80 py-1.5 px-4 flex items-center gap-3 overflow-hidden shrink-0" role="alert" aria-live="assertive">
             <div className="w-1.5 h-1.5 bg-clinical-red/70 rounded-full animate-pulse shrink-0" />
             <div className="flex gap-3 text-xs text-clinical-red/80 font-medium overflow-x-auto no-scrollbar">
               {medicalCase?.activeAlarms.map((alarm, i) => (<span key={i}>{alarm}</span>))}
@@ -456,17 +493,20 @@ function ClinicalSimulator() {
         )}
       </AnimatePresence>
 
-      {/* Vitals Rail — Phase 1: Softer, Phase 2: Consistent padding */}
+      {/* Vitals Rail with sparklines and expand */}
       <div className="h-11 bg-white border-b border-clinical-line/50 flex items-center px-4 gap-3 shrink-0 overflow-x-auto no-scrollbar" role="region" aria-label="Vital signs">
         <div className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full", medicalCase?.physiologicalTrend === 'improving' ? "text-clinical-green bg-green-50/80" : medicalCase?.physiologicalTrend === 'declining' ? "text-clinical-amber bg-amber-50/80" : medicalCase?.physiologicalTrend === 'critical' ? "text-clinical-red bg-red-50/80" : "text-clinical-slate bg-slate-50")}>
           {medicalCase?.physiologicalTrend}
         </div>
         <div className="w-px h-5 bg-clinical-line/50" />
-        <ClinicalVital label="HR" value={Math.round(vitalsHistory[vitalsHistory.length - 1]?.hr || medicalCase?.vitals?.heartRate || 0)} unit="bpm" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('HR') || a.includes('Pulse') || a.includes('Bradycardia') || a.includes('Tachycardia'))} />
-        <ClinicalVital label="BP" value={medicalCase?.vitals?.bloodPressure || '--'} unit="mmHg" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('BP') || a.includes('Pressure') || a.includes('Hypotension') || a.includes('Hypertension'))} />
-        <ClinicalVital label="SpO2" value={medicalCase?.vitals?.oxygenSaturation || 0} unit="%" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('SpO2') || a.includes('Saturation') || a.includes('Hypoxia'))} />
-        <ClinicalVital label="RR" value={medicalCase?.vitals?.respiratoryRate || '--'} unit="/min" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('RR') || a.includes('Respiratory'))} />
-        <ClinicalVital label="Temp" value={medicalCase?.vitals?.temperature || 0} unit="°C" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('Temp') || a.includes('Temperature') || a.includes('Fever'))} />
+        <ClinicalVital label="HR" value={Math.round(vitalsHistory[vitalsHistory.length - 1]?.hr || medicalCase?.vitals?.heartRate || 0)} unit="bpm" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('HR') || a.includes('Pulse') || a.includes('Bradycardia') || a.includes('Tachycardia'))} trend={vitalsHistory.map(v => v.hr)} onClick={() => setVitalsExpanded(true)} />
+        <ClinicalVital label="BP" value={medicalCase?.vitals?.bloodPressure || '--'} unit="mmHg" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('BP') || a.includes('Pressure') || a.includes('Hypotension') || a.includes('Hypertension'))} trend={vitalsHistory.map(v => v.sbp)} onClick={() => setVitalsExpanded(true)} />
+        <ClinicalVital label="SpO2" value={medicalCase?.vitals?.oxygenSaturation || 0} unit="%" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('SpO2') || a.includes('Saturation') || a.includes('Hypoxia'))} trend={vitalsHistory.map(v => v.spo2)} onClick={() => setVitalsExpanded(true)} />
+        <ClinicalVital label="RR" value={medicalCase?.vitals?.respiratoryRate || '--'} unit="/min" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('RR') || a.includes('Respiratory'))} trend={vitalsHistory.map(v => v.rr)} onClick={() => setVitalsExpanded(true)} />
+        <ClinicalVital label="Temp" value={medicalCase?.vitals?.temperature || 0} unit="°C" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('Temp') || a.includes('Temperature') || a.includes('Fever'))} onClick={() => setVitalsExpanded(true)} />
+        <button onClick={() => setVitalsExpanded(true)} className="ml-auto p-1 hover:bg-clinical-bg rounded transition-colors shrink-0" aria-label="Expand vitals">
+          <Maximize2 className="w-3.5 h-3.5 text-clinical-slate/50" />
+        </button>
       </div>
 
       <div className="flex flex-1 overflow-hidden relative">
@@ -501,7 +541,7 @@ function ClinicalSimulator() {
           )}
         </AnimatePresence>
 
-        {/* Desktop Sidebar — Phase 3: Grouped tabs with categories */}
+        {/* Desktop Sidebar */}
         <nav className="w-48 bg-white border-r border-clinical-line/50 flex-col py-3 px-2 z-20 shrink-0 hidden lg:flex" aria-label="Main navigation">
           <div className="space-y-4 flex-1">
             <div>
@@ -533,8 +573,9 @@ function ClinicalSimulator() {
 
 
 
-        {/* Clinical Workspace — Phase 2: Consistent padding */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-5 flex flex-col gap-4 pb-20 lg:pb-5" role="main">
+
+        {/* Clinical Workspace */}
+        <main className="flex-1 overflow-y-auto p-4 lg:p-5 flex flex-col gap-4 pb-20 lg:pb-5" role="main" aria-label="Clinical workspace">
           <AnimatePresence mode="wait">
             {activeTab === 'hpi' && (
               <motion.div key="hpi" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="panel">
@@ -567,7 +608,7 @@ function ClinicalSimulator() {
 
             {activeTab === 'exam' && (
               <motion.div key="exam" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4">
-                {/* GCS — Phase 3: Progressive disclosure (collapsible) */}
+                {/* GCS */}
                 <div className="panel">
                   <button onClick={() => toggleSection('gcs')} className="panel-header w-full cursor-pointer hover:bg-clinical-bg/60 transition-colors">
                     <span className="panel-title">Glasgow Coma Scale (GCS)</span>
@@ -719,6 +760,7 @@ function ClinicalSimulator() {
 
 
 
+
             {activeTab === 'pharmacy' && (
               <motion.div key="pharmacy" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4 flex-1 min-h-0">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1">
@@ -834,7 +876,7 @@ function ClinicalSimulator() {
                       </div>
                     </div>
                   </div>
-                  {/* Phase 3: Transfer section — progressive disclosure */}
+                  {/* Transfer section */}
                   <div className="panel">
                     <button onClick={() => toggleSection('transfer')} className="panel-header w-full cursor-pointer hover:bg-clinical-bg/60 transition-colors">
                       <span className="panel-title">Transfer / Timing</span>
@@ -906,7 +948,8 @@ function ClinicalSimulator() {
 
 
 
-            {/* Phase 1: Footer removed — Assessment is now its own tab */}
+
+            {/* Assessment Tab */}
             {activeTab === 'assess' && (
               <motion.div key="assess" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4">
                 <div className="panel">
@@ -968,8 +1011,9 @@ function ClinicalSimulator() {
                             </div>
                           </div>
                         )}
-                        <div className="flex justify-center pt-3">
+                        <div className="flex justify-center items-center gap-3 pt-3">
                           <button onClick={() => loadNewCase()} className="px-8 py-2.5 bg-clinical-blue text-white rounded-lg font-medium text-sm hover:bg-clinical-blue/90 transition-all">Next Patient</button>
+                          <CaseExport medicalCase={medicalCase} feedback={feedback} logs={logs} />
                         </div>
                       </div>
                     )}
@@ -994,7 +1038,7 @@ function ClinicalSimulator() {
         </main>
       </div>
 
-      {/* Phase 4: Mobile bottom navigation */}
+      {/* Mobile bottom navigation */}
       <div className="mobile-bottom-nav lg:hidden">
         {mobileNavTabs.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={cn("mobile-bottom-nav-item", activeTab === tab.id && "active")}>
@@ -1003,6 +1047,28 @@ function ClinicalSimulator() {
           </button>
         ))}
       </div>
+
+      {/* Undo Bar */}
+      <AnimatePresence>
+        {canUndo && (
+          <motion.div
+            initial={{ y: 60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 60, opacity: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="fixed bottom-20 lg:bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-clinical-ink text-white px-4 py-2.5 rounded-lg shadow-xl border border-white/10"
+          >
+            <Undo2 className="w-3.5 h-3.5 text-clinical-amber" />
+            <span className="text-xs font-medium">{lastAction}</span>
+            <button
+              onClick={handleUndo}
+              className="ml-2 px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-xs font-medium transition-colors"
+            >
+              Undo
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* AI Consultant Slide-over */}
       <AnimatePresence>
