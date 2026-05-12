@@ -568,61 +568,6 @@ Message: ${message}.`,
     }
   });
 
-  // ── POST /api/evaluate-diagnosis ────────────────────────────────────────────
-  app.post("/api/evaluate-diagnosis", async (req, res) => {
-    try {
-      const userDiagnosis = requireString(req.body?.userDiagnosis, "userDiagnosis", 2000);
-      const medicalCase = requireObject(req.body?.medicalCase, "medicalCase") as any;
-
-      if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY.includes("MY_")) {
-        return res.status(500).json({ error: "DEEPSEEK_API_KEY is not configured." });
-      }
-
-      const trimmedForEval = {
-        patientName: medicalCase.patientName,
-        age: medicalCase.age,
-        gender: medicalCase.gender,
-        chiefComplaint: medicalCase.chiefComplaint,
-        historyOfPresentIllness: medicalCase.historyOfPresentIllness,
-        vitals: medicalCase.vitals,
-        physicalExam: medicalCase.physicalExam,
-        labs: medicalCase.labs,
-        imaging: medicalCase.imaging,
-        correctDiagnosis: medicalCase.correctDiagnosis,
-        explanation: medicalCase.explanation,
-        simulationTime: medicalCase.simulationTime,
-        medications: medicalCase.medications,
-        clinicalActions: (medicalCase.clinicalActions || []).slice(-10),
-      };
-
-      const response = await openai.chat.completions.create({
-        model: "deepseek-chat",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a medical examiner. Evaluate the user's diagnostic accuracy. " +
-              "Consider: accuracy of diagnosis, appropriateness of workup ordered, speed of decision-making, and treatment choices. " +
-              'Respond ONLY with a JSON object: { "score": number (0-100), "feedback": string }',
-          },
-          {
-            role: "user",
-            content: `Evaluate diagnosis: "${userDiagnosis}" for the following case: ${JSON.stringify(trimmedForEval)}`,
-          },
-        ],
-        response_format: { type: "json_object" },
-      });
-
-      const content = response.choices[0].message.content;
-      if (!content) throw new Error("Empty response from AI");
-
-      res.json(JSON.parse(content));
-    } catch (error: any) {
-      console.error("DeepSeek Evaluation Error:", error);
-      res.status(500).json({ error: error.message || "Failed to evaluate diagnosis" });
-    }
-  });
-
   // ── POST /api/consult ───────────────────────────────────────────────────────
   app.post("/api/consult", async (req, res) => {
     try {

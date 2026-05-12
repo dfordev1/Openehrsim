@@ -26,7 +26,11 @@ create table if not exists simulation_results (
   -- CCS management-score columns (added by this migration)
   management_breakdown jsonb,   -- { initialManagement, diagnosticWorkup, therapeuticInterventions, patientOutcome, efficiencyPenalty }
   key_actions          jsonb,   -- string[]
-  clinical_pearl       text
+  clinical_pearl       text,
+  -- Clinical-reasoning columns (Healer-style). Optional but recommended.
+  reasoning_score        jsonb, -- { dataAcquisitionThoroughness, ..., overall } on 0-100 scale
+  problem_representation text,
+  differentials          jsonb  -- [{ diagnosis, confidence, isLead }]
 );
 
 alter table simulation_results enable row level security;
@@ -39,6 +43,18 @@ create policy "read own results"
   on simulation_results for select
   using (auth.uid() = user_id or user_id is null);
 ```
+
+> If you already created `simulation_results` before the reasoning columns
+> were introduced, add them with:
+> ```sql
+> alter table simulation_results
+>   add column if not exists reasoning_score        jsonb,
+>   add column if not exists problem_representation text,
+>   add column if not exists differentials          jsonb;
+> ```
+>
+> The `/api/end-case` handler degrades gracefully if these columns are
+> missing — the row is still saved without the reasoning fields.
 
 ---
 
