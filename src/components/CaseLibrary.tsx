@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   Heart, Activity, Wind, AlertTriangle, Droplets, Plus, RefreshCw,
   Loader2, Baby, Microscope, Stethoscope as StethoscopeIcon,
-  FlaskConical as FlaskIcon, Brain, Syringe, Crosshair, Truck, Building2
+  FlaskConical as FlaskIcon, Brain, Syringe, Crosshair, Truck, Building2,
+  Search, X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getRecentSimulations } from '../services/storageService';
@@ -19,6 +20,7 @@ export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps)
   const [loadingRecent, setLoadingRecent] = useState(false);
   const [selectedDifficulty, setSelectedDifficulty] = useState('resident');
   const [selectedEnv, setSelectedEnv] = useState('tertiary');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -142,9 +144,29 @@ export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps)
                 </div>
 
                 <div className="lg:col-span-3 p-4 md:p-6">
-                  <h3 className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest mb-6 border-b border-clinical-line pb-1">Choose Specialty Pathway</h3>
+                  <div className="flex items-center gap-3 mb-4">
+                    <h3 className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest border-b border-clinical-line pb-1 flex-1">Choose Specialty Pathway</h3>
+                  </div>
+                  {/* Search bar */}
+                  <div className="relative mb-4">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-clinical-slate/50" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Filter specialties…"
+                      className="w-full pl-9 pr-8 py-2 bg-clinical-bg border border-clinical-line rounded-lg text-xs focus:outline-none focus:border-clinical-blue/50 focus:ring-1 focus:ring-clinical-blue/30 transition-all"
+                    />
+                    {searchQuery && (
+                      <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-clinical-slate/50 hover:text-clinical-slate transition-colors">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
-                    {categories.map(c => (
+                    {categories
+                      .filter(c => !searchQuery || c.label.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .map(c => (
                       <button
                         key={c.id}
                         onClick={() => onSelectCase(selectedDifficulty, c.id, selectedEnv)}
@@ -161,6 +183,12 @@ export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps)
                         <p className="text-[9px] text-clinical-slate mt-1 uppercase tracking-tighter opacity-60">Generate Scenario</p>
                       </button>
                     ))}
+
+                    {searchQuery && categories.filter(c => c.label.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+                      <div className="sm:col-span-2 xl:col-span-3 py-8 text-center text-xs text-clinical-slate/50">
+                        No specialties match "{searchQuery}"
+                      </div>
+                    )}
 
                     <button
                       onClick={() => onSelectCase(selectedDifficulty, 'any', selectedEnv)}
