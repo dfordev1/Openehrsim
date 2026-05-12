@@ -670,6 +670,27 @@ function ClinicalSimulator() {
                 onGcsChange={(cat, score) => setGcsState(prev => ({ ...prev, [cat]: score }))}
                 gcsExpanded={gcsExpanded}
                 onToggleGcs={() => setGcsExpanded(p => !p)}
+                onExamineSystem={(system, finding) => {
+                  setLogs(prev => [...prev, {
+                    time: new Date().toLocaleTimeString(),
+                    text: `EXAM: ${system.toUpperCase()} examined`,
+                  }]);
+                  setMedicalCase(prev => {
+                    if (!prev) return prev;
+                    return {
+                      ...prev,
+                      clinicalActions: [
+                        ...(prev.clinicalActions || []),
+                        {
+                          id: `exam-${Date.now()}`,
+                          timestamp: prev.simulationTime,
+                          type: 'exam' as const,
+                          description: `Examined ${system}: ${finding.slice(0, 80)}${finding.length > 80 ? '…' : ''}`,
+                        },
+                      ],
+                    };
+                  });
+                }}
               />
             )}
 
