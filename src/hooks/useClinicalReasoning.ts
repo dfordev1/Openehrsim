@@ -46,15 +46,6 @@ function newId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-const STAGE_ORDER: WorkflowStage[] = [
-  'triage',
-  'history',
-  'exam',
-  'diagnostics',
-  'dxpause',
-  'management',
-];
-
 export function useClinicalReasoning() {
   // ── Problem Representation (working draft + committed snapshots) ──────────
   const [problemRepresentation, setProblemRepresentation] = useState('');
