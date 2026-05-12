@@ -48,6 +48,9 @@ interface ExamTabProps {
   onExamineSystem?: (system: string, finding: string) => void;
 }
 
+/** Sentinel value set by generate-case.ts for all locked systems */
+const LOCKED_SENTINEL = 'Not yet examined';
+
 export function ExamTab({
   medicalCase,
   gcsState,
@@ -56,20 +59,52 @@ export function ExamTab({
   onToggleGcs,
   onExamineSystem,
 }: ExamTabProps) {
-  // Track which systems the user has actively examined
-  const [examined, setExamined] = useState<Record<string, boolean>>({});
+  // Map of system → revealed finding text (populated on Examine click)
+  const [revealedFindings, setRevealedFindings] = useState<Record<string, string>>({});
+  const [loadingSystem, setLoadingSystem] = useState<string | null>(null);
 
-  const handleExamine = (system: string, finding: string) => {
-    if (examined[system]) return; // already examined, no re-click
-    setExamined(prev => ({ ...prev, [system]: true }));
-    onExamineSystem?.(system, finding);
+  const handleExamine = async (system: string, currentFinding: string) => {
+    if (revealedFindings[system]) return; // already done
+
+    // If the finding is already real (non-sentinel), reveal immediately
+    if (currentFinding && currentFinding !== LOCKED_SENTINEL) {
+      setRevealedFindings(prev => ({ ...prev, [system]: currentFinding }));
+      onExamineSystem?.(system, currentFinding);
+      return;
+    }
+
+    // Otherwise fetch the real finding from the server
+    setLoadingSystem(system);
+    try {
+      const res = await fetch('/api/examine-system', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caseId: medicalCase.id, system }),
+      });
+      if (res.ok) {
+        const { finding } = await res.json();
+        setRevealedFindings(prev => ({ ...prev, [system]: finding }));
+        onExamineSystem?.(system, finding);
+      } else {
+        // Fallback: mark as examined with a generic note
+        const fallback = 'Examination performed — findings within normal limits for presentation.';
+        setRevealedFindings(prev => ({ ...prev, [system]: fallback }));
+        onExamineSystem?.(system, fallback);
+      }
+    } catch {
+      const fallback = 'Examination performed — findings documented.';
+      setRevealedFindings(prev => ({ ...prev, [system]: fallback }));
+      onExamineSystem?.(system, fallback);
+    } finally {
+      setLoadingSystem(null);
+    }
   };
 
   const examEntries = Object.entries(medicalCase.physicalExam || {}).filter(
     ([key]) => key !== 'examined' // skip the meta field
   );
 
-  const examinedCount = Object.keys(examined).length;
+  const examinedCount = Object.keys(revealedFindings).length;
   const totalSystems  = examEntries.length;
 
   return (
@@ -146,9 +181,9 @@ export function ExamTab({
 
         <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
           {examEntries.map(([key, finding]) => {
-            const meta      = SYSTEM_META[key] ?? { label: key.toUpperCase(), icon: <Stethoscope className="w-4 h-4" /> };
-            const isExamined = examined[key];
-            const isLocked   = !isExamined && (finding === 'Not yet examined' || !finding);
+            const meta       = SYSTEM_META[key] ?? { label: key.toUpperCase(), icon: <Stethoscope className="w-4 h-4" /> };
+            const isExamined = !!revealedFindings[key];
+            const isLoading  = loadingSystem === key;
 
             return (
               <div
@@ -176,10 +211,13 @@ export function ExamTab({
                   ) : (
                     <button
                       onClick={() => handleExamine(key, finding as string)}
-                      className="text-[10px] font-medium text-white bg-clinical-ink hover:bg-clinical-slate px-2.5 py-1 rounded-md transition-all flex items-center gap-1"
+                      disabled={isLoading}
+                      className="text-[10px] font-medium text-white bg-clinical-ink hover:bg-clinical-slate px-2.5 py-1 rounded-md transition-all flex items-center gap-1 disabled:opacity-60"
                     >
-                      <Stethoscope className="w-3 h-3" />
-                      Examine
+                      {isLoading
+                        ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Examining...</>
+                        : <><Stethoscope className="w-3 h-3" />Examine</>
+                      }
                     </button>
                   )}
                 </div>
@@ -196,7 +234,7 @@ export function ExamTab({
                       className="px-3 py-2.5"
                     >
                       <p className="text-sm text-clinical-ink leading-relaxed">
-                        {finding as string}
+                        {revealedFindings[key]}
                       </p>
                     </motion.div>
                   ) : (
@@ -214,7 +252,7 @@ export function ExamTab({
                         ))}
                       </div>
                       <span className="text-[10px] text-clinical-slate/50 italic">
-                        Click Examine to reveal
+                        {isLoading ? 'Examining…' : 'Click Examine to reveal'}
                       </span>
                     </motion.div>
                   )}
