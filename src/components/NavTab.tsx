@@ -1,5 +1,4 @@
 import React from 'react';
-import { ChevronRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface NavTabProps {
@@ -16,17 +15,16 @@ export function NavTab({ active, icon, label, onClick }: NavTabProps) {
       aria-label={label}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        "w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all text-sm font-medium group",
+        "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all text-[13px]",
         active
-          ? "bg-clinical-blue text-white shadow-md shadow-clinical-blue/20 translate-x-1"
-          : "text-clinical-slate hover:bg-clinical-bg"
+          ? "bg-clinical-blue text-white font-medium"
+          : "text-clinical-slate hover:bg-slate-100 hover:text-clinical-ink"
       )}
     >
-      <div className={cn("transition-colors", active ? "text-white" : "text-clinical-slate opacity-40")}>
+      <div className={cn("w-4 h-4", active ? "text-white" : "text-clinical-slate/60")}>
         {icon}
       </div>
-      <span className="tracking-tight">{label}</span>
-      {active && <ChevronRight className="ml-auto w-3 h-3 text-white opacity-50" />}
+      <span>{label}</span>
     </button>
   );
 }

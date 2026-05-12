@@ -371,14 +371,10 @@ function ClinicalSimulator() {
   ];
 
   return (
-    <div className="min-h-screen h-screen bg-clinical-bg flex flex-col overflow-hidden text-clinical-ink">
+    <div className="h-screen bg-clinical-bg flex flex-col overflow-hidden text-clinical-ink">
       {!isSupabaseConfigured && (
-        <div className="bg-clinical-amber/10 border-b border-clinical-amber/30 py-2 px-4 md:px-6 flex items-center justify-between z-50" role="alert">
-          <div className="flex items-center gap-2 text-clinical-amber">
-            <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
-            <span className="text-[10px] font-bold uppercase tracking-wider">Persistence Offline: Supabase keys missing</span>
-          </div>
-          <p className="text-[9px] text-clinical-amber opacity-80 italic hidden sm:block">Simulation results will not be saved.</p>
+        <div className="bg-amber-50 border-b border-amber-100 py-1.5 px-4 text-xs text-amber-700 z-50">
+          History disabled — Supabase not configured
         </div>
       )}
 
@@ -386,138 +382,52 @@ function ClinicalSimulator() {
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
 
 
-      {/* EHR Header - Fixed: removed duplicate Active Orders widget */}
-      <header className="h-14 bg-clinical-surface border-b border-clinical-line flex items-center px-4 md:px-6 shrink-0 shadow-sm z-30" role="banner">
-        <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
-           <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 hover:bg-clinical-bg rounded" aria-label="Open navigation menu">
-             <Menu className="w-5 h-5 text-clinical-slate" />
-           </button>
-           <div className="flex items-center gap-2">
-              <div className="w-6 h-6 bg-clinical-blue rounded-sm flex items-center justify-center shrink-0" aria-hidden="true">
-                <Activity className="text-white w-3 h-3" />
-              </div>
-              <span className="text-sm font-bold tracking-tight hidden sm:inline">OpenEHR v4.2</span>
-           </div>
-           <div className="h-6 w-px bg-clinical-line hidden sm:block" />
-
-           {/* Single Active Orders widget (removed duplicate) */}
-           <div className="hidden xl:flex items-center gap-4 bg-clinical-bg border border-clinical-line rounded-lg px-3 py-1.5 h-10 overflow-hidden">
-              <div className="flex items-center gap-2 opacity-40 shrink-0">
-                <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
-                <span className="text-[9px] font-black uppercase tracking-widest">Active Orders</span>
-              </div>
-              <div className="flex gap-2 min-w-0">
-                {medicalCase?.labs.filter(l => !l.availableAt).map(l => (
-                   <div key={l.name} className="flex flex-col text-[8px] font-bold bg-white px-2 py-0.5 rounded border border-clinical-line shrink-0">
-                      <span className="text-clinical-ink uppercase truncate max-w-[60px]">{l.name}</span>
-                      <span className="text-clinical-blue">PENDING</span>
-                   </div>
-                ))}
-                {medicalCase?.imaging.filter(i => !i.availableAt).map(i => (
-                   <div key={i.type} className="flex flex-col text-[8px] font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200 shrink-0">
-                      <span className="text-amber-800 uppercase truncate max-w-[60px]">{i.type}</span>
-                      <span className="text-amber-600 italic">PROCESSING</span>
-                   </div>
-                ))}
-                {(!medicalCase?.labs.some(l => !l.availableAt) && !medicalCase?.imaging.some(i => !i.availableAt)) && (
-                   <span className="text-[9px] font-bold text-clinical-slate opacity-20 uppercase tracking-tighter">Queue Empty</span>
-                )}
-              </div>
-           </div>
-
-           <div className="text-[11px] font-bold text-clinical-slate uppercase flex items-center gap-2 md:gap-3 flex-1 min-w-0">
-              <span className="flex items-center gap-1 min-w-0">
-                <UserIcon className="w-3 h-3 shrink-0" aria-hidden="true" />
-                <span className="text-clinical-ink truncate max-w-[80px] md:max-w-none">{medicalCase?.patientName}</span>
-              </span>
-              <div className="h-3 w-px bg-clinical-line hidden md:block" />
-              <span className="hidden md:inline">ID: <span className="text-clinical-ink">#882-019-X</span></span>
-              <div className="h-3 w-px bg-clinical-line hidden lg:block" />
-              <div className="flex items-center gap-4">
-                <button onClick={() => setIsLibraryOpen(true)} className="flex items-center gap-1.5 text-clinical-blue hover:bg-clinical-blue/10 px-2 py-1 rounded transition-colors" aria-label="Open case library">
-                  <Clipboard className="w-3.5 h-3.5" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline">Case Library</span>
-                </button>
-                <span className="hidden lg:flex items-center gap-1.5 text-clinical-blue">
-                  <div className="w-1.5 h-1.5 rounded-full bg-clinical-amber animate-pulse" aria-hidden="true" />
-                  {medicalCase?.currentLocation || 'ER Bay 4'}
-                </span>
-              </div>
-           </div>
+      {/* Clean Header */}
+      <header className="h-12 bg-white border-b border-clinical-line flex items-center px-4 md:px-5 shrink-0 z-30" role="banner">
+        <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-1.5 hover:bg-slate-100 rounded-md mr-3" aria-label="Menu">
+          <Menu className="w-4 h-4 text-clinical-slate" />
+        </button>
+        <span className="text-sm font-semibold text-clinical-ink mr-4 hidden sm:inline">OpenEHR</span>
+        <div className="flex items-center gap-2 text-sm text-clinical-slate flex-1 min-w-0">
+          <span className="font-medium text-clinical-ink truncate">{medicalCase?.patientName}</span>
+          <span className="text-xs text-clinical-slate/60 hidden md:inline">{medicalCase?.currentLocation}</span>
         </div>
-
-        <div className="ml-auto flex items-center gap-2 md:gap-4">
-          {user ? (
-            <div className="flex items-center gap-3 bg-clinical-bg border border-clinical-line rounded-lg px-2 py-1 h-10">
-              <div className="text-right flex-col justify-center hidden sm:flex">
-                <div className="text-[10px] font-black text-clinical-ink truncate max-w-[80px] leading-none uppercase tracking-tighter">{user.email?.split('@')[0]}</div>
-                <button onClick={handleLogout} className="text-[7px] font-black text-clinical-slate uppercase tracking-widest hover:text-clinical-red block mt-1" aria-label="Log out">Log Off</button>
-              </div>
-              <div className="w-7 h-7 bg-clinical-blue rounded-full flex items-center justify-center text-[10px] font-black text-white uppercase shadow-lg shadow-clinical-blue/20" aria-hidden="true">
-                {user.email?.[0]}
-              </div>
-            </div>
-          ) : (
-            <button onClick={() => setIsAuthOpen(true)} className="flex items-center gap-2 h-10 px-3 md:px-4 bg-clinical-ink text-white rounded font-black uppercase text-[10px] tracking-widest hover:bg-clinical-blue transition-all" aria-label="Sign in">
-              <UserIcon className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Sign In</span>
-            </button>
-          )}
-          <div className="h-8 w-px bg-clinical-line hidden sm:block" />
-          <div className="flex flex-col items-end shrink-0">
-              <span className="text-[9px] md:text-[10px] font-bold text-clinical-slate uppercase tracking-widest">T + {simTime} min</span>
-              <span className="text-xs md:text-sm font-mono font-bold text-clinical-blue hidden md:inline">Elapsed Time</span>
-          </div>
-          <button onClick={() => loadNewCase()} className="p-2 hover:bg-clinical-bg rounded text-clinical-slate transition-colors" aria-label="Reset and load new case">
-              <RefreshCw className="w-4 h-4" />
+        <div className="flex items-center gap-3 ml-auto">
+          <span className="text-xs font-mono text-clinical-blue font-medium">T+{simTime}m</span>
+          <button onClick={() => setIsLibraryOpen(true)} className="text-xs text-clinical-slate hover:text-clinical-blue transition-colors" aria-label="New case">
+            <RefreshCw className="w-3.5 h-3.5" />
           </button>
+          {user ? (
+            <button onClick={handleLogout} className="w-6 h-6 bg-clinical-blue rounded-full flex items-center justify-center text-[9px] font-bold text-white" aria-label="Account">{user.email?.[0]}</button>
+          ) : (
+            <button onClick={() => setIsAuthOpen(true)} className="text-xs text-clinical-blue font-medium hover:underline" aria-label="Sign in">Sign in</button>
+          )}
         </div>
       </header>
 
-      {/* Alarm Banner */}
+      {/* Alarm Banner - minimal */}
       <AnimatePresence>
         {(medicalCase?.activeAlarms || []).length > 0 && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-clinical-red text-white py-2 px-4 md:px-6 flex items-center justify-between border-b border-red-900 overflow-hidden shrink-0" role="alert">
-            <div className="flex items-center gap-4">
-              <AlertCircle className="w-5 h-5 animate-pulse" aria-hidden="true" />
-              <div className="flex gap-2 md:gap-4 flex-wrap">
-                {medicalCase?.activeAlarms.map((alarm, i) => (
-                  <span key={i} className="text-[11px] font-bold uppercase tracking-widest bg-white/20 px-3 py-0.5 rounded flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping" aria-hidden="true" />
-                    {alarm}
-                  </span>
-                ))}
-              </div>
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-red-50 border-b border-red-100 py-1.5 px-4 flex items-center gap-3 overflow-hidden shrink-0" role="alert">
+            <div className="w-1.5 h-1.5 bg-clinical-red rounded-full animate-pulse shrink-0" />
+            <div className="flex gap-3 text-xs text-clinical-red font-medium overflow-x-auto no-scrollbar">
+              {medicalCase?.activeAlarms.map((alarm, i) => (<span key={i}>{alarm}</span>))}
             </div>
-            <span className="text-[10px] font-mono opacity-60 hidden md:block">SYSTEM ALERT: CRITICAL PHYSIOLOGY DETECTED</span>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Vitals Rail - improved mobile: scrollable, flexible sizing */}
-      <div className="h-14 md:h-16 bg-white border-b border-clinical-line flex items-center px-2 gap-1 md:gap-2 shrink-0 overflow-x-auto no-scrollbar" role="region" aria-label="Patient vital signs">
-          <div className="flex items-center gap-1 px-2 md:px-4 border-r border-clinical-line h-full mr-2 md:mr-4 shrink-0">
-             <div className={cn("w-3 h-3 rounded-full animate-pulse", medicalCase?.physiologicalTrend === 'improving' ? "bg-clinical-green" : medicalCase?.physiologicalTrend === 'declining' ? "bg-clinical-amber" : medicalCase?.physiologicalTrend === 'critical' ? "bg-clinical-red" : "bg-clinical-slate")} aria-hidden="true" />
-             <div className="flex flex-col">
-               <span className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest ml-1">{medicalCase?.physiologicalTrend}</span>
-               <span className="text-[7px] text-clinical-slate opacity-40 uppercase tracking-tighter ml-1">Trend</span>
-             </div>
+      {/* Vitals Rail - clean and minimal */}
+      <div className="h-12 bg-white border-b border-clinical-line/50 flex items-center px-4 gap-4 shrink-0 overflow-x-auto no-scrollbar" role="region" aria-label="Vital signs">
+          <div className={cn("text-xs font-medium px-2 py-0.5 rounded", medicalCase?.physiologicalTrend === 'improving' ? "text-clinical-green bg-green-50" : medicalCase?.physiologicalTrend === 'declining' ? "text-clinical-amber bg-amber-50" : medicalCase?.physiologicalTrend === 'critical' ? "text-clinical-red bg-red-50" : "text-clinical-slate bg-slate-50")}>
+            {medicalCase?.physiologicalTrend}
           </div>
-          <div className="flex-1 max-w-sm h-12 mr-4 shrink-0 hidden lg:block">
-            <ECGMonitor heartRate={medicalCase?.vitals?.heartRate || 0} isAlarming={medicalCase?.activeAlarms.some(a => a.includes('HR') || a.includes('Pulse') || a.includes('Bradycardia') || a.includes('Tachycardia'))} />
-          </div>
-          <ClinicalVital label="HR" value={Math.round(vitalsHistory[vitalsHistory.length - 1]?.hr || medicalCase?.vitals?.heartRate || 0)} unit="BPM" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('HR') || a.includes('Pulse') || a.includes('Bradycardia') || a.includes('Tachycardia'))} trend={vitalsHistory.map(v => v.hr)} />
-          <ClinicalVital label="BP" value={medicalCase?.vitals?.bloodPressure || '--'} unit="mmHg" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('BP') || a.includes('Pressure') || a.includes('Hypotension') || a.includes('Hypertension'))} trend={vitalsHistory.map(v => v.sbp)} />
-          <ClinicalVital label="RR" value={medicalCase?.vitals?.respiratoryRate || '--'} unit="/min" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('RR') || a.includes('Respiratory') || a.includes('Tachypnea') || a.includes('Apnea'))} trend={vitalsHistory.map(v => v.rr)} />
-          <ClinicalVital label="SpO2" value={medicalCase?.vitals?.oxygenSaturation || 0} unit="%" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('SpO2') || a.includes('Saturation') || a.includes('Hypoxia'))} trend={vitalsHistory.map(v => v.spo2)} />
-          <ClinicalVital label="T" value={medicalCase?.vitals?.temperature || 0} unit="°C" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('Temp') || a.includes('Temperature') || a.includes('Fever'))} />
-          <div className="h-full w-px bg-clinical-line" />
-          <div className="flex flex-col px-2 md:px-4 items-center justify-center bg-clinical-bg/50 rounded shrink-0">
-             <div className="text-[9px] font-bold text-clinical-slate uppercase mb-0.5">NEWS2</div>
-             <div className={cn("text-xl font-mono font-black", calculateNEWS2(medicalCase?.vitals) >= 7 ? "text-clinical-red animate-pulse" : calculateNEWS2(medicalCase?.vitals) >= 5 ? "text-clinical-amber" : "text-clinical-ink")} aria-label={`NEWS2 score: ${calculateNEWS2(medicalCase?.vitals)}`}>
-               {calculateNEWS2(medicalCase?.vitals)}
-             </div>
-          </div>
+          <div className="w-px h-6 bg-clinical-line/50" />
+          <ClinicalVital label="HR" value={Math.round(vitalsHistory[vitalsHistory.length - 1]?.hr || medicalCase?.vitals?.heartRate || 0)} unit="bpm" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('HR') || a.includes('Pulse') || a.includes('Bradycardia') || a.includes('Tachycardia'))} />
+          <ClinicalVital label="BP" value={medicalCase?.vitals?.bloodPressure || '--'} unit="mmHg" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('BP') || a.includes('Pressure') || a.includes('Hypotension') || a.includes('Hypertension'))} />
+          <ClinicalVital label="SpO2" value={medicalCase?.vitals?.oxygenSaturation || 0} unit="%" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('SpO2') || a.includes('Saturation') || a.includes('Hypoxia'))} />
+          <ClinicalVital label="RR" value={medicalCase?.vitals?.respiratoryRate || '--'} unit="/min" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('RR') || a.includes('Respiratory'))} />
+          <ClinicalVital label="Temp" value={medicalCase?.vitals?.temperature || 0} unit="°C" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => a.includes('Temp') || a.includes('Temperature') || a.includes('Fever'))} />
       </div>
 
 
@@ -553,34 +463,23 @@ function ClinicalSimulator() {
           )}
         </AnimatePresence>
 
-        {/* Navigation Sidebar (Desktop) - Fixed: pharmacy tab added */}
-        <nav className="w-60 bg-clinical-surface border-r border-clinical-line flex-col p-4 z-20 shrink-0 hidden lg:flex" aria-label="Main navigation">
-           <div className="space-y-1">
+        {/* Navigation Sidebar (Desktop) - Clean */}
+        <nav className="w-52 bg-white border-r border-clinical-line/50 flex-col py-4 px-2 z-20 shrink-0 hidden lg:flex" aria-label="Main navigation">
+           <div className="space-y-0.5">
               {navTabs.map(tab => (
                 <NavTab key={tab.id} active={activeTab === tab.id} icon={tab.icon} label={tab.label} onClick={() => setActiveTab(tab.id as any)} />
               ))}
            </div>
-           <div className="mt-8 space-y-4">
-              <button onClick={handleConsult} disabled={isConsulting || !medicalCase} className="w-full h-12 bg-clinical-ink border border-clinical-line rounded-lg flex items-center gap-3 px-4 text-white hover:bg-clinical-blue transition-all group overflow-hidden relative disabled:opacity-50" aria-label="Request AI consultant advice">
-                <div className="absolute inset-0 bg-white/5 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-                {isConsulting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-clinical-amber" />}
-                <div className="flex flex-col items-start min-w-0">
-                  <span className="text-[10px] font-black uppercase tracking-widest leading-none">AI Consultant</span>
-                  <span className="text-[8px] opacity-60 uppercase truncate">Request Specialty Advice</span>
-                </div>
-                <Zap className="w-3 h-3 ml-auto opacity-30 group-hover:opacity-100 transition-opacity" />
+           <div className="mt-auto pt-4 px-2">
+              <button onClick={handleConsult} disabled={isConsulting || !medicalCase} className="w-full py-2 px-3 text-xs font-medium text-clinical-slate hover:text-clinical-blue hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40" aria-label="AI Consultant">
+                {isConsulting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                AI Consultant
               </button>
-           </div>
-           <div className="mt-auto pt-6 border-t border-clinical-line">
-              <h3 className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest mb-3 px-2">Care Summary</h3>
-              <div className="p-4 bg-yellow-50/50 border border-yellow-200/50 rounded-lg">
-                 <p className="text-[11px] text-yellow-800 leading-relaxed italic">"{medicalCase?.currentCondition}"</p>
-              </div>
            </div>
         </nav>
 
         {/* Clinical Workspace */}
-        <main className="flex-1 overflow-y-auto bg-clinical-bg p-3 md:p-6 flex flex-col gap-6" role="main">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col gap-5" role="main">
           <AnimatePresence mode="wait">
             {activeTab === 'hpi' && (
               <motion.div key="hpi" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-clinical-surface border border-clinical-line rounded shadow-sm overflow-hidden">
