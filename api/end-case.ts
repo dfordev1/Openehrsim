@@ -169,7 +169,7 @@ IMPORTANT:
 
 Return JSON ONLY:
 {
-  "score": number,
+  "score": number (0-100),
   "breakdown": {
     "initialManagement": number,
     "diagnosticWorkup": number,

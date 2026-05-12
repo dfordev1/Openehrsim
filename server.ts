@@ -344,7 +344,19 @@ Time advances by ${waitTime} min (${medicalCase.simulationTime} → ${newSimTime
   // ── POST /api/end-case ──────────────────────────────────────────────────────
   app.post("/api/end-case", async (req, res) => {
     try {
-      const { caseId, medicalCase, userNotes, problemRepresentation, differentials, findingsCount, positiveFindings, negativeFindings } = req.body ?? {};
+      const {
+        caseId,
+        medicalCase,
+        userNotes,
+        problemRepresentation,
+        differentials,
+        findingsCount,
+        positiveFindings,
+        negativeFindings,
+        prHistory,
+        stageCommitments,
+        findingsByDx,
+      } = req.body ?? {};
       if (!caseId || typeof caseId !== "string") return res.status(400).json({ error: "Missing: caseId" });
       if (!medicalCase || typeof medicalCase !== "object") return res.status(400).json({ error: "Missing: medicalCase" });
 
@@ -370,16 +382,55 @@ Time advances by ${waitTime} min (${medicalCase.simulationTime} → ${newSimTime
         .map((i: any) => `${i.type} (ordered T+${i.orderedAt ?? "?"})`)
         .join(", ") || "None";
 
-      // Clinical reasoning context (Healer-style)
-      const reasoningContext = problemRepresentation || differentials
-        ? `
+      // ── Clinical reasoning context (Healer-style) ──────────────────────
+      // Render the richer payload pieces only if they were sent. Keeps the
+      // prompt compact when the learner hasn't engaged the reasoning tools.
+      const differentialsList = (differentials || []).map((d: any) => {
+        const base = `${d.diagnosis} (${d.confidence}${d.isLead ? ', LEAD' : ''})`;
+        if (!d.illnessScript) return base;
+        const is = d.illnessScript;
+        const scriptBits = [
+          is.typicalDemographics && `demo: ${is.typicalDemographics}`,
+          is.typicalTimeline && `timeline: ${is.typicalTimeline}`,
+          (is.keyFeatures || []).length > 0 && `key: [${is.keyFeatures.join('; ')}]`,
+          (is.discriminatingFeatures || []).length > 0 && `discriminating: [${is.discriminatingFeatures.join('; ')}]`,
+          (is.expectedLabs || []).length > 0 && `expected labs: [${is.expectedLabs.join('; ')}]`,
+        ].filter(Boolean).join(' | ');
+        return `${base} — script: ${scriptBits}`;
+      });
+
+      const prEvolution = (prHistory || [])
+        .map((s: any, i: number) => `  v${i + 1} @ ${s.stage} (T+${s.simTime}m): "${s.text}"`)
+        .join('\n');
+
+      const commitLog = (stageCommitments || [])
+        .map((c: any) => `  ${c.stage} @ T+${c.simTime}m — ${c.differentialCount} ddx${c.leadDiagnosis ? `, lead: ${c.leadDiagnosis}` : ''}`)
+        .join('\n');
+
+      const findingsByDxBlock = (findingsByDx || [])
+        .map((f: any) => {
+          const assignments = Object.entries(f.relevanceByDx || {})
+            .map(([dxId, r]) => {
+              const dx = (differentials || []).find((d: any) => d.id === dxId) || {};
+              return `${dx.diagnosis || dxId}=${r}`;
+            })
+            .join(', ');
+          return `  [${f.source}] "${f.findingText}" → ${assignments}`;
+        })
+        .join('\n');
+
+      const reasoningContext =
+        problemRepresentation || differentials || prHistory || stageCommitments
+          ? `
 CLINICAL REASONING DATA:
-  Problem Representation: "${problemRepresentation || "Not provided"}"
-  Differential Diagnoses: ${(differentials || []).map((d: any) => `${d.diagnosis} (${d.confidence}${d.isLead ? ', LEAD' : ''})`).join(', ') || "None"}
-  Findings Tracked: ${findingsCount || 0}
-  Pertinent Positives: ${(positiveFindings || []).join(', ') || "None identified"}
-  Pertinent Negatives: ${(negativeFindings || []).join(', ') || "None identified"}`
-        : "";
+  Final Problem Representation: "${problemRepresentation || 'Not provided'}"
+  Differentials with illness scripts:
+${differentialsList.length ? differentialsList.map((s: string) => `    - ${s}`).join('\n') : '    (none)'}
+  Findings tracked: ${findingsCount || 0}
+  Pertinent Positives: ${(positiveFindings || []).join(', ') || 'None'}
+  Pertinent Negatives: ${(negativeFindings || []).join(', ') || 'None'}
+${prEvolution ? `  PR evolution across stages:\n${prEvolution}\n` : ''}${commitLog ? `  Stage commitments:\n${commitLog}\n` : ''}${findingsByDxBlock ? `  Findings linked to specific differentials:\n${findingsByDxBlock}\n` : ''}`
+          : '';
 
       const aiRes = await openai.chat.completions.create({
         model: "deepseek-chat",
@@ -403,8 +454,16 @@ A) MANAGEMENT QUALITY (60 pts):
 B) CLINICAL REASONING QUALITY (40 pts):
   dataAcquisitionThoroughness (0-10): How many pertinent findings were gathered
   dataAcquisitionEfficiency (0-10): How focused was data gathering (few irrelevant tests)
-  problemRepresentation (0-10): Quality of PR — includes key demographics, timeline, discriminating features
+  problemRepresentation (0-10): Quality of PR — includes key demographics, timeline, discriminating features.
+    BONUS: If PR evolved across stages (multiple snapshots with increasing
+    specificity), score higher. Premature finalization or a PR that never
+    changes should score lower.
   differentialAccuracy (0-10): Lead diagnosis correct? Differential reasonable?
+    BONUS: Credit breadth early (>=3 dxs at triage/history) and
+    convergence late (narrowed to 1-3 with a committed lead by dxpause).
+    If illness scripts were recorded for the lead, score higher.
+    If findings were linked to specific differentials as pertinent +/-,
+    score higher.
 
 EFFICIENCY PENALTIES (subtract from total): >5 unnecessary tests: -5, Key intervention >30 min late: -5
 
@@ -427,7 +486,7 @@ Return JSON ONLY:
     "managementPlan": number (0-100 scale),
     "overall": number (0-100 scale)
   },
-  "feedback": "3-4 sentence narrative covering both management AND reasoning quality",
+  "feedback": "3-4 sentence narrative covering both management AND reasoning quality. If the PR evolved, comment on how it evolved. If illness scripts were written, comment on their accuracy.",
   "correctDiagnosis": "${fullCase.correctDiagnosis}",
   "explanation": "brief teaching point",
   "keyActions": ["description", ...],

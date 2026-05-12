@@ -52,12 +52,15 @@ import { SkeletonCard, SkeletonVitals } from './components/Skeleton';
 import { EmptyState } from './components/EmptyState';
 import VitalsExpanded from './components/VitalsExpanded';
 import { DiagnosisPad } from './components/DiagnosisPad';
+import type { PadTab } from './components/DiagnosisPad';
+import { StageCommitGate } from './components/StageCommitGate';
+import { ReasoningNudges } from './components/ReasoningNudges';
 import { WorkflowProgress } from './components/WorkflowProgress';
 import { useUrlTab } from './hooks/useUrlTab';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useUndoStack } from './hooks/useUndoStack';
 import { useDarkMode } from './hooks/useDarkMode';
-import { useClinicalReasoning } from './hooks/useClinicalReasoning';
+import { useClinicalReasoning, STAGE_ORDER } from './hooks/useClinicalReasoning';
 import type { WorkflowStage } from './types';
 
 // ── Tab components ────────────────────────────────────────────────────────────
@@ -181,6 +184,13 @@ function ClinicalSimulator() {
   // ── Clinical Reasoning (Healer-style) ─────────────────────────────────────
   const reasoning = useClinicalReasoning();
   const [isDxPadOpen, setIsDxPadOpen] = useState(true);
+  const [dxPadInitialTab, setDxPadInitialTab] = useState<PadTab | undefined>(undefined);
+
+  /** When the user tries to advance forward through a stage that has
+   *  unmet gate requirements, we store the *target* stage here and show
+   *  the StageCommitGate modal. When they commit (or cancel) we clear
+   *  it. */
+  const [pendingStage, setPendingStage] = useState<WorkflowStage | null>(null);
 
   const handleUndo = useCallback(() => {
     const entry = popUndo();
@@ -460,16 +470,42 @@ function ClinicalSimulator() {
     setSubmitting(true);
     setLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), text: 'CASE CLOSED — scoring...' }]);
     try {
+      // Build the findings-by-dx shape only for findings that have been
+      // linked to at least one differential (saves payload size).
+      const findingsByDx = reasoning.findings
+        .filter(f => f.relevanceByDx && Object.keys(f.relevanceByDx).length > 0)
+        .map(f => ({
+          findingText: f.text,
+          source: f.source,
+          relevanceByDx: f.relevanceByDx!,
+        }));
+
       const result = await endCase(medicalCase.id, medicalCase, userNotes, {
         problemRepresentation: reasoning.problemRepresentation,
         differentials: reasoning.differentials.map(d => ({
           diagnosis: d.diagnosis,
           confidence: d.confidence,
           isLead: d.isLead,
+          ...(d.illnessScript ? { illnessScript: d.illnessScript } : {}),
         })),
         findingsCount: reasoning.findings.length,
         positiveFindings: reasoning.findings.filter(f => f.relevance === 'positive').map(f => f.text),
         negativeFindings: reasoning.findings.filter(f => f.relevance === 'negative').map(f => f.text),
+        prHistory: reasoning.prHistory.map(s => ({
+          stage: s.stage,
+          text: s.text,
+          simTime: s.simTime,
+        })),
+        stageCommitments: reasoning.stageCommitments.map(c => {
+          const lead = reasoning.differentials.find(d => d.id === c.leadDiagnosisId);
+          return {
+            stage: c.stage,
+            simTime: c.simTime,
+            differentialCount: c.committedDifferentialIds.length,
+            ...(lead ? { leadDiagnosis: lead.diagnosis } : {}),
+          };
+        }),
+        findingsByDx,
       });
       setEvaluation(result);
       setLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), text: `SCORE: ${result.score}/100` }]);
@@ -484,6 +520,53 @@ function ClinicalSimulator() {
 
   // ── Tab config ────────────────────────────────────────────────────────────
   const simTime = medicalCase?.simulationTime || 0;
+
+  /** Map workflow stages to the tab ids used by activeTab. */
+  const stageToTab: Record<WorkflowStage, string> = {
+    triage: 'triage',
+    history: 'hpi',
+    exam: 'exam',
+    diagnostics: 'labs',
+    dxpause: 'dxpause',
+    management: 'treatment',
+  };
+
+  /** Click handler for the workflow stepper. Moving backward is always
+   *  permitted. Moving forward runs through the stage-commit gate: if
+   *  there are unmet requirements the gate modal opens for the
+   *  *target* stage; otherwise we commit the current stage and
+   *  advance. */
+  const handleStageNavigate = useCallback(
+    (target: WorkflowStage) => {
+      const from = reasoning.currentStage;
+      if (target === from) return;
+      const fromIdx = STAGE_ORDER.indexOf(from);
+      const toIdx = STAGE_ORDER.indexOf(target);
+
+      // Moving backward — free navigation, no commit recorded
+      if (toIdx < fromIdx) {
+        reasoning.goToStage(target);
+        setActiveTab(stageToTab[target] as any);
+        return;
+      }
+
+      // Moving forward — require commit on the *current* stage
+      const unmet = reasoning.checkStageGate(from);
+      if (unmet.length === 0) {
+        const snapId = reasoning.commitStage(from, simTime);
+        if (snapId) {
+          reasoning.goToStage(target);
+          setActiveTab(stageToTab[target] as any);
+          addToast(`Committed ${from} → ${target}`, 'success');
+          return;
+        }
+      }
+
+      // Gate fails → open the modal to let the user fill in what's missing
+      setPendingStage(target);
+    },
+    [reasoning, simTime, setActiveTab, addToast],
+  );
 
   const primaryTabs = [
     { id: 'triage',  icon: <AlertCircle className="w-4 h-4" />, label: 'Triage'   },
@@ -649,22 +732,38 @@ function ClinicalSimulator() {
         <div className="bg-clinical-surface border-b border-clinical-line/50 px-4 py-2 shrink-0">
           <WorkflowProgress
             currentStage={reasoning.currentStage}
-            onStageClick={(stage) => {
-              reasoning.goToStage(stage);
-              // Map workflow stages to existing tab system
-              const stageToTab: Record<WorkflowStage, string> = {
-                triage: 'triage',
-                history: 'hpi',
-                exam: 'exam',
-                diagnostics: 'labs',
-                dxpause: 'dxpause',
-                management: 'treatment',
-              };
-              setActiveTab(stageToTab[stage] as any);
-            }}
+            onStageClick={(stage) => handleStageNavigate(stage)}
             completedStages={reasoning.completedStages}
           />
         </div>
+      )}
+
+      {/* ── Real-time Reasoning Nudges ── */}
+      {medicalCase && (
+        <ReasoningNudges
+          nudges={reasoning.nudges}
+          onAction={(nudge) => {
+            // Open the DxPad on the most useful sub-tab for the nudge type
+            setIsDxPadOpen(true);
+            switch (nudge.type) {
+              case 'pr-stale':
+                setDxPadInitialTab('pr');
+                break;
+              case 'ddx-too-narrow':
+              case 'ddx-too-broad':
+              case 'lead-not-committed':
+              case 'illness-script-missing':
+              case 'tests-without-ddx':
+                setDxPadInitialTab('ddx');
+                break;
+              case 'findings-unassigned':
+                setDxPadInitialTab('matrix');
+                break;
+            }
+            // Reset after a tick so subsequent external sets re-fire.
+            setTimeout(() => setDxPadInitialTab(undefined), 100);
+          }}
+        />
       )}
 
       {/* ── Vitals Rail ── */}
@@ -843,10 +942,15 @@ function ClinicalSimulator() {
                 onProblemRepresentationChange={reasoning.setProblemRepresentation}
                 differentials={reasoning.differentials}
                 findings={reasoning.findings}
+                prHistory={reasoning.prHistory}
+                prIsDirty={reasoning.prIsDirty}
+                onUpdateFindingRelevanceForDx={reasoning.updateFindingRelevanceForDx}
+                onSetIllnessScript={reasoning.setIllnessScript}
+                onSetLead={reasoning.setLeadDiagnosis}
                 simTime={simTime}
                 onProceedToManagement={() => {
-                  reasoning.goToStage('management');
-                  setActiveTab('treatment' as any);
+                  // DxPause → Management uses the same gate flow as the stepper
+                  handleStageNavigate('management');
                 }}
               />
             )}
@@ -928,18 +1032,52 @@ function ClinicalSimulator() {
           <DiagnosisPad
             isOpen={isDxPadOpen}
             onToggle={() => setIsDxPadOpen(p => !p)}
+            initialTab={dxPadInitialTab}
             problemRepresentation={reasoning.problemRepresentation}
             onProblemRepresentationChange={reasoning.setProblemRepresentation}
+            prHistory={reasoning.prHistory}
+            prIsDirty={reasoning.prIsDirty}
+            currentStage={reasoning.currentStage}
             differentials={reasoning.differentials}
             onAddDifferential={reasoning.addDifferential}
             onRemoveDifferential={reasoning.removeDifferential}
             onSetLeadDiagnosis={reasoning.setLeadDiagnosis}
             onUpdateConfidence={reasoning.updateConfidence}
+            onSetIllnessScript={reasoning.setIllnessScript}
             findings={reasoning.findings}
             onRemoveFinding={reasoning.removeFinding}
             onUpdateRelevance={reasoning.updateRelevance}
+            onUpdateFindingRelevanceForDx={reasoning.updateFindingRelevanceForDx}
           />
         </AnimatePresence>
+      )}
+
+      {/* ── Stage Commit Gate ── */}
+      {medicalCase && pendingStage && (
+        <StageCommitGate
+          isOpen={!!pendingStage}
+          fromStage={reasoning.currentStage}
+          toStage={pendingStage}
+          problemRepresentation={reasoning.problemRepresentation}
+          onProblemRepresentationChange={reasoning.setProblemRepresentation}
+          differentials={reasoning.differentials}
+          onSetLead={reasoning.setLeadDiagnosis}
+          findings={reasoning.findings}
+          previousPrSnapshot={reasoning.latestPrSnapshot}
+          unmetRequirements={reasoning.checkStageGate(reasoning.currentStage)}
+          onCommit={(fromStage) => {
+            const snapId = reasoning.commitStage(fromStage, simTime);
+            if (snapId && pendingStage) {
+              const target = pendingStage;
+              reasoning.goToStage(target);
+              setActiveTab(stageToTab[target] as any);
+              addToast(`Committed ${fromStage} → ${target}`, 'success');
+              setPendingStage(null);
+            }
+            return snapId;
+          }}
+          onCancel={() => setPendingStage(null)}
+        />
       )}
 
       {/* ── Undo bar ── */}
