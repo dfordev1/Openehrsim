@@ -1,34 +1,27 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  --font-serif: "Playfair Display", serif;
 
-  /* Core clinical palette */
-  --color-clinical-bg: #F7F8FA;
+  /* Refined clinical palette */
+  --color-clinical-bg: #F8FAFC;
   --color-clinical-surface: #FFFFFF;
   --color-clinical-ink: #0F172A;
-  --color-clinical-slate: #475569;
+  --color-clinical-slate: #64748B;
+  --color-clinical-muted: #94A3B8;
   --color-clinical-line: #E2E8F0;
+  --color-clinical-soft: #F1F5F9;
   --color-clinical-blue: #2563EB;
   --color-clinical-red: #DC2626;
   --color-clinical-amber: #D97706;
   --color-clinical-green: #16A34A;
 
-  /* Extended palette */
-  --color-clinical-blue-light: #DBEAFE;
-  --color-clinical-red-light: #FEE2E2;
-  --color-clinical-amber-light: #FEF3C7;
-  --color-clinical-green-light: #DCFCE7;
-  --color-clinical-purple: #7C3AED;
-  --color-clinical-cyan: #0891B2;
-
   /* Shadows */
-  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
-  --shadow-elevated: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
-  --shadow-modal: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --shadow-card: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+  --shadow-pop: 0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+  --shadow-modal: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
 }
 
 @layer base {
@@ -36,175 +29,138 @@
     @apply bg-clinical-bg text-clinical-ink font-sans antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Better focus rings */
   *:focus-visible {
-    @apply outline-2 outline-offset-2 outline-clinical-blue/50;
+    @apply outline-2 outline-offset-2 outline-clinical-blue/40;
+  }
+
+  input, textarea, select {
+    @apply bg-white;
+  }
+
+  input:focus, textarea:focus, select:focus {
+    @apply ring-2 ring-clinical-blue/20 border-clinical-blue outline-none;
   }
 }
 
-/* Professional Scrollbar */
+/* Scrollbars */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: #CBD5E0;
+  background: #CBD5E1;
   border-radius: 100px;
 }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #94A3B8;
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Typography helpers */
+.label {
+  @apply text-[11px] font-medium text-clinical-slate;
 }
 
-.no-scrollbar::-webkit-scrollbar,
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar,
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+.label-muted {
+  @apply text-[11px] font-medium text-clinical-muted;
 }
 
-/* Clinical Table Styles */
-.clinical-table {
+.data-lg {
+  @apply text-2xl font-semibold text-clinical-ink tracking-tight tabular-nums;
+}
+
+.data-md {
+  @apply text-base font-semibold text-clinical-ink tabular-nums;
+}
+
+/* Cards */
+.card {
+  @apply bg-clinical-surface border border-clinical-line rounded-lg;
+}
+
+.card-header {
+  @apply px-4 py-3 border-b border-clinical-line flex items-center justify-between;
+}
+
+/* Badges */
+.badge {
+  @apply inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium;
+}
+
+.badge-critical { @apply bg-clinical-red/10 text-clinical-red; }
+.badge-warning { @apply bg-clinical-amber/10 text-clinical-amber; }
+.badge-success { @apply bg-clinical-green/10 text-clinical-green; }
+.badge-info { @apply bg-clinical-blue/10 text-clinical-blue; }
+.badge-muted { @apply bg-clinical-soft text-clinical-slate; }
+
+/* Buttons */
+.btn {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-primary {
+  @apply btn bg-clinical-blue text-white hover:bg-blue-700 shadow-sm;
+}
+
+.btn-secondary {
+  @apply btn bg-white border border-clinical-line text-clinical-ink hover:bg-clinical-soft;
+}
+
+.btn-ghost {
+  @apply btn text-clinical-slate hover:bg-clinical-soft;
+}
+
+.btn-danger {
+  @apply btn bg-clinical-red text-white hover:bg-red-700;
+}
+
+/* Tables */
+.data-table {
   @apply w-full border-collapse text-left;
 }
-
-.clinical-table th {
-  @apply py-3 px-4 bg-clinical-bg/60 text-clinical-slate font-medium text-[10px] uppercase tracking-widest border-b border-clinical-line;
+.data-table th {
+  @apply px-4 py-2.5 bg-clinical-soft/60 text-[11px] font-semibold text-clinical-slate uppercase tracking-wide border-b border-clinical-line sticky top-0;
 }
-
-.clinical-table td {
-  @apply py-3 px-4 border-b border-clinical-line/60 text-sm;
+.data-table td {
+  @apply px-4 py-3 border-b border-clinical-line/60 text-sm;
 }
-
-.clinical-table tbody tr {
-  @apply transition-colors duration-150;
+.data-table tbody tr {
+  @apply transition-colors;
 }
-
-.clinical-table tbody tr:hover {
-  @apply bg-clinical-blue/[0.02];
+.data-table tbody tr:hover {
+  @apply bg-clinical-blue/[0.03];
 }
-
-.clinical-table tbody tr:last-child td {
+.data-table tbody tr:last-child td {
   @apply border-b-0;
 }
 
-/* Custom scrollbar for specific containers */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
+/* Animations */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
+.animate-fade-in-up { animation: fade-in-up 0.25s ease-out; }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #94A3B8;
-  border-radius: 100px;
-}
-
-/* Pulse animation for vitals */
-@keyframes vital-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-
-.vital-pulse {
-  animation: vital-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* Smooth skeleton loading shimmer */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
-
 .skeleton {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background: linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 50%, #F1F5F9 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: 4px;
 }
 
-/* Gradient text for branding */
-.text-gradient {
-  background: linear-gradient(135deg, #2563EB, #7C3AED);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+/* Status dot */
+.dot {
+  @apply inline-block w-2 h-2 rounded-full;
 }
-
-/* Glass effect for overlays */
-.glass {
-  backdrop-filter: blur(12px) saturate(180%);
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-}
-
-/* Smooth card hover */
-.card-hover {
-  @apply transition-all duration-200;
-}
-.card-hover:hover {
-  @apply shadow-elevated -translate-y-0.5;
-}
-
-/* ECG Monitor glow */
-.ecg-glow {
-  box-shadow: inset 0 0 30px rgba(34, 197, 94, 0.05);
-}
-
-/* Fade-in animation utility */
-@keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in-up {
-  animation: fade-in-up 0.3s ease-out;
-}
-
-/* Stagger children animation */
-.stagger-children > * {
-  animation: fade-in-up 0.3s ease-out both;
-}
-.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
-.stagger-children > *:nth-child(2) { animation-delay: 50ms; }
-.stagger-children > *:nth-child(3) { animation-delay: 100ms; }
-.stagger-children > *:nth-child(4) { animation-delay: 150ms; }
-.stagger-children > *:nth-child(5) { animation-delay: 200ms; }
-.stagger-children > *:nth-child(6) { animation-delay: 250ms; }
-.stagger-children > *:nth-child(7) { animation-delay: 300ms; }
-.stagger-children > *:nth-child(8) { animation-delay: 350ms; }
-
-/* Better input styles */
-input:focus,
-textarea:focus {
-  @apply ring-2 ring-clinical-blue/20 border-clinical-blue;
-}
-
-/* Status badge styles */
-.badge-critical {
-  @apply bg-clinical-red/10 text-clinical-red border border-clinical-red/20;
-}
-.badge-warning {
-  @apply bg-clinical-amber/10 text-clinical-amber border border-clinical-amber/20;
-}
-.badge-success {
-  @apply bg-clinical-green/10 text-clinical-green border border-clinical-green/20;
-}
-.badge-info {
-  @apply bg-clinical-blue/10 text-clinical-blue border border-clinical-blue/20;
-}
+.dot-critical { @apply bg-clinical-red; }
+.dot-warning { @apply bg-clinical-amber; }
+.dot-success { @apply bg-clinical-green; }
+.dot-info { @apply bg-clinical-blue; }
+.dot-muted { @apply bg-clinical-muted; }
