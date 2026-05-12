@@ -145,7 +145,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
             <div className="bg-clinical-bg p-4 flex items-center justify-center gap-3">
               <ShieldCheck className="w-3 h-3 text-clinical-slate opacity-40" />
-              <p className="text-[8px] text-clinical-slate uppercase font-bold tracking-widest opacity-60">End-to-End Encryption • HIPAA Complaint Protocols</p>
+              <p className="text-[8px] text-clinical-slate uppercase font-bold tracking-widest opacity-60">End-to-End Encryption • HIPAA Compliant Protocols</p>
             </div>
           </motion.div>
         </>

@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 import { AnimatePresence, motion } from 'motion/react';
 import { cn } from '../lib/utils';
 
-type ToastType = 'success' | 'info' | 'warning';
+type ToastType = 'success' | 'info' | 'warning' | 'error';
 
 interface Toast {
   id: string;
@@ -74,7 +74,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   'text-sm font-medium',
                   toast.type === 'success' && 'text-clinical-green',
                   toast.type === 'info' && 'text-clinical-blue',
-                  toast.type === 'warning' && 'text-clinical-amber'
+                  toast.type === 'warning' && 'text-clinical-amber',
+                  toast.type === 'error' && 'text-clinical-red'
                 )}
               >
                 {toast.message}
