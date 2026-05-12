@@ -105,18 +105,41 @@ const ALIASES: Record<string, string> = {
   "chest xray":               "Chest X-ray",
   "chest radiograph":         "Chest X-ray",
   "chest pa":                 "Chest X-ray",
-  // CT variants
+  // CT Head variants
   "ct scan head":             "CT Head",
   "ct brain":                 "CT Head",
   "ct of head":               "CT Head",
+  "ct of the head":           "CT Head",
+  "ct non-contrast head":     "CT Head",
+  "ct head without contrast": "CT Head",
+  "ct head with contrast":    "CT Head",
+  "ct scan of head":          "CT Head",
+  "non-contrast ct head":     "CT Head",
+  // CT Chest variants
   "ct scan chest":            "CT Chest",
   "ct of chest":              "CT Chest",
+  "ct of the chest":          "CT Chest",
+  "ct chest without contrast":"CT Chest",
+  "ct chest with contrast":   "CT Chest",
+  "ct scan of chest":         "CT Chest",
+  "ct thorax":                "CT Chest",
+  // CT PE Protocol variants
   "ct pulmonary angiography": "CT PE Protocol",
   "ctpa":                     "CT PE Protocol",
   "ct angiography chest":     "CT PE Protocol",
+  "ct pulmonary embolism":    "CT PE Protocol",
+  "ct pe":                    "CT PE Protocol",
+  // CT Abdomen/Pelvis variants
   "ct abdomen":               "CT Abdomen/Pelvis",
   "ct pelvis":                "CT Abdomen/Pelvis",
   "ct ab/pelvis":             "CT Abdomen/Pelvis",
+  "ct abdomen and pelvis":    "CT Abdomen/Pelvis",
+  "ct abdomen/pelvis":        "CT Abdomen/Pelvis",
+  "ct of abdomen":            "CT Abdomen/Pelvis",
+  "ct of abdomen and pelvis": "CT Abdomen/Pelvis",
+  "ct scan abdomen":          "CT Abdomen/Pelvis",
+  "ct scan abdomen and pelvis":"CT Abdomen/Pelvis",
+  "ct abdomen pelvis":        "CT Abdomen/Pelvis",
   // Echo
   "echo":                     "Echocardiogram",
   "cardiac echo":             "Echocardiogram",
@@ -141,26 +164,30 @@ const ALIASES: Record<string, string> = {
  * Strategy:
  *  1. Exact match (case-insensitive)
  *  2. Alias map lookup
- *  3. Prefix/contains match against canonical keys
+ *
+ * NOTE: We intentionally do NOT fall back to fuzzy prefix/contains matching
+ * because CT variants (CT Head, CT Chest, CT Abdomen/Pelvis, CT PE Protocol)
+ * would all cross-match each other. All common variants must be in ALIASES.
  */
 function normaliseName(raw: string): string {
   const lower = raw.trim().toLowerCase();
 
-  // 1. Exact match
+  // 1. Exact match (case-insensitive)
   const exact = Object.keys(TURNAROUND).find(k => k.toLowerCase() === lower);
   if (exact) return exact;
 
   // 2. Alias map
   if (ALIASES[lower]) return ALIASES[lower];
 
-  // 3. Prefix or contains match
-  const partial = Object.keys(TURNAROUND).find(k => {
-    const kl = k.toLowerCase();
-    return lower.startsWith(kl) || kl.startsWith(lower) || lower.includes(kl) || kl.includes(lower);
-  });
-  if (partial) return partial;
+  // 3. Last-resort: find an alias where the input starts with the alias key
+  //    e.g. "troponin i serial" → "Troponin"
+  //    Skip if the match is just "ct" since that's ambiguous
+  const prefixMatch = Object.entries(ALIASES).find(([alias]) =>
+    alias.length > 3 && lower.startsWith(alias)
+  );
+  if (prefixMatch) return prefixMatch[1];
 
-  // Return the raw name; the caller will return a 400 with the available list
+  // Return raw — caller returns 400 with available list
   return raw;
 }
 
