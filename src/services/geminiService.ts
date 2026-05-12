@@ -79,16 +79,36 @@ export async function orderTest(
 
 // ── CCS: end case & score ────────────────────────────────────────────────────
 
+export interface EndCasePayload {
+  caseId: string;
+  medicalCase: Partial<MedicalCase>;
+  userNotes?: string;
+  // Clinical reasoning data (Healer-style)
+  problemRepresentation?: string;
+  differentials?: { diagnosis: string; confidence: string; isLead?: boolean }[];
+  findingsCount?: number;
+  positiveFindings?: string[];
+  negativeFindings?: string[];
+}
+
 export async function endCase(
   caseId: string,
   medicalCase: MedicalCase,
-  userNotes?: string
+  userNotes?: string,
+  reasoningData?: {
+    problemRepresentation: string;
+    differentials: { diagnosis: string; confidence: string; isLead?: boolean }[];
+    findingsCount: number;
+    positiveFindings: string[];
+    negativeFindings: string[];
+  }
 ): Promise<CaseEvaluation> {
   try {
     return await post("/api/end-case", {
       caseId,
       medicalCase: trimCase(medicalCase),
       userNotes,
+      ...(reasoningData || {}),
     });
   } catch (err) {
     Sentry.captureException(err, { tags: { endpoint: 'end-case' }, extra: { caseId } });

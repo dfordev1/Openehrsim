@@ -51,10 +51,14 @@ import { CommandPalette } from './components/CommandPalette';
 import { SkeletonCard, SkeletonVitals } from './components/Skeleton';
 import { EmptyState } from './components/EmptyState';
 import VitalsExpanded from './components/VitalsExpanded';
+import { DiagnosisPad } from './components/DiagnosisPad';
+import { WorkflowProgress } from './components/WorkflowProgress';
 import { useUrlTab } from './hooks/useUrlTab';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useUndoStack } from './hooks/useUndoStack';
 import { useDarkMode } from './hooks/useDarkMode';
+import { useClinicalReasoning } from './hooks/useClinicalReasoning';
+import type { WorkflowStage } from './types';
 
 // ── Tab components ────────────────────────────────────────────────────────────
 import { HpiTab } from './components/tabs/HpiTab';
@@ -65,6 +69,8 @@ import { PharmacyTab } from './components/tabs/PharmacyTab';
 import { TreatmentTab } from './components/tabs/TreatmentTab';
 import { CommsTab } from './components/tabs/CommsTab';
 import { AssessmentTab } from './components/tabs/AssessmentTab';
+import { TriageTab } from './components/tabs/TriageTab';
+import { DxPauseTab } from './components/tabs/DxPauseTab';
 
 // ── Error Boundary ────────────────────────────────────────────────────────────
 interface ErrorBoundaryProps { children: ReactNode; }
@@ -172,6 +178,10 @@ function ClinicalSimulator() {
   const [isDark, toggleDark] = useDarkMode();
   const { pushUndo, popUndo, canUndo, lastAction } = useUndoStack();
 
+  // ── Clinical Reasoning (Healer-style) ─────────────────────────────────────
+  const reasoning = useClinicalReasoning();
+  const [isDxPadOpen, setIsDxPadOpen] = useState(true);
+
   const handleUndo = useCallback(() => {
     const entry = popUndo();
     if (entry) {
@@ -260,6 +270,7 @@ function ClinicalSimulator() {
     setPatientOutcome(null);
     setSelectedLab(null);
     setLogs([{ time: new Date().toLocaleTimeString(), text: 'ADMIT: Patient registered in system.' }]);
+    reasoning.resetReasoning();
     try {
       setLoadingStep('Retrieving recent simulation history…');
       const history = await getRecentSimulations();
@@ -267,6 +278,15 @@ function ClinicalSimulator() {
       const newCase = await generateMedicalCase(difficulty, category, history, environment);
       setLoadingStep('Initialising monitoring systems…');
       setMedicalCase(newCase);
+      // Auto-add initial vitals as findings in Diagnosis Pad
+      if (newCase.vitals) {
+        const v = newCase.vitals;
+        reasoning.addFinding({ source: 'vitals', text: `HR ${v.heartRate} bpm`, relevance: 'none', addedAt: 0 });
+        reasoning.addFinding({ source: 'vitals', text: `BP ${v.bloodPressure} mmHg`, relevance: 'none', addedAt: 0 });
+        reasoning.addFinding({ source: 'vitals', text: `SpO2 ${v.oxygenSaturation}%`, relevance: 'none', addedAt: 0 });
+        reasoning.addFinding({ source: 'vitals', text: `RR ${v.respiratoryRate}/min`, relevance: 'none', addedAt: 0 });
+        reasoning.addFinding({ source: 'vitals', text: `Temp ${v.temperature}°C`, relevance: 'none', addedAt: 0 });
+      }
       const hrBase = newCase.vitals?.heartRate || 75;
       const sysBase = parseInt(newCase.vitals?.bloodPressure.split('/')[0]) || 120;
       const rrBase = newCase.vitals?.respiratoryRate || 16;
@@ -396,6 +416,13 @@ function ClinicalSimulator() {
           ? { ...prev, labs:    [...(prev.labs    || []), result.testResult], clinicalActions: [...(prev.clinicalActions || []), result.action] }
           : { ...prev, imaging: [...(prev.imaging || []), result.testResult], clinicalActions: [...(prev.clinicalActions || []), result.action] };
       });
+      // Auto-track finding in Diagnosis Pad
+      reasoning.addFinding({
+        source: type === 'lab' ? 'lab' : 'imaging',
+        text: `${name} ordered (T+${medicalCase.simulationTime}m)`,
+        relevance: 'none',
+        addedAt: medicalCase.simulationTime,
+      });
       addToast(result.message, 'success');
     } catch (err: any) {
       addToast(err.message || 'Failed to order test', 'error');
@@ -433,7 +460,17 @@ function ClinicalSimulator() {
     setSubmitting(true);
     setLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), text: 'CASE CLOSED — scoring...' }]);
     try {
-      const result = await endCase(medicalCase.id, medicalCase, userNotes);
+      const result = await endCase(medicalCase.id, medicalCase, userNotes, {
+        problemRepresentation: reasoning.problemRepresentation,
+        differentials: reasoning.differentials.map(d => ({
+          diagnosis: d.diagnosis,
+          confidence: d.confidence,
+          isLead: d.isLead,
+        })),
+        findingsCount: reasoning.findings.length,
+        positiveFindings: reasoning.findings.filter(f => f.relevance === 'positive').map(f => f.text),
+        negativeFindings: reasoning.findings.filter(f => f.relevance === 'negative').map(f => f.text),
+      });
       setEvaluation(result);
       setLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), text: `SCORE: ${result.score}/100` }]);
       saveCCSResult(medicalCase, result).catch(console.error);
@@ -449,12 +486,14 @@ function ClinicalSimulator() {
   const simTime = medicalCase?.simulationTime || 0;
 
   const primaryTabs = [
+    { id: 'triage',  icon: <AlertCircle className="w-4 h-4" />, label: 'Triage'   },
     { id: 'hpi',     icon: <Clipboard className="w-4 h-4" />,    label: 'History'  },
     { id: 'exam',    icon: <Stethoscope className="w-4 h-4" />,  label: 'Exam'     },
     { id: 'labs',    icon: <FlaskConical className="w-4 h-4" />, label: 'Labs'     },
     { id: 'imaging', icon: <FileSearch className="w-4 h-4" />,   label: 'Imaging'  },
   ];
   const actionTabs = [
+    { id: 'dxpause',   icon: <Brain className="w-4 h-4" />,       label: 'DxPause'  },
     { id: 'pharmacy',  icon: <Pill className="w-4 h-4" />,       label: 'Pharmacy' },
     { id: 'treatment', icon: <Activity className="w-4 h-4" />,   label: 'Orders'   },
     { id: 'comms',     icon: <Phone className="w-4 h-4" />,      label: 'Comms'    },
@@ -466,11 +505,11 @@ function ClinicalSimulator() {
     ...(user ? [{ id: 'archive', icon: <History className="w-4 h-4" />, label: 'Archive' }] : []),
   ];
   const mobileNavTabs = [
-    { id: 'hpi',       icon: <Clipboard className="w-4 h-4" />,   label: 'HPI'    },
+    { id: 'triage',    icon: <AlertCircle className="w-4 h-4" />, label: 'Triage' },
     { id: 'labs',      icon: <FlaskConical className="w-4 h-4" />,label: 'Labs'   },
+    { id: 'dxpause',   icon: <Brain className="w-4 h-4" />,       label: 'DxP'   },
     { id: 'treatment', icon: <Activity className="w-4 h-4" />,    label: 'Orders' },
     { id: 'assess',    icon: <CheckCircle2 className="w-4 h-4" />,label: 'Assess' },
-    { id: 'comms',     icon: <Phone className="w-4 h-4" />,       label: 'Comms'  },
   ];
 
   // ── Loading / error screen ────────────────────────────────────────────────
@@ -599,6 +638,29 @@ function ClinicalSimulator() {
         )}
       </AnimatePresence>
 
+      {/* ── Clinical Reasoning Workflow Progress ── */}
+      {medicalCase && (
+        <div className="bg-clinical-surface border-b border-clinical-line/50 px-4 py-2 shrink-0">
+          <WorkflowProgress
+            currentStage={reasoning.currentStage}
+            onStageClick={(stage) => {
+              reasoning.goToStage(stage);
+              // Map workflow stages to existing tab system
+              const stageToTab: Record<WorkflowStage, string> = {
+                triage: 'triage',
+                history: 'hpi',
+                exam: 'exam',
+                diagnostics: 'labs',
+                dxpause: 'dxpause',
+                management: 'treatment',
+              };
+              setActiveTab(stageToTab[stage] as any);
+            }}
+            completedStages={reasoning.completedStages}
+          />
+        </div>
+      )}
+
       {/* ── Vitals Rail ── */}
       <div className="h-11 bg-clinical-surface border-b border-clinical-line/50 flex items-center px-4 gap-3 shrink-0 overflow-x-auto no-scrollbar" role="region" aria-label="Vital signs">
         <div className={cn('text-[10px] font-medium px-2 py-0.5 rounded-full',
@@ -674,6 +736,10 @@ function ClinicalSimulator() {
         {/* ── Clinical Workspace ── */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-5 flex flex-col gap-4 pb-20 lg:pb-5" role="main" aria-label="Clinical workspace">
           <AnimatePresence mode="wait">
+            {activeTab === 'triage' && medicalCase && (
+              <TriageTab key="triage" medicalCase={medicalCase} />
+            )}
+
             {activeTab === 'hpi' && medicalCase && (
               <HpiTab key="hpi" medicalCase={medicalCase} />
             )}
@@ -691,6 +757,13 @@ function ClinicalSimulator() {
                     time: new Date().toLocaleTimeString(),
                     text: `EXAM: ${system.toUpperCase()} examined`,
                   }]);
+                  // Track finding in Diagnosis Pad
+                  reasoning.addFinding({
+                    source: 'exam',
+                    text: `${system}: ${finding.slice(0, 60)}${finding.length > 60 ? '…' : ''}`,
+                    relevance: 'none',
+                    addedAt: medicalCase.simulationTime,
+                  });
                   setMedicalCase(prev => {
                     if (!prev) return prev;
                     return {
@@ -753,6 +826,22 @@ function ClinicalSimulator() {
                 onSelectTarget={setCallTarget}
                 onMessageChange={setCallMessage}
                 onSend={handleStaffCall}
+              />
+            )}
+
+            {activeTab === 'dxpause' && medicalCase && (
+              <DxPauseTab
+                key="dxpause"
+                medicalCase={medicalCase}
+                problemRepresentation={reasoning.problemRepresentation}
+                onProblemRepresentationChange={reasoning.setProblemRepresentation}
+                differentials={reasoning.differentials}
+                findings={reasoning.findings}
+                simTime={simTime}
+                onProceedToManagement={() => {
+                  reasoning.goToStage('management');
+                  setActiveTab('treatment' as any);
+                }}
               />
             )}
 
@@ -826,6 +915,26 @@ function ClinicalSimulator() {
           </button>
         ))}
       </div>
+
+      {/* ── Diagnosis Pad (Healer-style floating panel) ── */}
+      {medicalCase && (
+        <AnimatePresence>
+          <DiagnosisPad
+            isOpen={isDxPadOpen}
+            onToggle={() => setIsDxPadOpen(p => !p)}
+            problemRepresentation={reasoning.problemRepresentation}
+            onProblemRepresentationChange={reasoning.setProblemRepresentation}
+            differentials={reasoning.differentials}
+            onAddDifferential={reasoning.addDifferential}
+            onRemoveDifferential={reasoning.removeDifferential}
+            onSetLeadDiagnosis={reasoning.setLeadDiagnosis}
+            onUpdateConfidence={reasoning.updateConfidence}
+            findings={reasoning.findings}
+            onRemoveFinding={reasoning.removeFinding}
+            onUpdateRelevance={reasoning.updateRelevance}
+          />
+        </AnimatePresence>
+      )}
 
       {/* ── Undo bar ── */}
       <AnimatePresence>

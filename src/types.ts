@@ -115,6 +115,7 @@ export interface CaseEvaluation {
     patientOutcome: number;
     efficiencyPenalty: number;
   };
+  reasoningScore?: ReasoningScore;
   feedback: string;
   correctDiagnosis: string;
   explanation: string;
@@ -123,4 +124,38 @@ export interface CaseEvaluation {
   clinicalPearl: string;
   caseId: string;
   totalSimulationTime: number;
+}
+
+// ── Healer-style Clinical Reasoning Types ─────────────────────────────────────
+
+/** A clinical finding tracked in the Diagnosis Pad */
+export interface ClinicalFinding {
+  id: string;
+  source: 'history' | 'exam' | 'lab' | 'imaging' | 'vitals';
+  text: string;
+  relevance: 'positive' | 'negative' | 'none';
+  addedAt: number; // sim-minutes
+}
+
+/** A differential diagnosis entry */
+export interface DifferentialEntry {
+  id: string;
+  diagnosis: string;
+  confidence: 'high' | 'moderate' | 'low';
+  addedAt: number; // sim-minutes
+  isLead?: boolean;
+}
+
+/** Clinical reasoning workflow stages (Healer-style) */
+export type WorkflowStage = 'triage' | 'history' | 'exam' | 'diagnostics' | 'dxpause' | 'management';
+
+/** Enhanced scoring with clinical reasoning axes */
+export interface ReasoningScore {
+  dataAcquisitionThoroughness: number; // 0-100
+  dataAcquisitionEfficiency: number;   // 0-100
+  problemRepresentation: number;       // 0-100
+  differentialAccuracy: number;        // 0-100
+  finalLeadDiagnosis: number;          // 0-100
+  managementPlan: number;              // 0-100
+  overall: number;                     // 0-100
 }
