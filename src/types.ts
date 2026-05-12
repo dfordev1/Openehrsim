@@ -93,9 +93,3 @@ export interface MedicalCase {
   difficulty?: 'intern' | 'resident' | 'attending';
   category?: 'cardiology' | 'pulmonology' | 'sepsis' | 'trauma' | 'neurology' | 'toxicology';
 }
-
-export interface ConsultantAdvice {
-  advice: string;
-  reasoning: string;
-  recommendedActions: string[];
-}
