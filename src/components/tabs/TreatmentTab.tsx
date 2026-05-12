@@ -4,7 +4,6 @@ import { ChevronRight, Clock, History, Loader2, UserPlus } from 'lucide-react';
 import { LineChart, Line, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { cn } from '../../lib/utils';
 import { EmptyState } from '../EmptyState';
-import { OrderPanel } from '../OrderPanel';
 import { MedicalCase } from '../../types';
 
 interface VitalsHistoryPoint {
@@ -26,8 +25,6 @@ interface TreatmentTabProps {
   onWait: (minutes: number) => void;
   onTransfer: (dept: string) => void;
   onToggleTransfer: () => void;
-  onOrderTest?: (testType: 'lab' | 'imaging', testName: string) => Promise<void>;
-  onAdvanceTime?: (minutes: number) => Promise<void>;
 }
 
 const DEPARTMENTS = ['ICU', 'OR / Surgery', 'Cath Lab', 'General Ward', 'Radiology'];
@@ -43,55 +40,9 @@ export function TreatmentTab({
   onWait,
   onTransfer,
   onToggleTransfer,
-  onOrderTest,
-  onAdvanceTime,
 }: TreatmentTabProps) {
-  // Track ordered tests from medical case
-  const orderedTests = React.useMemo(() => {
-    const tests: Array<{ name: string; type: 'lab' | 'imaging'; availableAt: number; orderedAt: number }> = [];
-    
-    // Add labs
-    (medicalCase.labs || []).forEach(lab => {
-      if (lab.orderedAt !== undefined && lab.availableAt !== undefined) {
-        tests.push({
-          name: lab.name,
-          type: 'lab',
-          orderedAt: lab.orderedAt,
-          availableAt: lab.availableAt,
-        });
-      }
-    });
-    
-    // Add imaging
-    (medicalCase.imaging || []).forEach(img => {
-      if (img.orderedAt !== undefined && img.availableAt !== undefined) {
-        tests.push({
-          name: img.type,
-          type: 'imaging',
-          orderedAt: img.orderedAt,
-          availableAt: img.availableAt,
-        });
-      }
-    });
-    
-    return tests;
-  }, [medicalCase.labs, medicalCase.imaging]);
-
   return (
-    <motion.div key="treatment" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-      {/* CCS-Style Order Panel */}
-      {onOrderTest && onAdvanceTime && medicalCase.availableTests && (
-        <OrderPanel
-          availableTests={medicalCase.availableTests}
-          currentSimTime={medicalCase.simulationTime}
-          onOrderTest={onOrderTest}
-          onAdvanceTime={onAdvanceTime}
-          orderedTests={orderedTests}
-          isProcessing={intervening}
-        />
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <motion.div key="treatment" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Left column */}
       <div className="space-y-4">
         {/* CPOE */}

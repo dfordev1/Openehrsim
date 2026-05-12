@@ -1,12 +1,6 @@
 /**
  * Shared MEDICAL_CASE_SCHEMA string used in all AI prompts.
  * Single source of truth — import this instead of duplicating.
- * 
- * CCS-STYLE SIMULATION SCHEMA:
- * - Initial case has minimal info (vitals, chief complaint, appearance)
- * - Labs/imaging are ordered by user, have orderedAt/availableAt timestamps
- * - Physical exam findings revealed progressively (not all upfront)
- * - correctDiagnosis kept SERVER-SIDE ONLY for scoring (never sent to client)
  */
 export const MEDICAL_CASE_SCHEMA = `
   interface MedicalCase {
@@ -15,7 +9,7 @@ export const MEDICAL_CASE_SCHEMA = `
     age: number;
     gender: string;
     chiefComplaint: string;
-    historyOfPresentIllness: string;  // Brief initial presentation only
+    historyOfPresentIllness: string;
     pastMedicalHistory: string[];
     vitals: {
       heartRate: number;
@@ -24,7 +18,6 @@ export const MEDICAL_CASE_SCHEMA = `
       respiratoryRate: number;
       oxygenSaturation: number;
     };
-    initialAppearance: string;  // What you see when patient arrives (e.g., "diaphoretic, clutching chest")
     physicalExam: {
       heent: string;
       cardiac: string;
@@ -32,7 +25,6 @@ export const MEDICAL_CASE_SCHEMA = `
       abdomen: string;
       extremities: string;
       neurological: string;
-      examined?: boolean;  // Whether this system has been examined yet
     };
     labs: {
       name: string;
@@ -40,8 +32,8 @@ export const MEDICAL_CASE_SCHEMA = `
       unit: string;
       normalRange: string;
       status: 'normal' | 'abnormal' | 'critical';
-      orderedAt?: number;      // Simulation time when ordered
-      availableAt?: number;    // Simulation time when results ready
+      orderedAt?: number;
+      availableAt?: number;
       clinicalNote?: string;
     }[];
     imaging: {
@@ -52,20 +44,18 @@ export const MEDICAL_CASE_SCHEMA = `
       orderedAt?: number;
       availableAt?: number;
     }[];
-    availableTests: {      // Catalog of orderable tests for this case
-      labs: string[];      // e.g., ["CBC", "BMP", "Troponin", "Lactate", "Blood Culture"]
-      imaging: string[];   // e.g., ["Chest X-ray", "CT Head", "ECG"]
-    };
     medications: {
       id: string;
       name: string;
       dose: string;
       route: string;
       timestamp: number;
-      isIVFluid?: boolean;
-      volumeML?: number;
+      isIVFluid?: boolean;   // true for NS, LR, albumin, etc.
+      volumeML?: number;     // volume in mL for fluid balance tracking
     }[];
     activeAlarms: string[];
+    correctDiagnosis: string;
+    explanation: string;
     currentCondition: string;
     physiologicalTrend: 'improving' | 'stable' | 'declining' | 'critical';
     simulationTime: number;
@@ -82,17 +72,12 @@ export const MEDICAL_CASE_SCHEMA = `
     }[];
     clinicalActions: {
       id: string;
-      timestamp: number;     // Changed to number for easier comparison
-      type: 'order' | 'medication' | 'procedure' | 'exam' | 'transfer' | 'communication' | 'time-advance';
+      timestamp: string;
+      type: 'order' | 'medication' | 'procedure' | 'exam' | 'transfer' | 'communication';
       description: string;
       result?: string;
       impact?: string;
     }[];
     patientOutcome?: 'alive' | 'deceased' | 'critical_deterioration';
-    
-    // SERVER-SIDE ONLY FIELDS (not sent to client during active case):
-    correctDiagnosis?: string;      // Hidden until case ends
-    explanation?: string;           // Hidden until case ends
-    underlyingPathology?: string;   // Hidden - used by AI to evolve patient realistically
   }
 `;

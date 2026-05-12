@@ -60,13 +60,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .join(", ")}. Avoid repeating the exact clinical presentation from these cases.`
         : "";
 
-    // First, generate the FULL case with diagnosis (server-side only)
-    const fullCaseResponse = await openai.chat.completions.create({
+    const response = await openai.chat.completions.create({
       model: "deepseek-chat",
       messages: [
         {
           role: "system",
-          content: `You are a high-fidelity clinical simulation engine. Generate a complete medical case with underlying diagnosis.
+          content: `You are a high-fidelity clinical simulation engine. Generate a complex, acute medical case.
 Difficulty Settings:
 - Intern: Clear clues, classic presentations (e.g. STEMI, Sepsis).
 - Resident: Mixed clues, moderate complexity (e.g. PE vs Pneumonia, DKA).
@@ -75,36 +74,15 @@ Difficulty Settings:
 ${envContext}
 ${historyContext}
 
-CRITICAL CCS-STYLE REQUIREMENTS:
-1. Generate the FULL case including:
-   - correctDiagnosis: the actual diagnosis (e.g., "Septic Shock secondary to pneumonia")
-   - explanation: brief pathophysiology explanation
-   - underlyingPathology: detailed pathology for AI to use when evolving patient
-   - Complete lab values and imaging findings (but these won't be visible initially)
-   
-2. Physical exam findings should be present but marked as "examined: false" initially
-
-3. Labs array should contain ALL relevant lab values WITH results, but NO orderedAt/availableAt timestamps
-
-4. Imaging array should contain ALL relevant imaging WITH findings, but NO orderedAt/availableAt timestamps
-
-5. availableTests: Create a catalog of orderable tests:
-   - labs: ["CBC", "BMP", "Troponin", "Lactate", "Blood Culture", "ABG", "Coagulation Panel", "LFTs", "Lipase", "Urinalysis", "Drug Screen"]
-   - imaging: ["Chest X-ray", "CT Head", "CT Chest", "CT Abdomen/Pelvis", "Ultrasound", "ECG", "Echocardiogram"]
-
-6. Initialize:
-   - simulationTime: 0
-   - currentLocation: ${environment === "prehospital" ? '"Ambulance Rescue 1"' : '"Emergency Room (ER) Bay 1"'}
-   - communicationLog: []
-   - medications: []
-   - activeAlarms: [] (or appropriate alarms based on vitals)
-   - clinicalActions: []
-   - physiologicalTrend: 'stable' or 'declining' based on acuity
-   - patientOutcome: "alive"
-   - initialAppearance: vivid description of patient appearance (e.g., "Pale, diaphoretic, clutching chest")
-
-7. historyOfPresentIllness: Keep this BRIEF - only what EMS/triage nurse would know
-
+CRITICAL REQUIREMENTS:
+- You MUST generate a unique "id" field for the case (e.g. "case-a1b2c3" or a short UUID). Do NOT omit it.
+- Initialize simulationTime at 0.
+- Initialize currentLocation as ${environment === "prehospital" ? '"Ambulance Rescue 1"' : '"Emergency Room (ER) Bay 1"'}.
+- Initialize communicationLog, medications, and activeAlarms as empty arrays.
+- Initialize physiologicalTrend as 'stable' or 'declining' based on acuity.
+- ALL labs and imaging should NOT have orderedAt or availableAt yet.
+- For any IV fluid medications, set isIVFluid: true and volumeML to the appropriate volume.
+- Set patientOutcome to "alive".
 Output MUST be valid JSON adhering to: ${MEDICAL_CASE_SCHEMA}`,
         },
         {
@@ -115,64 +93,17 @@ Output MUST be valid JSON adhering to: ${MEDICAL_CASE_SCHEMA}`,
       response_format: { type: "json_object" },
     });
 
-    const fullCaseContent = fullCaseResponse.choices[0].message.content;
-    if (!fullCaseContent) throw new Error("Empty response from AI");
+    const content = response.choices[0].message.content;
+    if (!content) throw new Error("Empty response from AI");
 
-    const fullCase = JSON.parse(fullCaseContent);
+    const parsed = JSON.parse(content);
 
-    // Ensure id is always present
-    if (!fullCase.id) {
-      fullCase.id = `case-${Math.random().toString(36).slice(2, 9)}`;
+    // Ensure id is always present as a fallback
+    if (!parsed.id) {
+      parsed.id = `case-${Math.random().toString(36).slice(2, 9)}`;
     }
 
-    // Store the full case in-memory for this session (in production, use Redis/DB)
-    // For now, we'll keep full case in a global Map (simple solution)
-    if (!global.casesStore) {
-      global.casesStore = new Map();
-    }
-    global.casesStore.set(fullCase.id, fullCase);
-
-    // Create the MINIMAL initial presentation (CCS-style)
-    const minimalCase = {
-      id: fullCase.id,
-      patientName: fullCase.patientName,
-      age: fullCase.age,
-      gender: fullCase.gender,
-      chiefComplaint: fullCase.chiefComplaint,
-      historyOfPresentIllness: fullCase.historyOfPresentIllness,
-      pastMedicalHistory: fullCase.pastMedicalHistory || [],
-      vitals: fullCase.vitals,
-      initialAppearance: fullCase.initialAppearance || "Patient appears acutely ill",
-      physicalExam: {
-        heent: "Not yet examined",
-        cardiac: "Not yet examined",
-        respiratory: "Not yet examined",
-        abdomen: "Not yet examined",
-        extremities: "Not yet examined",
-        neurological: "Not yet examined",
-        examined: false,
-      },
-      labs: [],  // Empty - must be ordered
-      imaging: [],  // Empty - must be ordered
-      availableTests: fullCase.availableTests || {
-        labs: ["CBC", "BMP", "Troponin", "Lactate", "Blood Culture", "ABG", "Coagulation Panel", "LFTs", "Lipase", "Urinalysis"],
-        imaging: ["Chest X-ray", "CT Head", "CT Chest", "CT Abdomen/Pelvis", "Ultrasound", "ECG", "Echocardiogram"],
-      },
-      medications: [],
-      activeAlarms: fullCase.activeAlarms || [],
-      currentCondition: fullCase.currentCondition,
-      physiologicalTrend: fullCase.physiologicalTrend || "stable",
-      clinicalActions: [],
-      simulationTime: 0,
-      currentLocation: fullCase.currentLocation,
-      communicationLog: [],
-      difficulty: fullCase.difficulty || difficulty,
-      category: fullCase.category || category,
-      patientOutcome: "alive",
-    };
-
-    // Return ONLY the minimal case to the client
-    res.json(minimalCase);
+    res.json(parsed);
   } catch (error: any) {
     console.error("DeepSeek Error:", error);
     res.status(500).json({ error: error.message || "Failed to generate case" });

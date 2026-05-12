@@ -15,7 +15,6 @@ interface AssessmentTabProps {
   onDiagnosisChange: (val: string) => void;
   onSubmit: () => void;
   onNewCase: () => void;
-  onEndCase?: () => void;  // CCS-style case ending
 }
 
 export function AssessmentTab({
@@ -28,7 +27,6 @@ export function AssessmentTab({
   onDiagnosisChange,
   onSubmit,
   onNewCase,
-  onEndCase,
 }: AssessmentTabProps) {
   return (
     <motion.div key="assess" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4">
@@ -46,17 +44,6 @@ export function AssessmentTab({
         <div className="p-5">
           {!feedback ? (
             <div className="space-y-5">
-              {/* CCS-STYLE: Emphasize management over diagnosis */}
-              <div className="bg-clinical-blue/5 border border-clinical-blue/20 rounded-lg p-4 mb-4">
-                <div className="flex gap-2 text-xs text-clinical-blue">
-                  <Stethoscope className="w-4 h-4 shrink-0 mt-0.5" />
-                  <div>
-                    <strong>CCS Mode:</strong> This case is scored on your <strong>management decisions</strong>, not just diagnosis.
-                    When ready, click "Complete Case" to receive feedback on your clinical actions, timing, and patient outcome.
-                  </div>
-                </div>
-              </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* Working differential */}
                 <div>
@@ -72,11 +59,11 @@ export function AssessmentTab({
                 {/* Confirmatory findings */}
                 <div>
                   <label className="text-[10px] font-medium text-clinical-slate uppercase mb-2 block">
-                    Key Findings
+                    Confirmatory Findings
                   </label>
                   <div className="flex flex-wrap gap-1.5">
                     {medicalCase.labs
-                      .filter((l) => l.status === 'critical' && l.availableAt !== undefined && l.availableAt <= simTime)
+                      .filter((l) => l.status === 'critical')
                       .map((l) => (
                         <span
                           key={l.name}
@@ -95,7 +82,7 @@ export function AssessmentTab({
                           {i.type}
                         </span>
                       ))}
-                    {medicalCase.labs.filter((l) => l.status === 'critical' && l.availableAt !== undefined && l.availableAt <= simTime).length === 0 &&
+                    {medicalCase.labs.filter((l) => l.status === 'critical').length === 0 &&
                       medicalCase.imaging.filter((i) => i.availableAt && i.availableAt <= simTime).length === 0 && (
                         <span className="text-xs text-clinical-slate/50 italic">No critical findings yet</span>
                       )}
@@ -103,17 +90,17 @@ export function AssessmentTab({
                 </div>
               </div>
 
-              {/* Final assessment notes */}
+              {/* Diagnosis submit */}
               <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t border-clinical-line/50">
                 <textarea
                   value={userDiagnosis}
                   onChange={(e) => onDiagnosisChange(e.target.value)}
-                  placeholder="Optional: Final assessment, diagnosis, and disposition plan..."
+                  placeholder="Enter final working diagnosis and disposition plan..."
                   className="flex-1 h-16 bg-clinical-bg border border-clinical-line rounded-md p-3 text-sm focus:outline-none focus:ring-1 focus:ring-clinical-blue/30 transition-all resize-none"
                 />
                 <button
-                  onClick={onEndCase || onSubmit}
-                  disabled={submitting}
+                  onClick={onSubmit}
+                  disabled={submitting || !userDiagnosis}
                   className="sm:h-16 px-6 py-3 bg-clinical-blue hover:bg-clinical-blue/90 text-white rounded-md flex items-center justify-center gap-2 transition-all disabled:opacity-50 shrink-0"
                 >
                   {submitting ? (
@@ -121,7 +108,7 @@ export function AssessmentTab({
                   ) : (
                     <CheckCircle2 className="w-4 h-4" />
                   )}
-                  <span className="text-xs font-medium">Complete Case</span>
+                  <span className="text-xs font-medium">Submit</span>
                 </button>
               </div>
             </div>
@@ -154,8 +141,8 @@ export function AssessmentTab({
                     "{feedback.feedback}"
                   </div>
                   <p className="text-xs text-clinical-slate mt-3">
-                    Underlying Diagnosis:{' '}
-                    <span className="font-medium text-clinical-ink">{(medicalCase as any).correctDiagnosis || 'See feedback above'}</span>
+                    Correct Diagnosis:{' '}
+                    <span className="font-medium text-clinical-ink">{medicalCase.correctDiagnosis}</span>
                   </p>
                 </div>
               </div>
