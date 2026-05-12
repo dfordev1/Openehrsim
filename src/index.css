@@ -52,6 +52,22 @@
   --panel-muted: #1A1D27;
 }
 
+/* Dark mode overrides */
+.dark {
+  --color-clinical-bg: #0F1117;
+  --color-clinical-surface: #1A1D27;
+  --color-clinical-ink: #E2E8F0;
+  --color-clinical-slate: #94A3B8;
+  --color-clinical-line: #2A2F3C;
+  --color-clinical-blue: #6B93FF;
+  --color-clinical-red: #F87171;
+  --color-clinical-amber: #FBBF24;
+  --color-clinical-green: #4ADE80;
+  --color-panel-dark: #0D0F14;
+  --color-panel-dark-border: #1F232E;
+  --color-panel-muted: #1A1D27;
+}
+
 @layer base {
   body {
     @apply bg-clinical-bg text-clinical-ink font-sans antialiased;
