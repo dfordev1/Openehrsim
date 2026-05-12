@@ -244,10 +244,14 @@ function ClinicalSimulator() {
     return () => clearInterval(interval);
   }, [medicalCase]);
 
+  // ── Loading progress ──────────────────────────────────────────────────────
+  const [loadingStep, setLoadingStep] = useState('Initialising…');
+
   // ── Load case ─────────────────────────────────────────────────────────────
   const loadNewCase = useCallback(async (difficulty?: string, category?: string, environment?: string) => {
     setLoading(true);
     setError(null);
+    setLoadingStep('Connecting to clinical simulation engine…');
     setEvaluation(null);
     setFeedback(null);
     setUserNotes('');
@@ -257,8 +261,11 @@ function ClinicalSimulator() {
     setSelectedLab(null);
     setLogs([{ time: new Date().toLocaleTimeString(), text: 'ADMIT: Patient registered in system.' }]);
     try {
+      setLoadingStep('Retrieving recent simulation history…');
       const history = await getRecentSimulations();
+      setLoadingStep('Generating patient case with AI engine…');
       const newCase = await generateMedicalCase(difficulty, category, history, environment);
+      setLoadingStep('Initialising monitoring systems…');
       setMedicalCase(newCase);
       const hrBase = newCase.vitals?.heartRate || 75;
       const sysBase = parseInt(newCase.vitals?.bloodPressure.split('/')[0]) || 120;
@@ -499,12 +506,15 @@ function ClinicalSimulator() {
             </div>
           ) : (
             <div className="w-full max-w-sm space-y-4" role="status" aria-label="Loading">
-              <div className="flex justify-center mb-4">
+              <div className="flex flex-col items-center gap-3 mb-4">
                 <Loader2 className="w-6 h-6 animate-spin text-clinical-blue" />
+                <p className="text-xs text-clinical-slate text-center font-medium">{loadingStep}</p>
+              </div>
+              <div className="h-1 w-full bg-clinical-line rounded-full overflow-hidden">
+                <div className="h-full bg-clinical-blue rounded-full animate-pulse" style={{ width: '60%' }} />
               </div>
               <SkeletonVitals />
               <SkeletonCard />
-              <p className="text-xs text-clinical-slate text-center">Synchronizing clinical data...</p>
             </div>
           )}
         </motion.div>
