@@ -13,6 +13,7 @@ export interface PhysicalExam {
   abdomen: string;
   extremities: string;
   neurological: string;
+  examined?: boolean;  // Whether this system has been examined yet
 }
 
 export interface LabResult {
@@ -44,8 +45,8 @@ export interface Treatment {
 
 export interface ClinicalAction {
   id: string;
-  timestamp: string; // Simulation time minute
-  type: 'order' | 'medication' | 'procedure' | 'exam' | 'transfer' | 'communication';
+  timestamp: number; // Simulation time in minutes
+  type: 'order' | 'medication' | 'procedure' | 'exam' | 'transfer' | 'communication' | 'time-advance';
   description: string;
   result?: string;
   impact?: string;
@@ -70,6 +71,11 @@ export interface MedicationRecord {
   volumeML?: number;    // mL administered — used for fluid balance tracking
 }
 
+export interface AvailableTests {
+  labs: string[];
+  imaging: string[];
+}
+
 export interface MedicalCase {
   id: string;
   patientName: string;
@@ -79,13 +85,13 @@ export interface MedicalCase {
   historyOfPresentIllness: string;
   pastMedicalHistory: string[];
   vitals: Vitals;
+  initialAppearance: string;  // What you see when patient arrives
   physicalExam: PhysicalExam;
   labs: LabResult[];
   imaging: ImagingResult[];
+  availableTests: AvailableTests;  // Catalog of orderable tests
   medications: MedicationRecord[];
   activeAlarms: string[];
-  correctDiagnosis: string;
-  explanation: string;
   currentCondition: string;
   physiologicalTrend: 'improving' | 'stable' | 'declining' | 'critical';
   clinicalActions: ClinicalAction[];
@@ -95,6 +101,11 @@ export interface MedicalCase {
   difficulty?: 'intern' | 'resident' | 'attending';
   category?: 'cardiology' | 'pulmonology' | 'sepsis' | 'trauma' | 'neurology' | 'toxicology';
   patientOutcome?: 'alive' | 'deceased' | 'critical_deterioration';
+  
+  // SERVER-SIDE ONLY (not sent to client during active case):
+  correctDiagnosis?: string;
+  explanation?: string;
+  underlyingPathology?: string;
 }
 
 export interface ConsultantAdvice {

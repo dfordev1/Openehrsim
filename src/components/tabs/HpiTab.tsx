@@ -14,6 +14,16 @@ export function HpiTab({ medicalCase }: HpiTabProps) {
         <span className="text-[10px] text-clinical-slate/50">{medicalCase.currentLocation}</span>
       </div>
       <div className="p-5 space-y-6">
+        {medicalCase.initialAppearance && (
+          <section>
+            <label className="text-[10px] font-medium text-clinical-slate uppercase block mb-1.5">
+              Initial Appearance
+            </label>
+            <p className="text-sm text-clinical-ink leading-snug px-3 py-2 bg-clinical-bg/50 border-l-2 border-clinical-blue/30 rounded">
+              {medicalCase.initialAppearance}
+            </p>
+          </section>
+        )}
         <section>
           <label className="text-[10px] font-medium text-clinical-slate uppercase block mb-1.5">
             Chief Complaint

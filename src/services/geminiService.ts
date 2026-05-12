@@ -87,3 +87,57 @@ export async function staffCall(
 
   return response.json();
 }
+
+/**
+ * CCS-STYLE: Order a lab or imaging test
+ */
+export async function orderTest(
+  caseId: string,
+  testType: 'lab' | 'imaging',
+  testName: string,
+  currentSimTime: number,
+  priority: 'stat' | 'routine' = 'stat'
+): Promise<{ success: boolean; testResult: any; action: any; message: string }> {
+  const response = await fetch("/api/order-test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ caseId, testType, testName, currentSimTime, priority }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error((err as any).error || "Failed to order test.");
+  }
+
+  return response.json();
+}
+
+/**
+ * CCS-STYLE: End case and get management-based scoring
+ */
+export async function endCase(
+  caseId: string,
+  medicalCase: MedicalCase,
+  userNotes?: string
+): Promise<{
+  score: number;
+  breakdown: any;
+  feedback: string;
+  correctDiagnosis: string;
+  keyActions: string[];
+  criticalMissed: string[];
+  clinicalPearl: string;
+}> {
+  const response = await fetch("/api/end-case", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ caseId, medicalCase: trimCase(medicalCase), userNotes }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error((err as any).error || "Failed to end case.");
+  }
+
+  return response.json();
+}
