@@ -14,7 +14,8 @@ import {
   Pill,
   Sparkles,
   RefreshCw,
-  Command
+  Command,
+  Clock,
 } from 'lucide-react';
 
 interface CommandItem {
@@ -32,9 +33,12 @@ interface CommandPaletteProps {
   onNewCase: () => void;
   onConsult: () => void;
   hasArchive: boolean;
+  onOrderTest?: (type: 'lab' | 'imaging', name: string) => void;
+  onAdminister?: (med: string) => void;
+  onAdvanceTime?: (mins: number) => void;
 }
 
-export function CommandPalette({ isOpen, onClose, onNavigate, onNewCase, onConsult, hasArchive }: CommandPaletteProps) {
+export function CommandPalette({ isOpen, onClose, onNavigate, onNewCase, onConsult, hasArchive, onOrderTest, onAdminister, onAdvanceTime }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -52,6 +56,26 @@ export function CommandPalette({ isOpen, onClose, onNavigate, onNewCase, onConsu
     ...(hasArchive ? [{ id: 'archive', label: 'Go to Clinical Archive', icon: <History className="w-4 h-4" />, category: 'Navigation', action: () => onNavigate('archive') }] : []),
     { id: 'new-case', label: 'New Patient Case', icon: <RefreshCw className="w-4 h-4" />, category: 'Actions', action: onNewCase },
     { id: 'consult', label: 'AI Consultant', icon: <Sparkles className="w-4 h-4" />, category: 'Actions', action: onConsult },
+    // ── Quick clinical actions ──────────────────────────────────────────────
+    ...(onOrderTest ? [
+      { id: 'order-cbc',  label: 'Order CBC',          icon: <FlaskConical className="w-4 h-4" />, category: 'Quick Orders', action: () => { onOrderTest('lab', 'CBC'); } },
+      { id: 'order-bmp',  label: 'Order BMP',          icon: <FlaskConical className="w-4 h-4" />, category: 'Quick Orders', action: () => { onOrderTest('lab', 'BMP'); } },
+      { id: 'order-trop', label: 'Order Troponin',     icon: <FlaskConical className="w-4 h-4" />, category: 'Quick Orders', action: () => { onOrderTest('lab', 'Troponin'); } },
+      { id: 'order-bg',   label: 'Order Blood Glucose',icon: <FlaskConical className="w-4 h-4" />, category: 'Quick Orders', action: () => { onOrderTest('lab', 'BMP'); } },
+      { id: 'order-ecg',  label: 'Order ECG',          icon: <Activity className="w-4 h-4" />, category: 'Quick Orders', action: () => { onOrderTest('imaging', 'ECG'); } },
+      { id: 'order-cxr',  label: 'Order Chest X-ray',  icon: <Activity className="w-4 h-4" />, category: 'Quick Orders', action: () => { onOrderTest('imaging', 'Chest X-ray'); } },
+    ] : []),
+    ...(onAdminister ? [
+      { id: 'give-aspirin', label: 'Administer Aspirin 324mg PO', icon: <Pill className="w-4 h-4" />, category: 'Quick Orders', action: () => { onAdminister('Aspirin 324mg PO'); } },
+      { id: 'give-o2',      label: 'Start O₂ 4L/min NC',         icon: <Pill className="w-4 h-4" />, category: 'Quick Orders', action: () => { onAdminister('O2 4L via nasal cannula'); } },
+      { id: 'give-ns',      label: 'Bolus NS 1L IV',              icon: <Pill className="w-4 h-4" />, category: 'Quick Orders', action: () => { onAdminister('NS 1L Bolus'); } },
+      { id: 'give-epi',     label: 'Administer Epinephrine 1mg',  icon: <Pill className="w-4 h-4" />, category: 'Quick Orders', action: () => { onAdminister('Epinephrine 1mg'); } },
+    ] : []),
+    ...(onAdvanceTime ? [
+      { id: 'advance-5',  label: 'Advance Time +5 min',  icon: <Clock className="w-4 h-4" />, category: 'Quick Orders', action: () => { onAdvanceTime(5); } },
+      { id: 'advance-10', label: 'Advance Time +10 min', icon: <Clock className="w-4 h-4" />, category: 'Quick Orders', action: () => { onAdvanceTime(10); } },
+      { id: 'advance-30', label: 'Advance Time +30 min', icon: <Clock className="w-4 h-4" />, category: 'Quick Orders', action: () => { onAdvanceTime(30); } },
+    ] : []),
   ];
 
   const filtered = query
@@ -141,7 +165,7 @@ export function CommandPalette({ isOpen, onClose, onNavigate, onNewCase, onConsu
                   <div className="px-5 py-6 text-center text-sm text-clinical-slate/50">No results found</div>
                 ) : (
                   <>
-                    {['Navigation', 'Actions'].map(category => {
+                    {['Navigation', 'Actions', 'Quick Orders'].map(category => {
                       const items = filtered.filter(c => c.category === category);
                       if (items.length === 0) return null;
                       return (
