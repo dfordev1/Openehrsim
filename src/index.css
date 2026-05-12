@@ -22,6 +22,22 @@
   --color-panel-muted: #F3F5F8;
 }
 
+/* Dark mode overrides */
+.dark {
+  --color-clinical-bg: #0F1117;
+  --color-clinical-surface: #1A1D27;
+  --color-clinical-ink: #E2E8F0;
+  --color-clinical-slate: #94A3B8;
+  --color-clinical-line: #2A2F3C;
+  --color-clinical-blue: #6B93FF;
+  --color-clinical-red: #F87171;
+  --color-clinical-amber: #FBBF24;
+  --color-clinical-green: #4ADE80;
+  --color-panel-dark: #0D0F14;
+  --color-panel-dark-border: #1F232E;
+  --color-panel-muted: #1A1D27;
+}
+
 @layer base {
   body {
     @apply bg-clinical-bg text-clinical-ink font-sans antialiased;
@@ -166,4 +182,58 @@
   .mobile-bottom-nav-item span {
     @apply text-[9px] font-medium;
   }
+}
+
+
+/* Accessibility: Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .skeleton {
+    animation: none;
+    background: #E8ECF1;
+  }
+
+  .dark .skeleton {
+    background: #2A2F3C;
+  }
+}
+
+/* Accessibility: Focus visible styling */
+:focus-visible {
+  outline: 2px solid var(--color-clinical-blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Accessibility: Screen reader only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Dark mode transitions */
+.dark body {
+  color-scheme: dark;
+}
+
+/* Undo bar styling */
+.undo-bar {
+  @apply fixed bottom-20 lg:bottom-4 left-1/2 -translate-x-1/2 z-[60] bg-clinical-ink text-white px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-3 text-xs font-medium;
+}
+
+.undo-bar button {
+  @apply px-2.5 py-1 bg-white/20 hover:bg-white/30 rounded text-xs font-medium transition-colors;
 }
