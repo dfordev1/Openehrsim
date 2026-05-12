@@ -5,33 +5,29 @@ import App from './App.tsx';
 import './index.css';
 
 // ── Sentry ────────────────────────────────────────────────────────────────────
-// Only initialises when VITE_SENTRY_DSN is set (set it in .env.local and in
-// the Vercel dashboard). No-ops silently in local dev without it.
-if (import.meta.env.VITE_SENTRY_DSN) {
-  Sentry.init({
-    dsn: import.meta.env.VITE_SENTRY_DSN,
+Sentry.init({
+  dsn: "https://7c330590e8ef398a2ba6cf908aefed9e@o4511376830038016.ingest.us.sentry.io/4511376836591616",
 
-    // Capture 10 % of sessions for performance tracing (adjust as needed)
-    tracesSampleRate: 0.1,
+  // Send default PII (IP address, user agent, etc.)
+  sendDefaultPii: true,
 
-    // Record a session replay on errors so you can see exactly what happened
-    replaysOnErrorSampleRate: 1.0,
+  // Capture 10% of sessions for performance tracing
+  tracesSampleRate: 0.1,
 
-    integrations: [
-      Sentry.browserTracingIntegration(),
-      Sentry.replayIntegration({
-        // Mask PII — text and inputs are blocked by default
-        maskAllText: false,
-        blockAllMedia: false,
-      }),
-    ],
+  // Full session replay on every error so you can see exactly what happened
+  replaysOnErrorSampleRate: 1.0,
 
-    // Tag every event with the release version (injected by Vite)
-    release: import.meta.env.VITE_APP_VERSION || 'dev',
+  integrations: [
+    Sentry.browserTracingIntegration(),
+    Sentry.replayIntegration({
+      maskAllText: false,
+      blockAllMedia: false,
+    }),
+  ],
 
-    environment: import.meta.env.MODE, // 'development' | 'production'
-  });
-}
+  environment: import.meta.env.MODE,            // 'development' | 'production'
+  release: import.meta.env.VITE_APP_VERSION,    // optional version tag
+});
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
