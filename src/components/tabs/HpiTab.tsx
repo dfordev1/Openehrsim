@@ -1,6 +1,5 @@
-import React from 'react';
 import { motion } from 'motion/react';
-import { User, MapPin, Stethoscope } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { MedicalCase } from '../../types';
 

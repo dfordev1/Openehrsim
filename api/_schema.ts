@@ -1,6 +1,8 @@
 /**
  * Shared MEDICAL_CASE_SCHEMA string used in all AI prompts.
  * Single source of truth — import this instead of duplicating.
+ *
+ * NOTE: This MUST stay in sync with src/lib/schema.ts and src/types.ts.
  */
 export const MEDICAL_CASE_SCHEMA = `
   interface MedicalCase {
@@ -11,6 +13,7 @@ export const MEDICAL_CASE_SCHEMA = `
     chiefComplaint: string;
     historyOfPresentIllness: string;
     pastMedicalHistory: string[];
+    initialAppearance: string;         // Vivid 1-sentence bedside impression
     vitals: {
       heartRate: number;
       bloodPressure: string;
@@ -44,6 +47,10 @@ export const MEDICAL_CASE_SCHEMA = `
       orderedAt?: number;
       availableAt?: number;
     }[];
+    availableTests: {                  // Catalog the user can order from
+      labs: string[];
+      imaging: string[];
+    };
     medications: {
       id: string;
       name: string;
@@ -72,8 +79,8 @@ export const MEDICAL_CASE_SCHEMA = `
     }[];
     clinicalActions: {
       id: string;
-      timestamp: string;
-      type: 'order' | 'medication' | 'procedure' | 'exam' | 'transfer' | 'communication';
+      timestamp: number;               // sim-minutes (number, not string)
+      type: 'order' | 'medication' | 'procedure' | 'exam' | 'transfer' | 'communication' | 'time-advance';
       description: string;
       result?: string;
       impact?: string;

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronRight, Stethoscope, Eye, Heart, Wind, Activity, Hand, Brain } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -29,7 +30,7 @@ const GCS_MAPPING = {
 };
 
 // Label + icon for each exam system
-const SYSTEM_META: Record<string, { label: string; icon: React.ReactNode }> = {
+const SYSTEM_META: Record<string, { label: string; icon: ReactNode }> = {
   heent:        { label: 'HEENT',         icon: <Eye        className="w-4 h-4" /> },
   cardiac:      { label: 'Cardiovascular',icon: <Heart      className="w-4 h-4" /> },
   respiratory:  { label: 'Respiratory',   icon: <Wind       className="w-4 h-4" /> },
