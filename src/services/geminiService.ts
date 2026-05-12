@@ -1,10 +1,10 @@
 import { MedicalCase } from "../types";
 
-export async function generateMedicalCase(difficulty?: string, category?: string, history?: any[]): Promise<MedicalCase> {
+export async function generateMedicalCase(difficulty?: string, category?: string, history?: any[], environment?: string): Promise<MedicalCase> {
   const response = await fetch("/api/generate-case", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ difficulty, category, history })
+    body: JSON.stringify({ difficulty, category, history, environment })
   });
   
   if (!response.ok) {
