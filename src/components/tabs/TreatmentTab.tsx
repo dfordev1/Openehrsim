@@ -92,8 +92,8 @@ export function TreatmentTab({
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Left column */}
-        <div className="space-y-4">
+      {/* Left column */}
+      <div className="space-y-4">
         {/* CPOE */}
         <div className="panel">
           <div className="panel-header">
@@ -308,7 +308,6 @@ export function TreatmentTab({
             )}
           </div>
         </div>
-      </div>
       </div>
     </motion.div>
   );
