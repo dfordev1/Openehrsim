@@ -7,13 +7,12 @@ import React, { useState, useEffect, useCallback, Component, ErrorInfo, ReactNod
 import { 
   Heart, 
   Activity, 
-  Thermometer, 
   Wind, 
   Droplets, 
   Clipboard, 
   Stethoscope, 
   FlaskConical, 
-  Stethoscope as StethIcon,
+  Pill,
   Plus,
   FileSearch, 
   ChevronRight, 
@@ -24,7 +23,6 @@ import {
   History,
   Send,
   Loader2,
-  MapPin,
   Phone,
   MessageSquare,
   UserPlus,
@@ -43,7 +41,7 @@ import {
   ResponsiveContainer 
 } from 'recharts';
 import { MedicalCase, Vitals, LabResult, CommunicationMessage } from './types';
-import { generateMedicalCase, evaluateDiagnosis, performIntervention, staffCall } from './services/geminiService';
+import { generateMedicalCase, evaluateDiagnosis, performIntervention, staffCall } from './services/apiService';
 import { saveSimulationResult, getRecentSimulations } from './services/storageService';
 import { getSupabase } from './lib/supabase';
 import type { User } from './lib/supabase';
@@ -227,6 +225,7 @@ function ClinicalSimulator() {
   const [calling, setCalling] = useState(false);
   const [callTarget, setCallTarget] = useState('Nursing Station');
   const [callMessage, setCallMessage] = useState('');
+  const [customMedInput, setCustomMedInput] = useState('');
   const [vitalsHistory, setVitalsHistory] = useState<{ time: string; hr: number; sbp: number; rr: number; spo2: number }[]>([]);
   const [gcsState, setGcsState] = useState({ eyes: 4, verbal: 5, motor: 6 });
   const [revealedLabs, setRevealedLabs] = useState<string[]>([]);
@@ -310,12 +309,6 @@ function ClinicalSimulator() {
       });
     }
   }, [medicalCase?.simulationTime, medicalCase?.vitals]);
-
-  useEffect(() => {
-    if (!medicalCase) return;
-    // Separate interval for lead II monitor only? 
-    // Actually let's just use simulation time changes to update the "history" trend.
-  }, [medicalCase]);
 
   const STAFF_TARGETS = [
     'Nursing Station',
@@ -696,6 +689,7 @@ function ClinicalSimulator() {
               <NavTab active={activeTab === 'exam'} icon={<Stethoscope className="w-4 h-4" />} label="Physical Selection" onClick={() => setActiveTab('exam')} />
               <NavTab active={activeTab === 'labs'} icon={<FlaskConical className="w-4 h-4" />} label="Order Results" onClick={() => setActiveTab('labs')} />
               <NavTab active={activeTab === 'imaging'} icon={<FileSearch className="w-4 h-4" />} label="Radiology PACS" onClick={() => setActiveTab('imaging')} />
+              <NavTab active={activeTab === 'pharmacy'} icon={<Pill className="w-4 h-4" />} label="Pharmacy" onClick={() => setActiveTab('pharmacy')} />
               <NavTab active={activeTab === 'comms'} icon={<Phone className="w-4 h-4" />} label="Communication" onClick={() => setActiveTab('comms')} />
               <NavTab active={activeTab === 'treatment'} icon={<Activity className="w-4 h-4" />} label="Interventions" onClick={() => setActiveTab('treatment')} />
               {user && (
@@ -1083,21 +1077,27 @@ function ClinicalSimulator() {
                   <div className="bg-clinical-surface border border-clinical-line rounded p-6 shadow-sm flex flex-col">
                     <h4 className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest mb-4">Current Order Workflow</h4>
                     <div className="flex-1 flex flex-col items-center justify-center p-8 border-2 border-dashed border-clinical-line rounded opacity-40 text-center">
-                      <StethIcon className="w-12 h-12 mb-4" />
+                      <Pill className="w-12 h-12 mb-4" />
                       <p className="text-xs font-bold uppercase mb-2">Custom Pharmacy Order</p>
                       <div className="w-full flex gap-2">
                         <input 
                           type="text" 
-                          id="custom-med"
+                          value={customMedInput}
+                          onChange={(e) => setCustomMedInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && customMedInput) {
+                              handlePerformIntervention(2, `Administer ${customMedInput}`);
+                              setCustomMedInput('');
+                            }
+                          }}
                           placeholder="Drug Name (e.g. Norepinephrine)" 
                           className="flex-1 bg-white border border-clinical-line rounded p-2 text-xs focus:outline-none focus:border-clinical-blue"
                         />
                         <button 
                           onClick={() => {
-                            const input = document.getElementById('custom-med') as HTMLInputElement;
-                            if (input.value) {
-                              handlePerformIntervention(2, `Administer ${input.value}`);
-                              input.value = '';
+                            if (customMedInput) {
+                              handlePerformIntervention(2, `Administer ${customMedInput}`);
+                              setCustomMedInput('');
                             }
                           }}
                           className="bg-clinical-blue text-white px-4 py-2 rounded text-[10px] font-bold uppercase"
