@@ -86,6 +86,11 @@
   background: #A0AEBE;
 }
 
+/* Scrollbar corner */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -154,6 +159,18 @@
   border-radius: 4px;
 }
 
+/* Dark-mode skeleton uses theme colours */
+:root.dark .skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--clinical-line) 25%,
+    color-mix(in srgb, var(--clinical-line) 60%, var(--clinical-surface)) 50%,
+    var(--clinical-line) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
 /* Phase 4: Command palette */
 .command-palette-overlay {
   @apply fixed inset-0 bg-clinical-ink/40 backdrop-blur-sm z-[200] flex items-start justify-center pt-[15vh];
@@ -213,7 +230,8 @@
     background: #E8ECF1;
   }
 
-  .dark .skeleton {
+  :root.dark .skeleton {
+    animation: none;
     background: var(--clinical-line);
   }
 }
@@ -223,6 +241,14 @@
   outline: 2px solid var(--color-clinical-blue);
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* Tighter focus for small buttons */
+button:focus-visible,
+[role="option"]:focus-visible,
+[role="radio"]:focus-visible {
+  outline-width: 2px;
+  outline-offset: 1px;
 }
 
 /* Accessibility: Screen reader only utility */

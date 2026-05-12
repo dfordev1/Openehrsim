@@ -374,7 +374,7 @@ export function AssessmentTab({
                   className="px-8 py-2.5 bg-clinical-blue text-white rounded-lg font-medium text-sm hover:bg-clinical-blue/90 transition-all">
                   Next Patient
                 </button>
-                <CaseExport medicalCase={medicalCase} feedback={{ score, feedback: feedbackText }} logs={logs} />
+                <CaseExport medicalCase={medicalCase} feedback={{ score, feedback: feedbackText }} logs={logs} evaluation={evaluation} />
               </div>
             </div>
           )}

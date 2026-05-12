@@ -76,6 +76,37 @@ export function OrderPanel({
         ))}
       </div>
 
+      {/* ── Pending tests summary ──────────────────────────────────────── */}
+      {(() => {
+        const pending = orderedTests.filter(t => t.availableAt > currentSimTime);
+        if (!pending.length) return null;
+        return (
+          <div className="px-4 pb-3 -mt-1">
+            <div className="bg-clinical-amber/5 border border-clinical-amber/20 rounded-lg p-3">
+              <p className="text-[10px] font-semibold text-clinical-amber uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                <Clock className="w-3 h-3" />
+                {pending.length} result{pending.length !== 1 ? 's' : ''} pending
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {pending.map(t => {
+                  const eta = t.availableAt - currentSimTime;
+                  const pct = Math.max(0, Math.min(100, 100 - (eta / Math.max(1, t.availableAt - t.orderedAt)) * 100));
+                  return (
+                    <div key={t.name} className="flex items-center gap-1.5 bg-clinical-surface border border-clinical-line rounded-md px-2 py-1">
+                      <span className="text-[10px] font-medium text-clinical-ink">{t.name}</span>
+                      <span className="text-[9px] text-clinical-amber font-mono">+{eta}m</span>
+                      <div className="w-12 h-1 bg-clinical-line rounded-full overflow-hidden">
+                        <div className="h-full bg-clinical-amber rounded-full transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="p-4">
         <AnimatePresence mode="wait">
 

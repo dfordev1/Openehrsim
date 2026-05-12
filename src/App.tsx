@@ -542,6 +542,9 @@ function ClinicalSimulator() {
         onNewCase={() => setIsLibraryOpen(true)}
         onConsult={handleConsult}
         hasArchive={!!user}
+        onOrderTest={medicalCase ? handleOrderTest : undefined}
+        onAdminister={medicalCase ? (med) => handlePerformIntervention(2, `Administer ${med}`) : undefined}
+        onAdvanceTime={medicalCase ? handleAdvanceTime : undefined}
       />
 
       {/* ── Header ── */}
