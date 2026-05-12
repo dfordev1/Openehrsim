@@ -74,7 +74,7 @@ export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps)
             role="dialog"
             aria-modal="true"
             aria-label="Clinical Case Library"
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-5xl bg-white rounded-lg shadow-2xl z-[101] overflow-hidden max-h-[90vh] flex flex-col"
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-5xl bg-clinical-surface rounded-lg shadow-2xl z-[101] overflow-hidden max-h-[90vh] flex flex-col"
           >
             <div className="bg-clinical-surface border-b border-clinical-line p-4 md:p-6 flex justify-between items-center shrink-0">
               <div>
@@ -105,7 +105,7 @@ export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps)
                             "w-full text-left p-3 rounded-lg border transition-all",
                             selectedDifficulty === d.id
                               ? "bg-clinical-blue text-white border-clinical-blue shadow-md"
-                              : "bg-white border-clinical-line hover:border-clinical-blue/40 text-clinical-ink"
+                              : "bg-clinical-surface border-clinical-line hover:border-clinical-blue/40 text-clinical-ink"
                           )}
                         >
                           <div className="font-bold text-[10px] uppercase tracking-wider mb-0.5">{d.label}</div>
@@ -127,7 +127,7 @@ export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps)
                             "w-full text-left p-3 rounded-lg border transition-all flex flex-col gap-1",
                             selectedEnv === e.id
                               ? "bg-clinical-ink text-white border-clinical-ink shadow-md"
-                              : "bg-white border-clinical-line hover:border-clinical-ink/40 text-clinical-ink"
+                              : "bg-clinical-surface border-clinical-line hover:border-clinical-ink/40 text-clinical-ink"
                           )}
                         >
                           <div className="flex items-center gap-2">
@@ -189,7 +189,7 @@ export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps)
                   </div>
                 ) : recentCases.length > 0 ? (
                   recentCases.map((rc, i) => (
-                    <div key={i} className="min-w-[200px] bg-white border border-clinical-line rounded p-3 shadow-sm hover:border-clinical-blue transition-colors">
+                    <div key={i} className="min-w-[200px] bg-clinical-surface border border-clinical-line rounded p-3 shadow-sm hover:border-clinical-blue transition-colors">
                       <div className="flex justify-between items-start mb-2">
                         <span className="text-[10px] font-bold text-clinical-ink">{rc.category?.toUpperCase() || 'GENERAL'}</span>
                         <span className={cn(

@@ -63,7 +63,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             initial={{ opacity: 0, scale: 0.9, y: 40 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 40 }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-xl shadow-2xl z-[201] overflow-hidden"
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-clinical-surface rounded-xl shadow-2xl z-[201] overflow-hidden"
           >
             <div className="bg-clinical-surface border-b border-clinical-line p-8 text-center relative">
                <div className="w-16 h-16 bg-clinical-blue rounded-full flex items-center justify-center mx-auto mb-4 shadow-xl shadow-clinical-blue/20">
@@ -145,7 +145,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
             <div className="bg-clinical-bg p-4 flex items-center justify-center gap-3">
               <ShieldCheck className="w-3 h-3 text-clinical-slate opacity-40" />
-              <p className="text-[8px] text-clinical-slate uppercase font-bold tracking-widest opacity-60">End-to-End Encryption • HIPAA Complaint Protocols</p>
+              <p className="text-[8px] text-clinical-slate uppercase font-bold tracking-widest opacity-60">End-to-End Encryption • HIPAA Compliant Protocols</p>
             </div>
           </motion.div>
         </>
