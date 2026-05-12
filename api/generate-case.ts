@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import OpenAI from "openai";
-import { MEDICAL_CASE_SCHEMA } from "./_schema";
+import { MEDICAL_CASE_SCHEMA } from "../src/lib/schema";
 
 // Simple manual validation — no extra deps needed
 function validateRequest(body: any) {

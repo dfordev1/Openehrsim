@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import OpenAI from "openai";
-import { MEDICAL_CASE_SCHEMA } from "./_schema";
+import { MEDICAL_CASE_SCHEMA } from "../src/lib/schema";
 
 const VALID_TARGETS = [
   "Nursing Station",
