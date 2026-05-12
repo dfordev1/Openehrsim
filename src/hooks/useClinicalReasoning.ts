@@ -1,6 +1,15 @@
 import { useState, useCallback } from 'react';
 import type { ClinicalFinding, DifferentialEntry, WorkflowStage } from '../types';
 
+const STAGE_ORDER: WorkflowStage[] = [
+  'triage',
+  'history',
+  'exam',
+  'diagnostics',
+  'dxpause',
+  'management',
+];
+
 export function useClinicalReasoning() {
   // ── Problem Representation ──────────────────────────────────────────────────
   const [problemRepresentation, setProblemRepresentation] = useState('');
@@ -66,8 +75,14 @@ export function useClinicalReasoning() {
 
   const goToStage = useCallback((stage: WorkflowStage) => {
     setCurrentStage(prev => {
-      // Mark previous stage as completed
-      setCompletedStages(cs => cs.includes(prev) ? cs : [...cs, prev]);
+      if (prev === stage) return prev;
+      const prevIdx = STAGE_ORDER.indexOf(prev);
+      const nextIdx = STAGE_ORDER.indexOf(stage);
+      // Only mark the previous stage complete when advancing forward.
+      // Jumping backward (e.g. to re-review history) shouldn't stamp it as done.
+      if (nextIdx > prevIdx) {
+        setCompletedStages(cs => (cs.includes(prev) ? cs : [...cs, prev]));
+      }
       return stage;
     });
   }, []);

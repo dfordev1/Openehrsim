@@ -574,10 +574,16 @@ function ClinicalSimulator() {
         <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-1.5 hover:bg-clinical-bg rounded-md mr-3" aria-label="Menu">
           <Menu className="w-4 h-4 text-clinical-slate" />
         </button>
-        <span className="text-sm font-semibold text-clinical-ink mr-3 hidden sm:inline tracking-tight">OpenEHR</span>
+        <span className="text-sm font-semibold text-clinical-ink hidden sm:inline tracking-tight">OpenEHR</span>
+        <span className="w-px h-4 bg-clinical-line mx-3 hidden sm:inline-block" aria-hidden="true" />
         <div className="flex items-center gap-2 text-sm text-clinical-slate flex-1 min-w-0">
           <span className="font-medium text-clinical-ink truncate">{medicalCase?.patientName}</span>
-          <span className="text-xs text-clinical-slate/50 hidden md:inline">{medicalCase?.currentLocation}</span>
+          {medicalCase?.currentLocation && (
+            <>
+              <span className="text-clinical-line hidden md:inline" aria-hidden="true">·</span>
+              <span className="text-xs text-clinical-slate/70 hidden md:inline truncate">{medicalCase?.currentLocation}</span>
+            </>
+          )}
         </div>
         <div className="flex items-center gap-3 ml-auto">
           <button onClick={toggleDark} className="p-1.5 hover:bg-clinical-bg rounded-md transition-colors" aria-label={isDark ? 'Light mode' : 'Dark mode'}>
