@@ -131,19 +131,3 @@ export async function staffCall(
   }
 }
 
-// ── Legacy evaluate-diagnosis (kept for backward-compat) ─────────────────────
-
-export async function evaluateDiagnosis(
-  userDiagnosis: string,
-  medicalCase: MedicalCase
-): Promise<{ score: number; feedback: string }> {
-  try {
-    return await post("/api/evaluate-diagnosis", {
-      userDiagnosis,
-      medicalCase: trimCase(medicalCase),
-    });
-  } catch (err) {
-    Sentry.captureException(err, { tags: { endpoint: 'evaluate-diagnosis' } });
-    throw err;
-  }
-}

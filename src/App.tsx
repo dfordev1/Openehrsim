@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CaseEvaluation, MedicalCase, LabResult, ConsultantAdvice } from './types';
-import { generateMedicalCase, evaluateDiagnosis, performIntervention, staffCall, orderTest, endCase } from './services/geminiService';
+import { generateMedicalCase, performIntervention, staffCall, orderTest, endCase } from './services/geminiService';
 import { getConsultantAdvice } from './services/aiConsultantService';
 import { saveCCSResult, getRecentSimulations } from './services/storageService';
 import { getSupabase } from './lib/supabase';
