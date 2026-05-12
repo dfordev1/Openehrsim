@@ -77,15 +77,19 @@ export function TreatmentTab({
                 placeholder="e.g. Vancomycin 25 mg/kg IV q8h, O2 4L via NC, Insert Foley catheter..."
                 className="w-full h-24 bg-clinical-bg border border-clinical-line rounded-md p-3 text-sm focus:outline-none focus:border-clinical-blue/50 focus:ring-1 focus:ring-clinical-blue/30 resize-none"
               />
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex gap-2 flex-wrap">
                 <button onClick={onExecuteOrder} disabled={intervening || !interventionInput}
                   className="flex-1 py-2.5 bg-clinical-ink text-white rounded-md font-medium text-xs hover:bg-clinical-slate disabled:opacity-30 transition-all">
                   Execute Order
                 </button>
-                <button onClick={() => onWait(10)} disabled={intervening}
-                  className="px-4 border border-clinical-line text-clinical-slate rounded-md text-xs font-medium hover:bg-clinical-bg transition-all">
-                  Wait 10m
-                </button>
+                <div className="flex gap-1">
+                  {[5, 10, 15, 30].map((mins) => (
+                    <button key={mins} onClick={() => onWait(mins)} disabled={intervening}
+                      className="px-2.5 py-2 border border-clinical-line text-clinical-slate rounded-md text-[10px] font-medium hover:bg-clinical-bg hover:border-clinical-blue/40 hover:text-clinical-blue transition-all disabled:opacity-40 whitespace-nowrap">
+                      +{mins}m
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react';
 import { CaseEvaluation, MedicalCase } from "../types";
 
 function trimCase(mc: MedicalCase): Partial<MedicalCase> {
@@ -29,7 +30,12 @@ export async function generateMedicalCase(
   history?: any[],
   environment?: string
 ): Promise<MedicalCase> {
-  return post("/api/generate-case", { difficulty, category, history, environment });
+  try {
+    return await post("/api/generate-case", { difficulty, category, history, environment });
+  } catch (err) {
+    Sentry.captureException(err, { tags: { endpoint: 'generate-case', difficulty, category } });
+    throw err;
+  }
 }
 
 // ── Intervention / time-advance ──────────────────────────────────────────────
@@ -39,11 +45,19 @@ export async function performIntervention(
   medicalCase: MedicalCase,
   waitTime = 5
 ): Promise<MedicalCase> {
-  return post("/api/perform-intervention", {
-    intervention,
-    medicalCase: trimCase(medicalCase),
-    waitTime,
-  });
+  try {
+    return await post("/api/perform-intervention", {
+      intervention,
+      medicalCase: trimCase(medicalCase),
+      waitTime,
+    });
+  } catch (err) {
+    Sentry.captureException(err, {
+      tags: { endpoint: 'perform-intervention' },
+      extra: { intervention, waitTime, caseId: medicalCase.id },
+    });
+    throw err;
+  }
 }
 
 // ── CCS: order a test ────────────────────────────────────────────────────────
@@ -55,7 +69,12 @@ export async function orderTest(
   currentSimTime: number,
   priority: "stat" | "routine" = "stat"
 ): Promise<{ success: boolean; testResult: any; action: any; message: string }> {
-  return post("/api/order-test", { caseId, testType, testName, currentSimTime, priority });
+  try {
+    return await post("/api/order-test", { caseId, testType, testName, currentSimTime, priority });
+  } catch (err) {
+    Sentry.captureException(err, { tags: { endpoint: 'order-test', testType, testName } });
+    throw err;
+  }
 }
 
 // ── CCS: end case & score ────────────────────────────────────────────────────
@@ -65,11 +84,16 @@ export async function endCase(
   medicalCase: MedicalCase,
   userNotes?: string
 ): Promise<CaseEvaluation> {
-  return post("/api/end-case", {
-    caseId,
-    medicalCase: trimCase(medicalCase),
-    userNotes,
-  });
+  try {
+    return await post("/api/end-case", {
+      caseId,
+      medicalCase: trimCase(medicalCase),
+      userNotes,
+    });
+  } catch (err) {
+    Sentry.captureException(err, { tags: { endpoint: 'end-case' }, extra: { caseId } });
+    throw err;
+  }
 }
 
 // ── Staff comms ──────────────────────────────────────────────────────────────
@@ -79,7 +103,12 @@ export async function staffCall(
   message: string,
   medicalCase: MedicalCase
 ): Promise<{ reply: string; updatedCase: MedicalCase }> {
-  return post("/api/staff-call", { target, message, medicalCase: trimCase(medicalCase) });
+  try {
+    return await post("/api/staff-call", { target, message, medicalCase: trimCase(medicalCase) });
+  } catch (err) {
+    Sentry.captureException(err, { tags: { endpoint: 'staff-call', target } });
+    throw err;
+  }
 }
 
 // ── Legacy evaluate-diagnosis (kept for backward-compat) ─────────────────────
@@ -88,8 +117,13 @@ export async function evaluateDiagnosis(
   userDiagnosis: string,
   medicalCase: MedicalCase
 ): Promise<{ score: number; feedback: string }> {
-  return post("/api/evaluate-diagnosis", {
-    userDiagnosis,
-    medicalCase: trimCase(medicalCase),
-  });
+  try {
+    return await post("/api/evaluate-diagnosis", {
+      userDiagnosis,
+      medicalCase: trimCase(medicalCase),
+    });
+  } catch (err) {
+    Sentry.captureException(err, { tags: { endpoint: 'evaluate-diagnosis' } });
+    throw err;
+  }
 }
