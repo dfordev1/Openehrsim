@@ -296,17 +296,12 @@ Message: ${message}.`,
   });
 
   // ── POST /api/consult ───────────────────────────────────────────────────────
+  // Uses Gemini if GEMINI_API_KEY is set, otherwise falls back to DeepSeek.
   app.post("/api/consult", async (req, res) => {
     try {
       const medicalCase = requireObject(req.body?.medicalCase, "medicalCase") as any;
 
-      if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY.includes("MY_")) {
-        return res.status(500).json({ error: "GEMINI_API_KEY is not configured in Secrets." });
-      }
-
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-      // Only send relevant clinical info for consultation
+      // Trim to only clinically relevant fields to keep prompt lean
       const trimmedCase = {
         patientName: medicalCase.patientName,
         age: medicalCase.age,
@@ -329,40 +324,62 @@ Message: ${message}.`,
         communicationLog: (medicalCase.communicationLog || []).slice(-5),
       };
 
-      const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash-lite",
-        contents: `Analyze the following medical case and provide consultant-level advice.
-State the current most likely differential diagnosis, reasoning, and suggest the top 3 immediate next steps.
+      const consultPrompt = `Analyze the following medical case and provide consultant-level advice.
+State the current most likely differential diagnosis, the underlying clinical reasoning, and suggest the top 3 immediate next steps.
+Return ONLY a JSON object with this exact shape:
+{ "advice": string, "reasoning": string, "recommendedActions": string[] }
 
-Case: ${JSON.stringify(trimmedCase)}`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              advice: {
-                type: Type.STRING,
-                description: "A high-level clinical summary and recommendation.",
+Case: ${JSON.stringify(trimmedCase)}`;
+
+      const geminiAvailable =
+        process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes("MY_");
+
+      if (geminiAvailable) {
+        // ── Gemini path ──────────────────────────────────────────────────────
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+        const response = await ai.models.generateContent({
+          model: "gemini-2.0-flash-lite",
+          contents: consultPrompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                advice: { type: Type.STRING },
+                reasoning: { type: Type.STRING },
+                recommendedActions: { type: Type.ARRAY, items: { type: Type.STRING } },
               },
-              reasoning: {
-                type: Type.STRING,
-                description: "The underlying pathophysiological or clinical reasoning.",
-              },
-              recommendedActions: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-                description: "A list of urgent next steps or orders.",
-              },
+              required: ["advice", "reasoning", "recommendedActions"],
             },
-            required: ["advice", "reasoning", "recommendedActions"],
           },
-        },
+        });
+        const text = response.text;
+        if (!text) throw new Error("Consultant was unable to provide advice.");
+        return res.json(JSON.parse(text));
+      }
+
+      // ── DeepSeek fallback ────────────────────────────────────────────────
+      if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY.includes("MY_")) {
+        return res.status(500).json({ error: "No AI API key is configured. Set DEEPSEEK_API_KEY or GEMINI_API_KEY." });
+      }
+
+      const dsResponse = await openai.chat.completions.create({
+        model: "deepseek-chat",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a senior specialist consultant. Analyze the medical case provided and return ONLY a valid JSON object with keys: advice (string), reasoning (string), recommendedActions (array of strings).",
+          },
+          { role: "user", content: consultPrompt },
+        ],
+        response_format: { type: "json_object" },
       });
 
-      const text = response.text;
-      if (!text) throw new Error("Consultant was unable to provide advice.");
+      const dsContent = dsResponse.choices[0].message.content;
+      if (!dsContent) throw new Error("Consultant was unable to provide advice.");
 
-      res.json(JSON.parse(text));
+      res.json(JSON.parse(dsContent));
     } catch (error: any) {
       console.error("Consult Error:", error);
       res.status(500).json({ error: error.message || "Consultant is currently unavailable." });
