@@ -1,0 +1,11 @@
+{
+  "buildCommand": "vite build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/api/generate-case", "destination": "/api/generate-case" },
+    { "source": "/api/perform-intervention", "destination": "/api/perform-intervention" },
+    { "source": "/api/evaluate-diagnosis", "destination": "/api/evaluate-diagnosis" },
+    { "source": "/api/staff-call", "destination": "/api/staff-call" }
+  ]
+}
