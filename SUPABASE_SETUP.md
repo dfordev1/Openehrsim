@@ -1,43 +1,91 @@
-# Supabase Setup Instructions
+# Supabase Setup — OpenEHR Sim
 
-Run the following SQL in your Supabase SQL Editor to initialize the persistence layer for the Clinical Simulator.
+Run the following SQL in your **Supabase SQL Editor** to initialise the persistence layer.
+
+---
+
+## 1. `simulation_results` — scored cases
 
 ```sql
--- Create the simulation_results table
-create table simulation_results (
-  id uuid default gen_random_uuid() primary key,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  user_id uuid references auth.users(id),
-  case_id text,
-  patient_name text,
-  age int,
-  category text,
-  difficulty text,
-  user_diagnosis text,
-  correct_diagnosis text,
-  score int,
-  feedback text,
-  simulation_time int,
-  clinical_actions jsonb,
-  medications jsonb
+create table if not exists simulation_results (
+  id                   uuid default gen_random_uuid() primary key,
+  created_at           timestamptz default timezone('utc', now()) not null,
+  user_id              uuid references auth.users(id),
+  case_id              text,
+  patient_name         text,
+  age                  int,
+  category             text,
+  difficulty           text,
+  user_diagnosis       text,
+  correct_diagnosis    text,
+  score                int,
+  feedback             text,
+  simulation_time      int,
+  clinical_actions     jsonb,
+  medications          jsonb,
+  -- CCS management-score columns (added by this migration)
+  management_breakdown jsonb,   -- { initialManagement, diagnosticWorkup, therapeuticInterventions, patientOutcome, efficiencyPenalty }
+  key_actions          jsonb,   -- string[]
+  clinical_pearl       text
 );
 
--- Enable RLS (Optional for now, but recommended for production)
 alter table simulation_results enable row level security;
 
--- Create policy to allow authenticated users to insert their own results
-create policy "Allow authenticated inserts" 
-  on simulation_results for insert 
+create policy "insert own results"
+  on simulation_results for insert
   with check (auth.uid() = user_id or user_id is null);
 
--- Create policy to allow user to read their own results
-create policy "Allow users to read own results" 
-  on simulation_results for select 
+create policy "read own results"
+  on simulation_results for select
   using (auth.uid() = user_id or user_id is null);
 ```
 
-## Direct Database Access
-You can also connect to your database directly using the connection string Provided:
-`postgresql://postgres:[YOUR-PASSWORD]@db.zkvntxnkmwwaernlzjky.supabase.co:5432/postgres`
+---
 
-Use a tool like **DBeaver**, **pgAdmin**, or the **Supabase SQL Editor** to run migrations or inspect data for research purposes.
+## 2. `active_cases` — in-flight CCS sessions (**new**)
+
+Stores the full case (including hidden `correctDiagnosis`) server-side so that
+every Vercel serverless function instance can access it — no in-memory globals.
+
+```sql
+create table if not exists active_cases (
+  id          text primary key,             -- matches MedicalCase.id
+  full_case   jsonb not null,               -- entire case including answer key
+  created_at  timestamptz default timezone('utc', now()) not null,
+  expires_at  timestamptz not null          -- auto-set to created_at + 2 hours
+);
+
+-- Auto-delete expired sessions (run once, keeps the table clean)
+create index if not exists active_cases_expires_idx on active_cases (expires_at);
+
+-- RLS: service-role key bypasses this; anon / logged-in users cannot read raw cases
+alter table active_cases enable row level security;
+
+-- No SELECT/INSERT/UPDATE/DELETE policies for end-users intentionally.
+-- Only the service-role key (used in API routes) may access this table.
+```
+
+> **Tip:** Set up a Supabase Edge Function or a pg_cron job to purge expired rows:
+> ```sql
+> delete from active_cases where expires_at < now();
+> ```
+
+---
+
+## 3. Environment variables
+
+### Vercel (server-side — API routes)
+| Variable | Where to find it |
+|---|---|
+| `SUPABASE_URL` | Project Settings → API → Project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Project Settings → API → `service_role` secret |
+| `DEEPSEEK_API_KEY` | DeepSeek dashboard |
+
+### Vercel / local (client-side — Vite)
+| Variable | Where to find it |
+|---|---|
+| `VITE_SUPABASE_URL` | same as `SUPABASE_URL` |
+| `VITE_SUPABASE_ANON_KEY` | Project Settings → API → `anon` public key |
+
+> `SUPABASE_SERVICE_ROLE_KEY` is **never** exposed to the browser.
+> It is only used in server-side API routes via `api/_supabase.ts`.

@@ -1,142 +1,125 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-
 /**
- * CCS-Style Order Test Endpoint
- * 
- * Handles ordering of labs and imaging studies.
- * Sets orderedAt timestamp and calculates availableAt based on:
- * - Test type (labs faster than imaging)
- * - Location (tertiary faster than rural)
- * - Stat vs routine
+ * CCS-style order endpoint.
+ * Looks up the test result from the server-side full case,
+ * stamps orderedAt / availableAt, returns to client.
+ * Does NOT reveal the result until availableAt <= simulationTime.
  */
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { getCaseServerSide } from "./_supabase.js";
 
-interface OrderTestRequest {
-  caseId: string;
-  testType: 'lab' | 'imaging';
-  testName: string;
-  priority?: 'stat' | 'routine';
-  currentSimTime: number;
-}
-
-// Test processing times (in minutes)
-const TEST_DELAYS = {
+// Stat turnaround times in minutes (realistic ER estimates)
+const TURNAROUND: Record<string, { stat: number; routine: number }> = {
   // Labs
-  'CBC': { stat: 15, routine: 30 },
-  'BMP': { stat: 15, routine: 30 },
-  'Troponin': { stat: 20, routine: 45 },
-  'Lactate': { stat: 10, routine: 20 },
-  'Blood Culture': { stat: 30, routine: 60 },  // Initial gram stain
-  'ABG': { stat: 5, routine: 15 },
-  'Coagulation Panel': { stat: 20, routine: 40 },
-  'LFTs': { stat: 20, routine: 45 },
-  'Lipase': { stat: 20, routine: 45 },
-  'Urinalysis': { stat: 15, routine: 30 },
-  'Drug Screen': { stat: 30, routine: 60 },
-  
+  "CBC":                { stat: 15, routine: 30 },
+  "BMP":                { stat: 15, routine: 30 },
+  "CMP":                { stat: 20, routine: 45 },
+  "Troponin":           { stat: 20, routine: 45 },
+  "Lactate":            { stat: 10, routine: 20 },
+  "Blood Culture":      { stat: 30, routine: 60 },
+  "ABG":                { stat:  5, routine: 15 },
+  "Coagulation Panel":  { stat: 20, routine: 40 },
+  "LFTs":               { stat: 20, routine: 45 },
+  "Lipase":             { stat: 20, routine: 45 },
+  "Urinalysis":         { stat: 15, routine: 30 },
+  "Drug Screen":        { stat: 30, routine: 60 },
+  "TSH":                { stat: 30, routine: 60 },
+  "Procalcitonin":      { stat: 25, routine: 50 },
+  "D-Dimer":            { stat: 20, routine: 40 },
+  "BNP":                { stat: 20, routine: 40 },
   // Imaging
-  'Chest X-ray': { stat: 20, routine: 45 },
-  'CT Head': { stat: 30, routine: 60 },
-  'CT Chest': { stat: 30, routine: 60 },
-  'CT Abdomen/Pelvis': { stat: 35, routine: 70 },
-  'Ultrasound': { stat: 25, routine: 50 },
-  'ECG': { stat: 5, routine: 10 },
-  'Echocardiogram': { stat: 30, routine: 60 },
+  "ECG":                { stat:  5, routine: 10 },
+  "Chest X-ray":        { stat: 20, routine: 45 },
+  "CT Head":            { stat: 30, routine: 60 },
+  "CT Chest":           { stat: 30, routine: 60 },
+  "CT Abdomen/Pelvis":  { stat: 35, routine: 70 },
+  "CT PE Protocol":     { stat: 35, routine: 70 },
+  "Ultrasound":         { stat: 25, routine: 50 },
+  "Echocardiogram":     { stat: 30, routine: 60 },
+  "MRI Brain":          { stat: 45, routine: 90 },
 };
 
-function validateRequest(body: any): OrderTestRequest {
-  if (!body || typeof body !== "object") {
-    throw new Error("Request body must be a JSON object.");
-  }
-  if (!body.caseId || typeof body.caseId !== "string") {
-    throw new Error("Missing or invalid field: caseId");
-  }
-  if (!body.testType || !['lab', 'imaging'].includes(body.testType)) {
-    throw new Error("Invalid testType. Must be 'lab' or 'imaging'.");
-  }
-  if (!body.testName || typeof body.testName !== "string") {
-    throw new Error("Missing or invalid field: testName");
-  }
-  if (body.currentSimTime === undefined || typeof body.currentSimTime !== "number") {
-    throw new Error("Missing or invalid field: currentSimTime");
-  }
-  
+function validateRequest(body: any) {
+  if (!body || typeof body !== "object") throw new Error("Request body must be a JSON object.");
+  if (!body.caseId || typeof body.caseId !== "string") throw new Error("Missing: caseId");
+  if (!["lab","imaging"].includes(body.testType))        throw new Error("Invalid testType");
+  if (!body.testName || typeof body.testName !== "string") throw new Error("Missing: testName");
+  if (typeof body.currentSimTime !== "number")           throw new Error("Missing: currentSimTime");
   return {
-    caseId: body.caseId,
-    testType: body.testType,
-    testName: body.testName,
-    priority: body.priority || 'stat',  // Default to stat in ER
-    currentSimTime: body.currentSimTime,
+    caseId:         body.caseId         as string,
+    testType:       body.testType       as "lab" | "imaging",
+    testName:       body.testName       as string,
+    currentSimTime: body.currentSimTime as number,
+    priority:       (body.priority === "routine" ? "routine" : "stat") as "stat" | "routine",
   };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    const { caseId, testType, testName, priority, currentSimTime } = validateRequest(req.body);
+    const { caseId, testType, testName, currentSimTime, priority } = validateRequest(req.body);
 
-    // Retrieve the full case from storage
-    if (!global.casesStore || !global.casesStore.has(caseId)) {
-      return res.status(404).json({ error: "Case not found. Please start a new case." });
-    }
-
-    const fullCase = global.casesStore.get(caseId);
-
-    // Calculate delay
-    const delays = TEST_DELAYS[testName as keyof typeof TEST_DELAYS];
+    // Turnaround lookup
+    const delays = TURNAROUND[testName];
     if (!delays) {
-      return res.status(400).json({ 
-        error: `Unknown test: ${testName}. Available tests: ${Object.keys(TEST_DELAYS).join(', ')}` 
+      return res.status(400).json({
+        error: `Unknown test "${testName}". Available: ${Object.keys(TURNAROUND).join(", ")}`,
       });
     }
 
-    const delay = priority === 'stat' ? delays.stat : delays.routine;
-    const orderedAt = currentSimTime;
-    const availableAt = currentSimTime + delay;
+    const orderedAt   = currentSimTime;
+    const availableAt = currentSimTime + delays[priority];
 
-    // Find the test result from the full case
-    let testResult;
-    if (testType === 'lab') {
-      testResult = fullCase.labs.find((lab: any) => lab.name === testName);
-      if (!testResult) {
-        return res.status(400).json({ error: `Lab test "${testName}" not available for this case.` });
-      }
-      testResult = {
-        ...testResult,
-        orderedAt,
-        availableAt,
-      };
-    } else {
-      testResult = fullCase.imaging.find((img: any) => img.type === testName);
-      if (!testResult) {
-        return res.status(400).json({ error: `Imaging test "${testName}" not available for this case.` });
-      }
-      testResult = {
-        ...testResult,
-        orderedAt,
-        availableAt,
-      };
+    // Retrieve full case to get the pre-generated result
+    const fullCase = await getCaseServerSide(caseId);
+    if (!fullCase) {
+      return res.status(404).json({ error: "Case not found. Please start a new case." });
     }
 
-    // Add to clinical actions
+    let result: any;
+    if (testType === "lab") {
+      const match = (fullCase.labs || []).find(
+        (l: any) => l.name.toLowerCase() === testName.toLowerCase()
+      );
+      if (!match) {
+        // AI may have used a slightly different name — return a pending placeholder
+        result = {
+          name: testName, value: "Pending", unit: "", normalRange: "", status: "normal",
+          orderedAt, availableAt,
+        };
+      } else {
+        result = { ...match, orderedAt, availableAt };
+      }
+    } else {
+      const match = (fullCase.imaging || []).find(
+        (i: any) => i.type.toLowerCase() === testName.toLowerCase()
+      );
+      if (!match) {
+        result = {
+          type: testName, findings: "Pending read", impression: "Pending",
+          orderedAt, availableAt,
+        };
+      } else {
+        result = { ...match, orderedAt, availableAt };
+      }
+    }
+
     const action = {
-      id: `action-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      timestamp: currentSimTime,
-      type: 'order',
-      description: `Ordered ${testName} (${priority})`,
-      result: `Results expected at T+${availableAt} min`,
+      id:          `action-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      timestamp:   currentSimTime,
+      type:        "order",
+      description: `Ordered ${testName} (${priority.toUpperCase()})`,
+      result:      `Results expected at T+${availableAt} min`,
     };
 
     res.json({
-      success: true,
-      testResult,
+      success:     true,
+      testResult:  result,
       action,
-      message: `${testName} ordered. Results available at simulation time ${availableAt} minutes.`,
+      message:     `${testName} ordered. Results available at T+${availableAt} min.`,
     });
-  } catch (error: any) {
-    console.error("Order Test Error:", error);
-    res.status(500).json({ error: error.message || "Failed to order test." });
+  } catch (err: any) {
+    console.error("order-test error:", err);
+    res.status(500).json({ error: err.message || "Failed to order test." });
   }
 }

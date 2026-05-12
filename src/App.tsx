@@ -31,10 +31,10 @@ import {
   Zap,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MedicalCase, Vitals, LabResult, ConsultantAdvice } from './types';
-import { generateMedicalCase, evaluateDiagnosis, performIntervention, staffCall } from './services/geminiService';
+import { CaseEvaluation, MedicalCase, LabResult, ConsultantAdvice } from './types';
+import { generateMedicalCase, evaluateDiagnosis, performIntervention, staffCall, orderTest, endCase } from './services/geminiService';
 import { getConsultantAdvice } from './services/aiConsultantService';
-import { saveSimulationResult, getRecentSimulations } from './services/storageService';
+import { saveCCSResult, getRecentSimulations } from './services/storageService';
 import { getSupabase } from './lib/supabase';
 import type { User } from './lib/supabase';
 import { cn } from './lib/utils';
@@ -135,10 +135,11 @@ function ClinicalSimulator() {
   const [interventionInput, setInterventionInput] = useState('');
   const [intervening, setIntervening] = useState(false);
 
-  // ── Diagnosis ─────────────────────────────────────────────────────────────
-  const [userDiagnosis, setUserDiagnosis] = useState('');
-  const [feedback, setFeedback] = useState<{ score: number; feedback: string } | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  // ── Diagnosis / CCS evaluation ───────────────────────────────────────────
+  const [userNotes, setUserNotes]       = useState('');
+  const [evaluation, setEvaluation]     = useState<CaseEvaluation | null>(null);
+  const [feedback, setFeedback]         = useState<{ score: number; feedback: string } | null>(null);
+  const [submitting, setSubmitting]     = useState(false);
 
   // ── Comms ─────────────────────────────────────────────────────────────────
   const [callTarget, setCallTarget] = useState('Nursing Station');
@@ -242,8 +243,9 @@ function ClinicalSimulator() {
   const loadNewCase = useCallback(async (difficulty?: string, category?: string, environment?: string) => {
     setLoading(true);
     setError(null);
+    setEvaluation(null);
     setFeedback(null);
-    setUserDiagnosis('');
+    setUserNotes('');
     setRevealedStudies([]);
     setPatientOutcome(null);
     setSelectedLab(null);
@@ -339,23 +341,6 @@ function ClinicalSimulator() {
     }
   };
 
-  // ── Diagnosis handler ─────────────────────────────────────────────────────
-  const handleSubmitDiagnosis = async () => {
-    if (!medicalCase || !userDiagnosis) return;
-    setSubmitting(true);
-    try {
-      const result = await evaluateDiagnosis(userDiagnosis, medicalCase);
-      setFeedback(result);
-      setLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), text: `DIAGNOSIS FILED: ${userDiagnosis}` }]);
-      saveSimulationResult(medicalCase, userDiagnosis, result.score, result.feedback).catch(console.error);
-      addToast(`Diagnosis submitted — Score: ${result.score}/100`, 'success');
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   // ── Staff call handler ────────────────────────────────────────────────────
   const handleStaffCall = async () => {
     if (!medicalCase || !callMessage) return;
@@ -396,112 +381,63 @@ function ClinicalSimulator() {
     }
   };
 
-  // ── CCS-STYLE HANDLERS ────────────────────────────────────────────────────
-  const handleOrderTest = async (testType: 'lab' | 'imaging', testName: string) => {
+  // ── CCS: order a test ─────────────────────────────────────────────────────
+  const handleOrderTest = async (type: 'lab' | 'imaging', name: string) => {
     if (!medicalCase || intervening) return;
     setIntervening(true);
-    setLogs((prev) => [
-      ...prev,
-      { time: new Date().toLocaleTimeString(), text: `ORDERED: ${testName} (${testType})` },
-    ]);
-    
+    setLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), text: `ORDER: ${name}` }]);
     try {
-      const { orderTest } = await import('./services/geminiService');
-      const result = await orderTest(
-        medicalCase.id,
-        testType,
-        testName,
-        medicalCase.simulationTime,
-        'stat'
-      );
-      
-      // Add the ordered test to the medical case
-      if (testType === 'lab') {
-        setMedicalCase(prev => prev ? {
-          ...prev,
-          labs: [...(prev.labs || []), result.testResult],
-          clinicalActions: [...(prev.clinicalActions || []), result.action],
-        } : prev);
-      } else {
-        setMedicalCase(prev => prev ? {
-          ...prev,
-          imaging: [...(prev.imaging || []), result.testResult],
-          clinicalActions: [...(prev.clinicalActions || []), result.action],
-        } : prev);
-      }
-      
+      const result = await orderTest(medicalCase.id, type, name, medicalCase.simulationTime, 'stat');
+      setMedicalCase((prev) => {
+        if (!prev) return prev;
+        return type === 'lab'
+          ? { ...prev, labs:    [...(prev.labs    || []), result.testResult], clinicalActions: [...(prev.clinicalActions || []), result.action] }
+          : { ...prev, imaging: [...(prev.imaging || []), result.testResult], clinicalActions: [...(prev.clinicalActions || []), result.action] };
+      });
       addToast(result.message, 'success');
     } catch (err: any) {
-      console.error('Order test failed:', err);
       addToast(err.message || 'Failed to order test', 'error');
     } finally {
       setIntervening(false);
     }
   };
 
+  // ── CCS: advance time ─────────────────────────────────────────────────────
   const handleAdvanceTime = async (minutes: number) => {
     if (!medicalCase || intervening) return;
-    pushUndo(`Advance time +${minutes}min`, medicalCase);
+    pushUndo(`Advance +${minutes}m`, medicalCase);
     setIntervening(true);
-    setLogs((prev) => [
-      ...prev,
-      { time: new Date().toLocaleTimeString(), text: `TIME ADVANCE: +${minutes} minutes` },
-    ]);
-    
+    setLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), text: `ADVANCE TIME: +${minutes} min` }]);
     try {
-      // Call perform-intervention with empty intervention (pure time advance)
       const updated = await performIntervention('', medicalCase, minutes);
-      setMedicalCase(updated);
-      
-      // Check if any tests became available
-      const newlyAvailable = [
-        ...(updated.labs || []).filter(l => 
-          l.availableAt && l.availableAt <= updated.simulationTime && 
-          l.orderedAt && l.orderedAt > (medicalCase.simulationTime || 0)
-        ),
-        ...(updated.imaging || []).filter(i => 
-          i.availableAt && i.availableAt <= updated.simulationTime &&
-          i.orderedAt && i.orderedAt > (medicalCase.simulationTime || 0)
-        ),
-      ];
-      
-      if (newlyAvailable.length > 0) {
-        addToast(`${newlyAvailable.length} test result(s) now available`, 'info');
+      setMedicalCase((prev) => prev
+        ? { ...prev, ...updated, labs: updated.labs ?? prev.labs, imaging: updated.imaging ?? prev.imaging, availableTests: prev.availableTests }
+        : updated);
+      if (updated.patientOutcome && updated.patientOutcome !== 'alive') {
+        setPatientOutcome(updated.patientOutcome);
+        addToast(updated.patientOutcome === 'deceased' ? '⚠️ Patient has expired.' : '🔴 Critical deterioration.', 'error');
       }
-      
-      addToast(`Time advanced to T+${updated.simulationTime} min`, 'success');
+      addToast(`Clock → T+${updated.simulationTime} min`, 'success');
     } catch (err: any) {
-      console.error('Time advance failed:', err);
       addToast(err.message || 'Failed to advance time', 'error');
     } finally {
       setIntervening(false);
     }
   };
 
+  // ── CCS: end case & score ─────────────────────────────────────────────────
   const handleEndCase = async () => {
     if (!medicalCase || submitting) return;
     setSubmitting(true);
-    
+    setLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), text: 'CASE CLOSED — scoring...' }]);
     try {
-      const { endCase } = await import('./services/geminiService');
-      const result = await endCase(medicalCase.id, medicalCase, userDiagnosis);
-      
-      // Convert to feedback format for compatibility with existing UI
-      setFeedback({
-        score: result.score,
-        feedback: result.feedback,
-      });
-      
-      setLogs((prev) => [
-        ...prev,
-        { time: new Date().toLocaleTimeString(), text: `CASE CLOSED: Score ${result.score}/100` },
-      ]);
-      
-      saveSimulationResult(medicalCase, userDiagnosis, result.score, result.feedback).catch(console.error);
-      addToast(`Case completed — Score: ${result.score}/100`, 'success');
+      const result = await endCase(medicalCase.id, medicalCase, userNotes);
+      setEvaluation(result);
+      setLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), text: `SCORE: ${result.score}/100` }]);
+      saveCCSResult(medicalCase, result).catch(console.error);
+      addToast(`Case scored — ${result.score}/100`, 'success');
     } catch (err: any) {
-      console.error('End case failed:', err);
-      addToast(err.message || 'Failed to end case', 'error');
+      addToast(err.message || 'Scoring failed', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -744,7 +680,7 @@ function ClinicalSimulator() {
                 simTime={simTime}
                 selectedLab={selectedLab}
                 onSelectLab={setSelectedLab}
-                onOrderLab={(name) => handleOrderDiagnostic('lab', name)}
+                onOrderLab={(name) => handleOrderTest('lab', name)}
               />
             )}
 
@@ -755,7 +691,7 @@ function ClinicalSimulator() {
                 simTime={simTime}
                 revealedStudies={revealedStudies}
                 onRevealStudy={(type) => setRevealedStudies(prev => [...prev, type])}
-                onOrderImaging={(name) => handleOrderDiagnostic('imaging', name)}
+                onOrderImaging={(name) => handleOrderTest('imaging', name)}
               />
             )}
 
@@ -792,7 +728,7 @@ function ClinicalSimulator() {
                 transferExpanded={transferExpanded}
                 onInterventionChange={setInterventionInput}
                 onExecuteOrder={() => handlePerformIntervention()}
-                onWait={(mins) => handlePerformIntervention(mins, mins === 10 ? 'Observe patient' : mins === 15 ? 'Observe patient' : 'Periodic monitoring')}
+                onWait={(mins) => handlePerformIntervention(mins, 'Observe patient')}
                 onTransfer={(dept) => handlePerformIntervention(0, `Transfer to ${dept}`)}
                 onToggleTransfer={() => setTransferExpanded(p => !p)}
                 onOrderTest={handleOrderTest}
@@ -805,12 +741,12 @@ function ClinicalSimulator() {
                 key="assess"
                 medicalCase={medicalCase}
                 simTime={simTime}
-                userDiagnosis={userDiagnosis}
+                userNotes={userNotes}
+                evaluation={evaluation}
                 feedback={feedback}
                 submitting={submitting}
                 logs={logs}
-                onDiagnosisChange={setUserDiagnosis}
-                onSubmit={handleSubmitDiagnosis}
+                onNotesChange={setUserNotes}
                 onEndCase={handleEndCase}
                 onNewCase={() => loadNewCase()}
               />

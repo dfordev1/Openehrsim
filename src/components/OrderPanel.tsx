@@ -1,150 +1,113 @@
 import React, { useState } from 'react';
-import { FlaskConical, Camera, Clock, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Camera, CheckCircle2, Clock, FlaskConical, Loader2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 
+interface OrderedTest {
+  name: string;
+  type: 'lab' | 'imaging';
+  orderedAt: number;
+  availableAt: number;
+}
+
 interface OrderPanelProps {
-  availableTests: {
-    labs: string[];
-    imaging: string[];
-  };
+  availableTests: { labs: string[]; imaging: string[] };
   currentSimTime: number;
   onOrderTest: (testType: 'lab' | 'imaging', testName: string) => Promise<void>;
   onAdvanceTime: (minutes: number) => Promise<void>;
-  orderedTests: Array<{ name: string; type: 'lab' | 'imaging'; availableAt: number; orderedAt: number }>;
+  orderedTests: OrderedTest[];
   isProcessing: boolean;
 }
 
-export function OrderPanel({ 
-  availableTests, 
-  currentSimTime, 
-  onOrderTest, 
+type Tab = 'labs' | 'imaging' | 'time';
+
+export function OrderPanel({
+  availableTests,
+  currentSimTime,
+  onOrderTest,
   onAdvanceTime,
   orderedTests,
-  isProcessing 
+  isProcessing,
 }: OrderPanelProps) {
-  const [selectedTab, setSelectedTab] = useState<'labs' | 'imaging' | 'time'>('labs');
-  const [selectedTest, setSelectedTest] = useState<string | null>(null);
-  const [customTime, setCustomTime] = useState<number>(15);
+  const [tab, setTab]             = useState<Tab>('labs');
+  const [loadingTest, setLoading] = useState<string | null>(null);
+  const [customMin, setCustomMin] = useState(15);
 
-  const handleOrderTest = async (testName: string, testType: 'lab' | 'imaging') => {
-    setSelectedTest(testName);
-    try {
-      await onOrderTest(testType, testName);
-    } finally {
-      setSelectedTest(null);
-    }
+  const handleOrder = async (type: 'lab' | 'imaging', name: string) => {
+    setLoading(name);
+    try { await onOrderTest(type, name); }
+    finally { setLoading(null); }
   };
 
-  const isTestOrdered = (testName: string) => {
-    return orderedTests.some(t => t.name === testName);
+  const statusOf = (name: string) => {
+    const t = orderedTests.find((x) => x.name === name);
+    if (!t) return null;
+    if (t.availableAt <= currentSimTime) return 'ready';
+    return `${t.availableAt - currentSimTime} min`;
   };
 
-  const getTestStatus = (testName: string) => {
-    const test = orderedTests.find(t => t.name === testName);
-    if (!test) return null;
-    
-    if (test.availableAt <= currentSimTime) {
-      return { status: 'ready', text: 'Results Ready', color: 'text-green-600' };
-    } else {
-      const timeLeft = test.availableAt - currentSimTime;
-      return { status: 'pending', text: `${timeLeft} min`, color: 'text-amber-600' };
-    }
-  };
+  const timeDisplay = `${Math.floor(currentSimTime / 60)}:${String(currentSimTime % 60).padStart(2, '0')}`;
 
   return (
     <div className="panel">
       <div className="panel-header">
-        <span className="panel-title">Order Tests & Advance Time</span>
-        <span className="text-xs text-clinical-blue font-mono">T+{currentSimTime} min</span>
+        <span className="panel-title">Order Entry &amp; Time</span>
+        <span className="text-xs font-mono text-clinical-blue">T+{currentSimTime} min</span>
       </div>
 
-      {/* Tabs */}
+      {/* Tab bar */}
       <div className="flex border-b border-clinical-line">
-        <button
-          onClick={() => setSelectedTab('labs')}
-          className={cn(
-            'flex-1 px-4 py-2.5 text-xs font-medium transition-all',
-            selectedTab === 'labs'
-              ? 'text-clinical-blue border-b-2 border-clinical-blue bg-clinical-blue/5'
-              : 'text-clinical-slate hover:text-clinical-ink hover:bg-clinical-bg'
-          )}
-        >
-          <FlaskConical className="w-3.5 h-3.5 inline mr-1.5" />
-          Labs
-        </button>
-        <button
-          onClick={() => setSelectedTab('imaging')}
-          className={cn(
-            'flex-1 px-4 py-2.5 text-xs font-medium transition-all',
-            selectedTab === 'imaging'
-              ? 'text-clinical-blue border-b-2 border-clinical-blue bg-clinical-blue/5'
-              : 'text-clinical-slate hover:text-clinical-ink hover:bg-clinical-bg'
-          )}
-        >
-          <Camera className="w-3.5 h-3.5 inline mr-1.5" />
-          Imaging
-        </button>
-        <button
-          onClick={() => setSelectedTab('time')}
-          className={cn(
-            'flex-1 px-4 py-2.5 text-xs font-medium transition-all',
-            selectedTab === 'time'
-              ? 'text-clinical-blue border-b-2 border-clinical-blue bg-clinical-blue/5'
-              : 'text-clinical-slate hover:text-clinical-ink hover:bg-clinical-bg'
-          )}
-        >
-          <Clock className="w-3.5 h-3.5 inline mr-1.5" />
-          Time
-        </button>
+        {(['labs', 'imaging', 'time'] as Tab[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={cn(
+              'flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors',
+              tab === t
+                ? 'text-clinical-blue border-b-2 border-clinical-blue bg-clinical-blue/5'
+                : 'text-clinical-slate hover:text-clinical-ink hover:bg-clinical-bg'
+            )}
+          >
+            {t === 'labs'    && <FlaskConical className="w-3.5 h-3.5" />}
+            {t === 'imaging' && <Camera       className="w-3.5 h-3.5" />}
+            {t === 'time'    && <Clock        className="w-3.5 h-3.5" />}
+            <span className="capitalize">{t}</span>
+          </button>
+        ))}
       </div>
 
-      {/* Content */}
       <div className="p-4">
         <AnimatePresence mode="wait">
-          {selectedTab === 'labs' && (
-            <motion.div
-              key="labs"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="grid grid-cols-2 gap-2"
-            >
-              {availableTests.labs.map((testName) => {
-                const ordered = isTestOrdered(testName);
-                const status = getTestStatus(testName);
-                
+
+          {/* ── Labs ─────────────────────────────────────────────────────────── */}
+          {tab === 'labs' && (
+            <motion.div key="labs" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {availableTests.labs.map((name) => {
+                const st = statusOf(name);
                 return (
                   <button
-                    key={testName}
-                    onClick={() => !ordered && handleOrderTest(testName, 'lab')}
-                    disabled={ordered || isProcessing || selectedTest === testName}
+                    key={name}
+                    onClick={() => !st && handleOrder('lab', name)}
+                    disabled={!!st || isProcessing || loadingTest === name}
                     className={cn(
-                      'p-3 rounded-lg text-left text-sm transition-all border',
-                      ordered
+                      'p-2.5 rounded-lg text-left text-xs border transition-all',
+                      st
                         ? 'bg-clinical-bg border-clinical-line cursor-not-allowed opacity-70'
-                        : 'bg-clinical-surface border-clinical-line hover:border-clinical-blue hover:bg-clinical-blue/5',
-                      selectedTest === testName && 'border-clinical-blue bg-clinical-blue/10'
+                        : 'bg-clinical-surface border-clinical-line hover:border-clinical-blue hover:bg-clinical-blue/5'
                     )}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className={cn('font-medium', ordered && 'text-clinical-slate')}>
-                        {testName}
-                      </span>
-                      {selectedTest === testName && (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-clinical-blue" />
-                      )}
-                      {status && status.status === 'ready' && (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                      )}
-                      {status && status.status === 'pending' && (
-                        <Clock className="w-3.5 h-3.5 text-amber-600" />
-                      )}
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-medium truncate">{name}</span>
+                      {loadingTest === name && <Loader2 className="w-3 h-3 animate-spin text-clinical-blue shrink-0" />}
+                      {st === 'ready'  && <CheckCircle2 className="w-3 h-3 text-green-600 shrink-0" />}
+                      {st && st !== 'ready' && <Clock className="w-3 h-3 text-amber-500 shrink-0" />}
                     </div>
-                    {status && (
-                      <div className={cn('text-xs mt-1', status.color)}>
-                        {status.text}
-                      </div>
+                    {st && st !== 'ready' && (
+                      <div className="text-[10px] text-amber-600 mt-0.5">{st}</div>
+                    )}
+                    {st === 'ready' && (
+                      <div className="text-[10px] text-green-600 mt-0.5">Ready</div>
                     )}
                   </button>
                 );
@@ -152,132 +115,85 @@ export function OrderPanel({
             </motion.div>
           )}
 
-          {selectedTab === 'imaging' && (
-            <motion.div
-              key="imaging"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="grid grid-cols-2 gap-2"
-            >
-              {availableTests.imaging.map((testName) => {
-                const ordered = isTestOrdered(testName);
-                const status = getTestStatus(testName);
-                
+          {/* ── Imaging ──────────────────────────────────────────────────────── */}
+          {tab === 'imaging' && (
+            <motion.div key="imaging" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              className="grid grid-cols-2 gap-2">
+              {availableTests.imaging.map((name) => {
+                const st = statusOf(name);
                 return (
                   <button
-                    key={testName}
-                    onClick={() => !ordered && handleOrderTest(testName, 'imaging')}
-                    disabled={ordered || isProcessing || selectedTest === testName}
+                    key={name}
+                    onClick={() => !st && handleOrder('imaging', name)}
+                    disabled={!!st || isProcessing || loadingTest === name}
                     className={cn(
-                      'p-3 rounded-lg text-left text-sm transition-all border',
-                      ordered
+                      'p-2.5 rounded-lg text-left text-xs border transition-all',
+                      st
                         ? 'bg-clinical-bg border-clinical-line cursor-not-allowed opacity-70'
-                        : 'bg-clinical-surface border-clinical-line hover:border-clinical-blue hover:bg-clinical-blue/5',
-                      selectedTest === testName && 'border-clinical-blue bg-clinical-blue/10'
+                        : 'bg-clinical-surface border-clinical-line hover:border-clinical-blue hover:bg-clinical-blue/5'
                     )}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className={cn('font-medium', ordered && 'text-clinical-slate')}>
-                        {testName}
-                      </span>
-                      {selectedTest === testName && (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-clinical-blue" />
-                      )}
-                      {status && status.status === 'ready' && (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                      )}
-                      {status && status.status === 'pending' && (
-                        <Clock className="w-3.5 h-3.5 text-amber-600" />
-                      )}
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-medium truncate">{name}</span>
+                      {loadingTest === name && <Loader2 className="w-3 h-3 animate-spin text-clinical-blue shrink-0" />}
+                      {st === 'ready'  && <CheckCircle2 className="w-3 h-3 text-green-600 shrink-0" />}
+                      {st && st !== 'ready' && <Clock className="w-3 h-3 text-amber-500 shrink-0" />}
                     </div>
-                    {status && (
-                      <div className={cn('text-xs mt-1', status.color)}>
-                        {status.text}
-                      </div>
-                    )}
+                    {st && st !== 'ready' && <div className="text-[10px] text-amber-600 mt-0.5">{st}</div>}
+                    {st === 'ready'        && <div className="text-[10px] text-green-600 mt-0.5">Ready</div>}
                   </button>
                 );
               })}
             </motion.div>
           )}
 
-          {selectedTab === 'time' && (
-            <motion.div
-              key="time"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-4"
-            >
-              <div className="bg-clinical-bg/50 p-3 rounded-lg border border-clinical-line">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-clinical-slate uppercase">Current Simulation Time</span>
-                  <span className="text-2xl font-mono font-bold text-clinical-blue">
-                    {Math.floor(currentSimTime / 60)}:{String(currentSimTime % 60).padStart(2, '0')}
-                  </span>
-                </div>
-                <div className="text-xs text-clinical-slate">
-                  {currentSimTime} minutes elapsed
-                </div>
+          {/* ── Time ─────────────────────────────────────────────────────────── */}
+          {tab === 'time' && (
+            <motion.div key="time" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              className="space-y-4">
+              {/* Clock display */}
+              <div className="bg-clinical-bg rounded-lg p-3 border border-clinical-line flex items-center justify-between">
+                <span className="text-xs text-clinical-slate uppercase font-medium">Simulation Clock</span>
+                <span className="text-2xl font-mono font-bold text-clinical-blue">{timeDisplay}</span>
               </div>
 
+              {/* Quick advance */}
               <div>
-                <label className="text-xs font-medium text-clinical-slate uppercase mb-2 block">
-                  Quick Advance
-                </label>
+                <p className="text-[10px] font-medium text-clinical-slate uppercase mb-2">Quick Advance</p>
                 <div className="grid grid-cols-4 gap-2">
-                  {[5, 15, 30, 60].map((minutes) => (
-                    <button
-                      key={minutes}
-                      onClick={() => onAdvanceTime(minutes)}
-                      disabled={isProcessing}
-                      className="p-3 bg-clinical-surface border border-clinical-line hover:border-clinical-blue hover:bg-clinical-blue/5 rounded-lg text-sm font-medium transition-all disabled:opacity-50"
-                    >
-                      +{minutes}m
+                  {[5, 15, 30, 60].map((m) => (
+                    <button key={m} onClick={() => onAdvanceTime(m)} disabled={isProcessing}
+                      className="py-2.5 bg-clinical-surface border border-clinical-line rounded-lg text-xs font-medium hover:border-clinical-blue hover:bg-clinical-blue/5 transition-all disabled:opacity-50">
+                      +{m}m
                     </button>
                   ))}
                 </div>
               </div>
 
+              {/* Custom advance */}
               <div>
-                <label className="text-xs font-medium text-clinical-slate uppercase mb-2 block">
-                  Custom Time
-                </label>
+                <p className="text-[10px] font-medium text-clinical-slate uppercase mb-2">Custom</p>
                 <div className="flex gap-2">
-                  <input
-                    type="number"
-                    min="1"
-                    max="1440"
-                    value={customTime}
-                    onChange={(e) => setCustomTime(Number(e.target.value))}
-                    className="flex-1 px-3 py-2 bg-clinical-bg border border-clinical-line rounded-lg text-sm focus:outline-none focus:border-clinical-blue"
-                    placeholder="Minutes"
-                  />
-                  <button
-                    onClick={() => onAdvanceTime(customTime)}
-                    disabled={isProcessing || customTime < 1}
-                    className="px-6 py-2 bg-clinical-blue text-white rounded-lg text-sm font-medium hover:bg-clinical-blue/90 transition-all disabled:opacity-50"
-                  >
-                    {isProcessing ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      'Advance'
-                    )}
+                  <input type="number" min={1} max={1440} value={customMin}
+                    onChange={(e) => setCustomMin(Number(e.target.value))}
+                    className="flex-1 px-3 py-2 bg-clinical-bg border border-clinical-line rounded-lg text-sm focus:outline-none focus:border-clinical-blue" />
+                  <button onClick={() => onAdvanceTime(customMin)} disabled={isProcessing || customMin < 1}
+                    className="px-5 py-2 bg-clinical-blue text-white rounded-lg text-xs font-medium hover:bg-clinical-blue/90 disabled:opacity-50 transition-all flex items-center gap-1.5">
+                    {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Advance'}
                   </button>
                 </div>
               </div>
 
-              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-lg">
-                <div className="flex gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="text-xs text-amber-900 dark:text-amber-200">
-                    <strong>Note:</strong> Patient condition evolves with time. Untreated conditions may worsen.
-                  </div>
-                </div>
+              {/* Warning */}
+              <div className="flex gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-lg">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-900 dark:text-amber-200">
+                  Patient condition evolves with time. Untreated conditions <strong>will</strong> deteriorate.
+                </p>
               </div>
             </motion.div>
           )}
+
         </AnimatePresence>
       </div>
     </div>

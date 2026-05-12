@@ -1,166 +1,176 @@
+/**
+ * CCS case-completion & management-based scoring endpoint.
+ *
+ * Retrieves the hidden correctDiagnosis from Supabase,
+ * scores the user's management, persists results, and deletes the active case.
+ */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import OpenAI from "openai";
+import { getCaseServerSide, deleteCaseServerSide, getServerSupabase } from "./_supabase.js";
 
-/**
- * CCS-Style Case Completion & Scoring Endpoint
- * 
- * Evaluates the user's management of the case based on:
- * - Appropriate orders (labs, imaging, medications)
- * - Timing of critical interventions
- * - Patient outcome
- * - Efficiency (avoiding unnecessary tests)
- * - Clinical reasoning
- * 
- * Returns management critique, not just diagnosis comparison
- */
-
-interface EndCaseRequest {
-  caseId: string;
-  medicalCase: any;  // The current state from frontend
-  userNotes?: string;  // Optional final assessment/notes
+function validateRequest(body: any) {
+  if (!body || typeof body !== "object") throw new Error("Request body must be a JSON object.");
+  if (!body.caseId || typeof body.caseId !== "string") throw new Error("Missing: caseId");
+  if (!body.medicalCase || typeof body.medicalCase !== "object") throw new Error("Missing: medicalCase");
+  return {
+    caseId:      body.caseId      as string,
+    medicalCase: body.medicalCase as any,
+    userNotes:   body.userNotes   as string | undefined,
+  };
 }
 
-function validateRequest(body: any): EndCaseRequest {
-  if (!body || typeof body !== "object") {
-    throw new Error("Request body must be a JSON object.");
-  }
-  if (!body.caseId || typeof body.caseId !== "string") {
-    throw new Error("Missing or invalid field: caseId");
-  }
-  if (!body.medicalCase || typeof body.medicalCase !== "object") {
-    throw new Error("Missing or invalid field: medicalCase");
-  }
-  
+function trimCase(mc: any) {
   return {
-    caseId: body.caseId,
-    medicalCase: body.medicalCase,
-    userNotes: body.userNotes || "",
+    ...mc,
+    clinicalActions:  (mc.clinicalActions  || []).slice(-20),
+    communicationLog: (mc.communicationLog || []).slice(-10),
   };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
     const { caseId, medicalCase, userNotes } = validateRequest(req.body);
 
-    // Retrieve the full case with correct diagnosis
-    if (!global.casesStore || !global.casesStore.has(caseId)) {
-      return res.status(404).json({ error: "Case not found. Cannot score." });
+    // ── Fetch answer key ──────────────────────────────────────────────────────
+    const fullCase = await getCaseServerSide(caseId);
+    if (!fullCase) {
+      return res.status(404).json({ error: "Case not found or already scored." });
     }
 
-    const fullCase = global.casesStore.get(caseId);
+    if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY.includes("MY_"))
+      return res.status(500).json({ error: "DEEPSEEK_API_KEY is not configured." });
 
-    if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY.includes("MY_")) {
-      return res.status(500).json({ error: "DEEPSEEK_API_KEY is not configured in environment variables." });
-    }
+    const openai = new OpenAI({ apiKey: process.env.DEEPSEEK_API_KEY, baseURL: "https://api.deepseek.com" });
 
-    const openai = new OpenAI({
-      apiKey: process.env.DEEPSEEK_API_KEY,
-      baseURL: "https://api.deepseek.com",
-    });
+    const actionLog = (medicalCase.clinicalActions || [])
+      .map((a: any) => `T+${a.timestamp}: [${a.type}] ${a.description}`)
+      .join("\n") || "No actions recorded.";
 
-    // Build action summary for scoring
-    const actionSummary = (medicalCase.clinicalActions || [])
-      .map((a: any) => `T+${a.timestamp}: ${a.description}`)
-      .join('\n');
-
-    const medicationSummary = (medicalCase.medications || [])
+    const medLog = (medicalCase.medications || [])
       .map((m: any) => `T+${m.timestamp}: ${m.name} ${m.dose} ${m.route}`)
-      .join('\n');
+      .join("\n") || "No medications administered.";
 
-    const response = await openai.chat.completions.create({
+    const labsOrdered = (medicalCase.labs || [])
+      .map((l: any) => `${l.name} (ordered T+${l.orderedAt ?? "?"})`)
+      .join(", ") || "None";
+
+    const imagingOrdered = (medicalCase.imaging || [])
+      .map((i: any) => `${i.type} (ordered T+${i.orderedAt ?? "?"})`)
+      .join(", ") || "None";
+
+    const aiRes = await openai.chat.completions.create({
       model: "deepseek-chat",
       messages: [
         {
           role: "system",
-          content: `You are a USMLE Step 3 CCS case evaluator. Score the user's MANAGEMENT, not just their diagnosis.
+          content: `You are a USMLE Step 3 CCS examiner. Score management quality — NOT just diagnosis.
 
-CORRECT DIAGNOSIS: ${fullCase.correctDiagnosis}
-EXPLANATION: ${fullCase.explanation || "No explanation provided"}
+ANSWER KEY:
+  Correct Diagnosis: ${fullCase.correctDiagnosis}
+  Explanation: ${fullCase.explanation || ""}
 
-SCORING CRITERIA (100 points total):
-1. Initial Management (25 pts):
-   - Appropriate initial orders (vitals monitoring, O2, IV access, basic labs)
-   - Recognition of acuity level
-   
-2. Diagnostic Workup (25 pts):
-   - Ordered appropriate tests for differential diagnosis
-   - Timing: critical tests ordered early
-   - Avoided unnecessary/harmful tests
-   
-3. Therapeutic Interventions (30 pts):
-   - Correct treatment for underlying condition
-   - Timing: critical interventions (antibiotics for sepsis, fluids for shock) started early
-   - Appropriate medication dosing
-   
-4. Patient Outcome (20 pts):
-   - Patient survived: +20
-   - Patient deteriorated: -10
-   - Patient deceased from preventable cause: -20
+SCORING (100 pts total):
+  initialManagement (0-25):
+    - Did they place appropriate initial orders (vitals, O2, IV access, basic workup)?
+    - Did they recognise acuity and act quickly?
+  diagnosticWorkup (0-25):
+    - Ordered the right tests at the right time?
+    - Avoided unnecessary / expensive / harmful tests?
+  therapeuticInterventions (0-30):
+    - Correct treatment for the underlying condition?
+    - Critical interventions (antibiotics <1h for sepsis, fluids for shock, PCI for STEMI) done on time?
+    - Appropriate doses / routes?
+  patientOutcome (0-20):
+    - alive with improving trend: 20
+    - alive stable:               12
+    - critical deterioration:      5
+    - deceased:                    0
 
-EFFICIENCY PENALTIES:
-- Too many unnecessary tests: -5 to -15 points
-- Delayed critical intervention: -5 to -15 points per delay
+EFFICIENCY PENALTIES (subtract from total):
+  - >5 unnecessary tests:   -10
+  - Key intervention >30 min late: -10
 
-OUTPUT FORMAT (JSON):
+Return JSON ONLY:
 {
-  "score": number (0-100),
+  "score": number,
   "breakdown": {
-    "initialManagement": number (0-25),
-    "diagnosticWorkup": number (0-25),
-    "therapeuticInterventions": number (0-30),
-    "patientOutcome": number (-20 to +20)
+    "initialManagement": number,
+    "diagnosticWorkup": number,
+    "therapeuticInterventions": number,
+    "patientOutcome": number,
+    "efficiencyPenalty": number
   },
-  "feedback": "Detailed paragraph explaining performance",
+  "feedback": "3-4 sentence narrative of overall performance",
   "correctDiagnosis": "${fullCase.correctDiagnosis}",
-  "keyActions": ["✓ Action they did well", "✗ Action they missed or delayed"],
-  "criticalMissed": ["Critical intervention they missed"],
-  "clinicalPearl": "One teaching point from this case"
+  "explanation": "brief teaching point",
+  "keyActions": ["✓ or ✗ + description", ...],
+  "criticalMissed": ["missed or delayed critical action", ...],
+  "clinicalPearl": "one memorable teaching point from this case"
 }`,
         },
         {
           role: "user",
-          content: `CASE PRESENTATION:
-Chief Complaint: ${medicalCase.chiefComplaint}
-Initial Vitals: HR ${medicalCase.vitals.heartRate}, BP ${medicalCase.vitals.bloodPressure}, RR ${medicalCase.vitals.respiratoryRate}, SpO2 ${medicalCase.vitals.oxygenSaturation}%, Temp ${medicalCase.vitals.temperature}°C
+          content: `CASE: ${medicalCase.chiefComplaint} | ${medicalCase.age}y ${medicalCase.gender}
+INITIAL VITALS: HR ${medicalCase.vitals?.heartRate}, BP ${medicalCase.vitals?.bloodPressure}, RR ${medicalCase.vitals?.respiratoryRate}, SpO2 ${medicalCase.vitals?.oxygenSaturation}%, Temp ${medicalCase.vitals?.temperature}°C
 
-ACTIONS TAKEN:
-${actionSummary || "No actions recorded"}
+LABS ORDERED: ${labsOrdered}
+IMAGING ORDERED: ${imagingOrdered}
 
-MEDICATIONS GIVEN:
-${medicationSummary || "No medications administered"}
+ACTIONS:
+${actionLog}
 
-FINAL STATE:
-- Simulation Time: ${medicalCase.simulationTime} minutes
-- Patient Outcome: ${medicalCase.patientOutcome || "alive"}
-- Physiological Trend: ${medicalCase.physiologicalTrend}
-- Final Vitals: HR ${medicalCase.vitals.heartRate}, BP ${medicalCase.vitals.bloodPressure}, SpO2 ${medicalCase.vitals.oxygenSaturation}%
+MEDICATIONS:
+${medLog}
 
-USER NOTES: ${userNotes || "None provided"}`,
+FINAL STATE: T+${medicalCase.simulationTime} min | Outcome: ${medicalCase.patientOutcome || "alive"} | Trend: ${medicalCase.physiologicalTrend}
+FINAL VITALS: HR ${medicalCase.vitals?.heartRate}, BP ${medicalCase.vitals?.bloodPressure}, SpO2 ${medicalCase.vitals?.oxygenSaturation}%
+
+USER NOTES: ${userNotes || "none"}`,
         },
       ],
       response_format: { type: "json_object" },
     });
 
-    const content = response.choices[0].message.content;
+    const content = aiRes.choices[0].message.content;
     if (!content) throw new Error("Empty response from AI evaluator");
 
     const evaluation = JSON.parse(content);
 
-    // Clean up the case from storage
-    global.casesStore.delete(caseId);
+    // ── Persist result to simulation_results table ────────────────────────────
+    const db = getServerSupabase();
+    if (db) {
+      const { error: saveErr } = await (db as any).from("simulation_results").insert([{
+        case_id:              caseId,
+        patient_name:         medicalCase.patientName,
+        age:                  medicalCase.age,
+        category:             medicalCase.category,
+        difficulty:           medicalCase.difficulty,
+        user_diagnosis:       userNotes || null,
+        correct_diagnosis:    fullCase.correctDiagnosis,
+        score:                evaluation.score,
+        feedback:             evaluation.feedback,
+        simulation_time:      medicalCase.simulationTime,
+        clinical_actions:     medicalCase.clinicalActions,
+        medications:          medicalCase.medications,
+        management_breakdown: evaluation.breakdown,
+        key_actions:          evaluation.keyActions,
+        clinical_pearl:       evaluation.clinicalPearl,
+      }]);
+      if (saveErr) console.warn("Could not save result:", saveErr.message);
+    }
+
+    // ── Clean up active case ──────────────────────────────────────────────────
+    await deleteCaseServerSide(caseId);
 
     res.json({
       ...evaluation,
       caseId,
       totalSimulationTime: medicalCase.simulationTime,
-      explanation: fullCase.explanation,
     });
-  } catch (error: any) {
-    console.error("End Case Error:", error);
-    res.status(500).json({ error: error.message || "Failed to evaluate case." });
+  } catch (err: any) {
+    console.error("end-case error:", err);
+    res.status(500).json({ error: err.message || "Failed to score case." });
   }
 }
