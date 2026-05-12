@@ -47,7 +47,7 @@ export function ClinicalNotes() {
           value={currentNote}
           onChange={(e) => setCurrentNote(e.target.value)}
           placeholder="Document clinical assessment, differential, and plan..."
-          className="flex-1 p-4 text-sm focus:outline-none bg-white resize-none"
+          className="flex-1 p-4 text-sm focus:outline-none bg-clinical-surface resize-none"
         />
       </div>
 

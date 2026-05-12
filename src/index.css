@@ -5,37 +5,51 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  /* Phase 1: Softened color palette — less saturated, gentler contrast */
-  --color-clinical-bg: #F9FAFB;
-  --color-clinical-surface: #FFFFFF;
-  --color-clinical-ink: #334155;
-  --color-clinical-slate: #78859B;
-  --color-clinical-line: #E8ECF1;
-  --color-clinical-blue: #4F7DF2;
-  --color-clinical-red: #E8554E;
-  --color-clinical-amber: #E09B3D;
-  --color-clinical-green: #3DA877;
+  --color-clinical-bg: var(--clinical-bg);
+  --color-clinical-surface: var(--clinical-surface);
+  --color-clinical-ink: var(--clinical-ink);
+  --color-clinical-slate: var(--clinical-slate);
+  --color-clinical-line: var(--clinical-line);
+  --color-clinical-blue: var(--clinical-blue);
+  --color-clinical-red: var(--clinical-red);
+  --color-clinical-amber: var(--clinical-amber);
+  --color-clinical-green: var(--clinical-green);
 
-  /* Extended palette for unified panels */
-  --color-panel-dark: #1B1F2A;
-  --color-panel-dark-border: #2A2F3C;
-  --color-panel-muted: #F3F5F8;
+  --color-panel-dark: var(--panel-dark);
+  --color-panel-dark-border: var(--panel-dark-border);
+  --color-panel-muted: var(--panel-muted);
+}
+
+/* Light mode (default) */
+:root {
+  --clinical-bg: #F9FAFB;
+  --clinical-surface: #FFFFFF;
+  --clinical-ink: #334155;
+  --clinical-slate: #78859B;
+  --clinical-line: #E8ECF1;
+  --clinical-blue: #4F7DF2;
+  --clinical-red: #E8554E;
+  --clinical-amber: #E09B3D;
+  --clinical-green: #3DA877;
+  --panel-dark: #1B1F2A;
+  --panel-dark-border: #2A2F3C;
+  --panel-muted: #F3F5F8;
 }
 
 /* Dark mode overrides */
-.dark {
-  --color-clinical-bg: #0F1117;
-  --color-clinical-surface: #1A1D27;
-  --color-clinical-ink: #E2E8F0;
-  --color-clinical-slate: #94A3B8;
-  --color-clinical-line: #2A2F3C;
-  --color-clinical-blue: #6B93FF;
-  --color-clinical-red: #F87171;
-  --color-clinical-amber: #FBBF24;
-  --color-clinical-green: #4ADE80;
-  --color-panel-dark: #0D0F14;
-  --color-panel-dark-border: #1F232E;
-  --color-panel-muted: #1A1D27;
+:root.dark {
+  --clinical-bg: #0F1117;
+  --clinical-surface: #1A1D27;
+  --clinical-ink: #E2E8F0;
+  --clinical-slate: #94A3B8;
+  --clinical-line: #2A2F3C;
+  --clinical-blue: #6B93FF;
+  --clinical-red: #F87171;
+  --clinical-amber: #FBBF24;
+  --clinical-green: #4ADE80;
+  --panel-dark: #0D0F14;
+  --panel-dark-border: #1F232E;
+  --panel-muted: #1A1D27;
 }
 
 @layer base {
@@ -200,7 +214,7 @@
   }
 
   .dark .skeleton {
-    background: #2A2F3C;
+    background: var(--clinical-line);
   }
 }
 
@@ -222,6 +236,15 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+/* Dark mode scrollbar */
+.dark ::-webkit-scrollbar-thumb {
+  background: #3B4252;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #4C566A;
 }
 
 /* Dark mode transitions */

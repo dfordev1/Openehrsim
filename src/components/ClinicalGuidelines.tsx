@@ -96,7 +96,7 @@ export function ClinicalGuidelines() {
                 <div className="bg-clinical-bg/30 px-4 pb-4 animate-in slide-in-from-top-2">
                   <div className="space-y-2">
                     {g.steps.map((step, i) => (
-                      <div key={i} className="flex items-start gap-3 p-3 bg-white border border-clinical-line rounded-lg">
+                      <div key={i} className="flex items-start gap-3 p-3 bg-clinical-surface border border-clinical-line rounded-lg">
                         <CheckCircle2 className="w-3.5 h-3.5 text-clinical-blue shrink-0 mt-0.5" />
                         <span className="text-xs text-clinical-ink leading-relaxed">{step}</span>
                       </div>
