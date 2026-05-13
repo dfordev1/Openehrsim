@@ -103,6 +103,7 @@ export function ClinicalLayout() {
 }
 
 function ClinicalLayoutInner() {
+  const [moreMenuOpen, setMoreMenuOpen] = React.useState(false);
   const { user, isAuthOpen, setIsAuthOpen, handleLogout } = useAuth();
   const {
     medicalCase,
@@ -257,9 +258,9 @@ function ClinicalLayoutInner() {
       {/* ── Single header line ── */}
       <header className="h-12 flex items-center px-4 shrink-0 relative z-30">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <span className="text-sm font-semibold text-gray-900 truncate">
+          <button onClick={() => setVitalsExpanded(true)} className="text-sm font-semibold text-gray-900 truncate hover:underline">
             {medicalCase?.patientName}
-          </span>
+          </button>
           <span className="text-xs text-gray-400">
             {medicalCase?.age}{medicalCase?.gender?.[0]?.toUpperCase()}
           </span>
@@ -278,6 +279,9 @@ function ClinicalLayoutInner() {
           )}>
             {simTime}m
           </span>
+          <button onClick={handleConsult} disabled={isConsulting || !medicalCase} className="text-xs text-gray-400 hover:text-gray-700 disabled:opacity-30 transition-colors font-medium" aria-label="AI Consultant">
+            AI
+          </button>
           <button onClick={() => setIsLibraryOpen(true)} className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors" aria-label="New case">
             <RefreshCw className="w-4 h-4" />
           </button>
@@ -438,6 +442,48 @@ function ClinicalLayoutInner() {
               </button>
             );
           })}
+          {/* More menu */}
+          <div className="relative">
+            <button
+              onClick={() => setMoreMenuOpen(p => !p)}
+              className="flex flex-col items-center gap-1 group"
+              aria-label="More"
+            >
+              <div className={cn(
+                'w-2 h-2 rounded-full transition-all duration-200',
+                moreMenuOpen ? 'w-6 bg-gray-900' : 'bg-gray-300 group-hover:bg-gray-500'
+              )} />
+              <span className={cn(
+                'text-[9px] font-medium transition-colors',
+                moreMenuOpen ? 'text-gray-900' : 'text-gray-400'
+              )}>
+                More
+              </span>
+            </button>
+            {moreMenuOpen && (
+              <div className="absolute bottom-12 right-0 bg-white border border-gray-200 rounded-xl shadow-lg py-2 px-1 min-w-[130px] z-50">
+                {[
+                  { id: 'pharmacy', label: 'Pharmacy' },
+                  { id: 'comms', label: 'Comms' },
+                  { id: 'dxpause', label: 'DxPause' },
+                  { id: 'notes', label: 'Notes' },
+                  { id: 'tools', label: 'Guidelines' },
+                  { id: 'archive', label: 'Archive' },
+                ].map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => { setActiveTab(item.id as any); setMoreMenuOpen(false); }}
+                    className={cn(
+                      'w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors',
+                      activeTab === item.id ? 'bg-gray-100 text-gray-900 font-medium' : 'text-gray-600 hover:bg-gray-50'
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </nav>
 
