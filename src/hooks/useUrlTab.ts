@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 
-type TabId = 'triage' | 'hpi' | 'exam' | 'labs' | 'imaging' | 'pharmacy' | 'treatment' | 'comms' | 'archive' | 'notes' | 'tools' | 'assess' | 'dxpause';
+type TabId = 'triage' | 'hpi' | 'exam' | 'labs' | 'pharmacy' | 'treatment' | 'comms' | 'archive' | 'notes' | 'tools' | 'assess' | 'dxpause';
 
-const VALID_TABS: TabId[] = ['triage', 'hpi', 'exam', 'labs', 'imaging', 'pharmacy', 'treatment', 'comms', 'archive', 'notes', 'tools', 'assess', 'dxpause'];
+const VALID_TABS: TabId[] = ['triage', 'hpi', 'exam', 'labs', 'pharmacy', 'treatment', 'comms', 'archive', 'notes', 'tools', 'assess', 'dxpause'];
 
 function getTabFromUrl(): TabId {
   const params = new URLSearchParams(window.location.search);
