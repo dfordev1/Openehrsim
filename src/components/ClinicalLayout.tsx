@@ -195,8 +195,32 @@ function ClinicalLayoutInner() {
   }
   const hasCritical = abnormalVitals.some(v => v.critical);
 
+  // ── Auth gate ───────────────────────────────────────────────────────────────
+  if (isSupabaseConfigured && !isAuthLoading && !user) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8">
+        <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} isRecovery={isRecovery} onRecoveryHandled={clearRecovery} />
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center max-w-sm">
+          <div className="w-14 h-14 bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <span className="text-white text-xl font-black">Rx</span>
+          </div>
+          <h1 className="text-2xl font-black text-gray-900 mb-2 uppercase tracking-tight">OpenEHR Sim</h1>
+          <p className="text-sm text-gray-500 mb-8 leading-relaxed">
+            USMLE Step 3 CCS simulator. Sign in to access cases and track your progress.
+          </p>
+          <button
+            onClick={() => setIsAuthOpen(true)}
+            className="px-8 py-3 bg-gray-900 text-white text-sm font-medium rounded-full hover:bg-gray-800 transition-colors"
+          >
+            Sign in
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
+
   // ── Loading screen ──────────────────────────────────────────────────────────
-  if (loading || error) {
+  if (isAuthLoading || loading || error) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center max-w-xs">
@@ -272,7 +296,7 @@ function ClinicalLayoutInner() {
           <button onClick={() => setIsLibraryOpen(true)} className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors" aria-label="New case">
             <RefreshCw className="w-4 h-4" />
           </button>
-          {!isAuthLoading && (user ? (
+          {user && (
             <div className="relative">
               <button
                 onClick={() => setAccountMenuOpen(p => !p)}
@@ -298,9 +322,7 @@ function ClinicalLayoutInner() {
                 </>
               )}
             </div>
-          ) : isSupabaseConfigured ? (
-            <button onClick={() => setIsAuthOpen(true)} className="text-xs text-gray-400 hover:text-gray-700" aria-label="Sign in">Sign in</button>
-          ) : null)}
+          )}
         </div>
       </header>
 
