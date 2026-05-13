@@ -32,12 +32,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Normalise: "Troponin I" → "Troponin", "EKG" → "ECG", "CT Brain" → "CT Head", etc.
     const testName = normaliseTestName(rawName);
 
-    const delays = TURNAROUND[testName];
-    if (!delays) {
-      return res.status(400).json({
-        error: `Unknown test "${rawName}". Available: ${Object.keys(TURNAROUND).join(", ")}`,
-      });
-    }
+    // Use known turnaround if available, otherwise use sensible defaults
+    const delays = TURNAROUND[testName] || (testType === "lab"
+      ? { stat: 20, routine: 45 }
+      : { stat: 30, routine: 60 });
 
     const orderedAt   = currentSimTime;
     const availableAt = currentSimTime + delays[priority];
@@ -49,8 +47,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let result: any;
     if (testType === "lab") {
+      // Try exact match first, then fuzzy match by checking if names contain each other
       const match = (fullCase.labs || []).find(
         (l: any) => normaliseTestName(l.name) === testName
+      ) || (fullCase.labs || []).find(
+        (l: any) => l.name.toLowerCase().includes(testName.toLowerCase()) ||
+                    testName.toLowerCase().includes(l.name.toLowerCase())
       );
       result = match
         ? { ...match, orderedAt, availableAt }
@@ -58,6 +60,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } else {
       const match = (fullCase.imaging || []).find(
         (i: any) => normaliseTestName(i.type) === testName
+      ) || (fullCase.imaging || []).find(
+        (i: any) => i.type.toLowerCase().includes(testName.toLowerCase()) ||
+                    testName.toLowerCase().includes(i.type.toLowerCase())
       );
       result = match
         ? { ...match, orderedAt, availableAt }

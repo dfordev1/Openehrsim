@@ -18,7 +18,6 @@ import {
   Stethoscope,
 } from 'lucide-react';
 import { useUrlTab } from '../hooks/useUrlTab';
-import { useDarkMode } from '../hooks/useDarkMode';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useCase } from './CaseContext';
 import { useAuth } from './AuthContext';
@@ -42,8 +41,6 @@ export interface NavigationContextValue {
   setIsLibraryOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isCommandOpen: boolean;
   setIsCommandOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  isDark: boolean;
-  toggleDark: () => void;
   primaryTabs: TabDef[];
   actionTabs: TabDef[];
   toolTabs: TabDef[];
@@ -68,7 +65,6 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [isCommandOpen, setIsCommandOpen] = useState(false);
-  const [isDark, toggleDark] = useDarkMode();
 
   // Wrap loadNewCase call with closing the library
   const handleNewCaseFromLibrary = useCallback(() => {
@@ -122,8 +118,6 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
         setIsLibraryOpen,
         isCommandOpen,
         setIsCommandOpen,
-        isDark,
-        toggleDark,
         primaryTabs,
         actionTabs,
         toolTabs,

@@ -7,14 +7,8 @@
 import * as Sentry from '@sentry/react';
 import React, { Component, type ErrorInfo, type ReactNode } from 'react';
 import {
-  AlertCircle,
-  Brain,
-  Loader2,
   RefreshCw,
-  Sparkles,
-  Undo2,
   X,
-  Zap,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -28,12 +22,9 @@ import { ClinicalNotes } from './ClinicalNotes';
 import { ClinicalGuidelines } from './ClinicalGuidelines';
 import { CaseLibrary } from './CaseLibrary';
 import { CommandPalette } from './CommandPalette';
-import { SkeletonCard } from './Skeleton';
-import { EmptyState } from './EmptyState';
 import VitalsExpanded from './VitalsExpanded';
 import { DiagnosisPad } from './DiagnosisPad';
 import { StageCommitGate } from './StageCommitGate';
-import { OnboardingTour } from './OnboardingTour';
 import { ArchiveView } from './ArchiveView';
 
 // Tab components
@@ -242,7 +233,6 @@ function ClinicalLayoutInner() {
       <VitalsExpanded isOpen={vitalsExpanded} onClose={() => setVitalsExpanded(false)} vitalsHistory={vitalsHistory} />
       <CaseLibrary isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} onSelectCase={(d, c, e) => { setIsLibraryOpen(false); loadNewCase(d, c, e); }} />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
-      <OnboardingTour />
       <CommandPalette
         isOpen={isCommandOpen}
         onClose={() => setIsCommandOpen(false)}
