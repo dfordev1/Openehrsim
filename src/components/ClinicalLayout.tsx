@@ -82,6 +82,7 @@ const NAV_ITEMS = [
   { id: 'labs', label: 'Tests' },
   { id: 'treatment', label: 'Treat' },
   { id: 'assess', label: 'Score' },
+  { id: 'archive', label: 'Stats' },
 ] as const;
 
 // ── Main Layout ───────────────────────────────────────────────────────────────
@@ -499,7 +500,6 @@ function ClinicalLayoutInner() {
                   { id: 'dxpause', label: 'DxPause' },
                   { id: 'notes', label: 'Notes' },
                   { id: 'tools', label: 'Guidelines' },
-                  { id: 'archive', label: 'Archive' },
                 ].map(item => (
                   <button
                     key={item.id}
