@@ -40,7 +40,6 @@ import { ArchiveView } from './ArchiveView';
 import { HpiTab } from './tabs/HpiTab';
 import { ExamTab } from './tabs/ExamTab';
 import { LabsTab } from './tabs/LabsTab';
-import { ImagingTab } from './tabs/ImagingTab';
 import { PharmacyTab } from './tabs/PharmacyTab';
 import { TreatmentTab } from './tabs/TreatmentTab';
 import { CommsTab } from './tabs/CommsTab';
@@ -369,11 +368,7 @@ function ClinicalLayoutInner() {
             )}
 
             {activeTab === 'labs' && medicalCase && (
-              <LabsTab key="labs" medicalCase={medicalCase} simTime={simTime} selectedLab={selectedLab} onSelectLab={setSelectedLab} onOrderLab={(name) => handleOrderTest('lab', name)} />
-            )}
-
-            {activeTab === 'imaging' && medicalCase && (
-              <ImagingTab key="imaging" medicalCase={medicalCase} simTime={simTime} revealedStudies={revealedStudies} onRevealStudy={(type) => setRevealedStudies(prev => [...prev, type])} onOrderImaging={(name) => handleOrderTest('imaging', name)} />
+              <LabsTab key="labs" medicalCase={medicalCase} simTime={simTime} selectedLab={selectedLab} onSelectLab={setSelectedLab} onOrderLab={(name) => handleOrderTest('lab', name)} revealedStudies={revealedStudies} onRevealStudy={(type) => setRevealedStudies(prev => [...prev, type])} onOrderImaging={(name) => handleOrderTest('imaging', name)} />
             )}
 
             {activeTab === 'pharmacy' && (

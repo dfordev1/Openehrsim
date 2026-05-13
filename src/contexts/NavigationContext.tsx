@@ -10,7 +10,6 @@ import {
   Brain,
   CheckCircle2,
   Clipboard,
-  FileSearch,
   FlaskConical,
   History,
   PenTool,
@@ -25,7 +24,7 @@ import { useCase } from './CaseContext';
 import { useAuth } from './AuthContext';
 
 // ── Types ───────────────────────────────────────────────────────────────────
-type TabId = 'triage' | 'hpi' | 'exam' | 'labs' | 'imaging' | 'pharmacy' | 'treatment' | 'comms' | 'archive' | 'notes' | 'tools' | 'assess' | 'dxpause';
+type TabId = 'triage' | 'hpi' | 'exam' | 'labs' | 'pharmacy' | 'treatment' | 'comms' | 'archive' | 'notes' | 'tools' | 'assess' | 'dxpause';
 
 export interface TabDef {
   id: string;
@@ -90,8 +89,7 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
     { id: 'triage',  icon: <AlertCircle className="w-4 h-4" />, label: 'Triage',  shortcut: '1' },
     { id: 'hpi',     icon: <Clipboard className="w-4 h-4" />,   label: 'History', shortcut: '2' },
     { id: 'exam',    icon: <Stethoscope className="w-4 h-4" />, label: 'Exam',    shortcut: '3' },
-    { id: 'labs',    icon: <FlaskConical className="w-4 h-4" />, label: 'Labs',    shortcut: '4' },
-    { id: 'imaging', icon: <FileSearch className="w-4 h-4" />,  label: 'Imaging', shortcut: '5' },
+    { id: 'labs',    icon: <FlaskConical className="w-4 h-4" />, label: 'Tests',   shortcut: '4' },
   ];
   const actionTabs: TabDef[] = [
     { id: 'dxpause',   icon: <Brain className="w-4 h-4" />,     label: 'DxPause'  },
