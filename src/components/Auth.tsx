@@ -1,30 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mail, Lock, LogIn, UserPlus, Fingerprint, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, LogIn, UserPlus, Fingerprint, ShieldCheck, CheckCircle2, KeyRound } from 'lucide-react';
 import { getSupabase } from '../lib/supabase';
 import { cn } from '../lib/utils';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
+  isRecovery?: boolean;
+  onRecoveryHandled?: () => void;
 }
 
-type Mode = 'login' | 'register' | 'forgot';
+type Mode = 'login' | 'register' | 'forgot' | 'recovery';
 
-export function AuthModal({ isOpen, onClose }: AuthModalProps) {
+export function AuthModal({ isOpen, onClose, isRecovery = false, onRecoveryHandled }: AuthModalProps) {
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   const supabase = getSupabase();
+
+  useEffect(() => {
+    if (isRecovery) setMode('recovery');
+  }, [isRecovery]);
+
   if (!supabase) return null;
 
   const reset = () => {
     setEmail('');
     setPassword('');
+    setConfirmPassword('');
     setError(null);
     setSuccess(null);
     setMode('login');
@@ -55,9 +64,19 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         setSuccess('Account created — check your email to confirm, then sign in.');
         setPassword('');
         setMode('login');
+      } else if (mode === 'recovery') {
+        if (password !== confirmPassword) throw new Error('Passwords do not match.');
+        if (password.length < 8) throw new Error('Password must be at least 8 characters.');
+        const { error } = await supabase.auth.updateUser({ password });
+        if (error) throw error;
+        setSuccess('Password updated — you are now signed in.');
+        setPassword('');
+        setConfirmPassword('');
+        onRecoveryHandled?.();
+        setTimeout(() => handleClose(), 1500);
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}?reset=1`,
+          redirectTo: `${window.location.origin}`,
         });
         if (error) throw error;
         setSuccess('Password reset link sent — check your inbox.');
@@ -70,8 +89,8 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     }
   };
 
-  const title   = mode === 'login' ? 'Access Portal' : mode === 'register' ? 'Register Account' : 'Reset Password';
-  const btnIcon = mode === 'login' ? <LogIn className="w-4 h-4" /> : mode === 'register' ? <UserPlus className="w-4 h-4" /> : <Mail className="w-4 h-4" />;
+  const title   = mode === 'login' ? 'Access Portal' : mode === 'register' ? 'Register Account' : mode === 'recovery' ? 'Set New Password' : 'Reset Password';
+  const btnIcon = mode === 'login' ? <LogIn className="w-4 h-4" /> : mode === 'register' ? <UserPlus className="w-4 h-4" /> : mode === 'recovery' ? <KeyRound className="w-4 h-4" /> : <Mail className="w-4 h-4" />;
 
   return (
     <AnimatePresence>
@@ -113,30 +132,51 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               )}
 
               <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-clinical-slate uppercase tracking-widest ml-1">Work Email</label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-clinical-slate" />
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      placeholder="name@hospital.tld"
-                      className="w-full bg-clinical-bg border border-clinical-line rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-clinical-blue transition-all"
-                    />
+                {mode !== 'recovery' && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-clinical-slate uppercase tracking-widest ml-1">Work Email</label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-clinical-slate" />
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        placeholder="name@hospital.tld"
+                        className="w-full bg-clinical-bg border border-clinical-line rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-clinical-blue transition-all"
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {mode !== 'forgot' && (
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-clinical-slate uppercase tracking-widest ml-1">Passphrase</label>
+                    <label className="text-[10px] font-black text-clinical-slate uppercase tracking-widest ml-1">
+                      {mode === 'recovery' ? 'New Passphrase' : 'Passphrase'}
+                    </label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-clinical-slate" />
                       <input
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
+                        required
+                        placeholder="••••••••"
+                        className="w-full bg-clinical-bg border border-clinical-line rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-clinical-blue transition-all"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {mode === 'recovery' && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-clinical-slate uppercase tracking-widest ml-1">Confirm Passphrase</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-clinical-slate" />
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
                         required
                         placeholder="••••••••"
                         className="w-full bg-clinical-bg border border-clinical-line rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-clinical-blue transition-all"
@@ -157,19 +197,21 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 {title}
               </button>
 
-              <div className={cn('pt-4 border-t border-clinical-line text-center', mode === 'login' ? 'flex justify-between' : 'flex justify-center')}>
-                {mode === 'login' && (
-                  <button type="button" onClick={() => { setError(null); setSuccess(null); setMode('forgot'); }}
-                    className="text-[10px] font-black text-clinical-slate uppercase tracking-widest hover:text-clinical-blue transition-colors">
-                    Forgot Password?
+              {mode !== 'recovery' && (
+                <div className={cn('pt-4 border-t border-clinical-line text-center', mode === 'login' ? 'flex justify-between' : 'flex justify-center')}>
+                  {mode === 'login' && (
+                    <button type="button" onClick={() => { setError(null); setSuccess(null); setMode('forgot'); }}
+                      className="text-[10px] font-black text-clinical-slate uppercase tracking-widest hover:text-clinical-blue transition-colors">
+                      Forgot Password?
+                    </button>
+                  )}
+                  <button type="button"
+                    onClick={() => { setError(null); setSuccess(null); setMode(mode === 'login' ? 'register' : 'login'); }}
+                    className="text-[10px] font-black text-clinical-blue uppercase tracking-widest hover:underline">
+                    {mode === 'login' ? 'Need New Credentials?' : 'Already Have Clearance?'}
                   </button>
-                )}
-                <button type="button"
-                  onClick={() => { setError(null); setSuccess(null); setMode(mode === 'login' ? 'register' : 'login'); }}
-                  className="text-[10px] font-black text-clinical-blue uppercase tracking-widest hover:underline">
-                  {mode === 'login' ? 'Need New Credentials?' : 'Already Have Clearance?'}
-                </button>
-              </div>
+                </div>
+              )}
             </form>
 
             <div className="bg-clinical-bg p-4 flex items-center justify-center gap-3">

@@ -12,6 +12,9 @@ export interface AuthContextValue {
   isAuthOpen: boolean;
   setIsAuthOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isSupabaseConfigured: boolean;
+  isAuthLoading: boolean;
+  isRecovery: boolean;
+  clearRecovery: () => void;
   handleLogout: () => Promise<void>;
 }
 
@@ -29,15 +32,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isSupabaseConfigured, setIsSupabaseConfigured] = useState(true);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isRecovery, setIsRecovery] = useState(false);
 
   useEffect(() => {
     const supabase = getSupabase();
     setIsSupabaseConfigured(!!supabase);
-    if (!supabase) return;
-    supabase.auth.getUser().then(({ data: { user } }) => setUser(user));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) =>
-      setUser(session?.user ?? null)
-    );
+    if (!supabase) {
+      setIsAuthLoading(false);
+      return;
+    }
+    supabase.auth.getUser().then(({ data }) => {
+      setUser((data as any).user ?? null);
+      setIsAuthLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null);
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsRecovery(true);
+        setIsAuthOpen(true);
+      }
+    });
     return () => subscription.unsubscribe();
   }, []);
 
@@ -46,8 +61,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (supabase) await supabase.auth.signOut();
   }, []);
 
+  const clearRecovery = useCallback(() => setIsRecovery(false), []);
+
   return (
-    <AuthContext.Provider value={{ user, isAuthOpen, setIsAuthOpen, isSupabaseConfigured, handleLogout }}>
+    <AuthContext.Provider value={{ user, isAuthOpen, setIsAuthOpen, isSupabaseConfigured, isAuthLoading, isRecovery, clearRecovery, handleLogout }}>
       {children}
     </AuthContext.Provider>
   );
