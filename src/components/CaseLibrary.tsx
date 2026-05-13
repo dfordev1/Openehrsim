@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
-  Heart, Activity, Wind, AlertTriangle, Droplets, Plus, RefreshCw,
+  Heart, HeartPulse, Activity, Wind, AlertTriangle, Droplets, Droplet, Plus, RefreshCw,
   Loader2, Baby, Microscope, Stethoscope as StethoscopeIcon,
   FlaskConical as FlaskIcon, Brain, Syringe, Crosshair, Truck, Building2,
-  Search, X,
+  Search, X, GitBranch, Zap, Bug, Bone, Eye, Ear, Dna,
+  Shield, Feather, Dumbbell, Sparkles, Accessibility, TestTubes,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getRecentSimulations } from '../services/storageService';
@@ -13,6 +14,120 @@ interface CaseLibraryProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectCase: (difficulty: string, category: string, environment: string) => void;
+}
+
+// ── Specialty catalog ─────────────────────────────────────────────────────────
+interface Specialty {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+}
+
+interface SpecialtyGroup {
+  id: string;
+  label: string;
+  specialties: Specialty[];
+}
+
+const SPECIALTY_GROUPS: SpecialtyGroup[] = [
+  {
+    id: 'cardio_resp',
+    label: 'Cardiovascular & Respiratory',
+    specialties: [
+      { id: 'cardiology',       label: 'Cardiology',        icon: <Heart className="w-4 h-4" /> },
+      { id: 'pulmonology',      label: 'Pulmonology',       icon: <Wind className="w-4 h-4" /> },
+      { id: 'vascular_surgery', label: 'Vascular Surgery',  icon: <GitBranch className="w-4 h-4" /> },
+      { id: 'cardiothoracic',   label: 'Cardiothoracic',    icon: <HeartPulse className="w-4 h-4" /> },
+    ],
+  },
+  {
+    id: 'neuro',
+    label: 'Neurosciences',
+    specialties: [
+      { id: 'neurology',     label: 'Neurology',     icon: <Brain className="w-4 h-4" /> },
+      { id: 'neurosurgery',  label: 'Neurosurgery',  icon: <Activity className="w-4 h-4" /> },
+      { id: 'psychiatry',    label: 'Psychiatry',    icon: <Brain className="w-4 h-4 text-clinical-amber" /> },
+      { id: 'pain_medicine', label: 'Pain Medicine', icon: <Zap className="w-4 h-4" /> },
+    ],
+  },
+  {
+    id: 'internal',
+    label: 'Internal Medicine',
+    specialties: [
+      { id: 'gastroenterology',    label: 'Gastroenterology',      icon: <StethoscopeIcon className="w-4 h-4" /> },
+      { id: 'gi_hepatology',       label: 'GI & Hepatology',       icon: <StethoscopeIcon className="w-4 h-4" /> },
+      { id: 'nephrology',          label: 'Nephrology',            icon: <Droplet className="w-4 h-4" /> },
+      { id: 'endocrinology',       label: 'Endocrinology',         icon: <Syringe className="w-4 h-4" /> },
+      { id: 'hematology_oncology', label: 'Haematology/Oncology',  icon: <Dna className="w-4 h-4" /> },
+      { id: 'rheumatology',        label: 'Rheumatology',          icon: <Bone className="w-4 h-4" /> },
+      { id: 'allergy_immunology',  label: 'Allergy/Immunology',    icon: <Shield className="w-4 h-4" /> },
+      { id: 'dermatology',         label: 'Dermatology',           icon: <Sparkles className="w-4 h-4" /> },
+      { id: 'geriatrics',          label: 'Geriatrics',            icon: <Accessibility className="w-4 h-4" /> },
+    ],
+  },
+  {
+    id: 'infect_crit',
+    label: 'Infectious & Critical',
+    specialties: [
+      { id: 'infectious_disease', label: 'Infectious Disease', icon: <Bug className="w-4 h-4" /> },
+      { id: 'sepsis',             label: 'Sepsis/Shock',       icon: <AlertTriangle className="w-4 h-4" /> },
+      { id: 'toxicology',         label: 'Toxicology',         icon: <FlaskIcon className="w-4 h-4" /> },
+      { id: 'critical_care',      label: 'Critical Care/ICU',  icon: <Activity className="w-4 h-4" /> },
+    ],
+  },
+  {
+    id: 'surg_trauma',
+    label: 'Surgery & Trauma',
+    specialties: [
+      { id: 'trauma',         label: 'Trauma/Surgery', icon: <Droplets className="w-4 h-4" /> },
+      { id: 'orthopaedics',   label: 'Orthopaedics',   icon: <Bone className="w-4 h-4" /> },
+      { id: 'urology',        label: 'Urology',        icon: <TestTubes className="w-4 h-4" /> },
+      { id: 'sports_medicine',label: 'Sports Medicine',icon: <Dumbbell className="w-4 h-4" /> },
+    ],
+  },
+  {
+    id: 'sensory_hn',
+    label: 'Sensory & Head/Neck',
+    specialties: [
+      { id: 'ophthalmology', label: 'Ophthalmology', icon: <Eye className="w-4 h-4" /> },
+      { id: 'ent',           label: 'ENT',           icon: <Ear className="w-4 h-4" /> },
+    ],
+  },
+  {
+    id: 'lifecycle',
+    label: 'Women, Children & Lifecycle',
+    specialties: [
+      { id: 'obgyn',           label: 'OB/GYN',          icon: <Microscope className="w-4 h-4" /> },
+      { id: 'pediatrics',      label: 'Paediatrics',     icon: <Baby className="w-4 h-4" /> },
+      { id: 'neonatology',     label: 'Neonatology',     icon: <Baby className="w-4 h-4 text-clinical-blue" /> },
+      { id: 'palliative_care', label: 'Palliative Care', icon: <Feather className="w-4 h-4" /> },
+    ],
+  },
+];
+
+// ── Reusable specialty card ───────────────────────────────────────────────────
+interface SpecialtyCardProps {
+  specialty: Specialty;
+  onSelect: (id: string) => void;
+}
+
+function SpecialtyCard({ specialty, onSelect }: SpecialtyCardProps) {
+  return (
+    <button
+      onClick={() => onSelect(specialty.id)}
+      aria-label={`Generate ${specialty.label} case`}
+      className="group p-4 md:p-5 rounded-xl border border-clinical-line hover:border-clinical-blue hover:shadow-xl hover:-translate-y-1 transition-all text-left bg-clinical-surface relative overflow-hidden"
+    >
+      <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity scale-[4]" aria-hidden="true">
+        {specialty.icon}
+      </div>
+      <div className="w-8 h-8 rounded-lg bg-clinical-bg border border-clinical-line flex items-center justify-center text-clinical-blue mb-3 group-hover:bg-clinical-blue group-hover:text-white transition-colors">
+        {specialty.icon}
+      </div>
+      <div className="font-bold text-xs text-clinical-ink group-hover:text-clinical-blue transition-colors">{specialty.label}</div>
+      <p className="text-[9px] text-clinical-slate mt-1 uppercase tracking-tighter opacity-60">Generate Scenario</p>
+    </button>
+  );
 }
 
 export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps) {
@@ -31,20 +146,6 @@ export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps)
     }
   }, [isOpen]);
 
-  const categories = [
-    { id: 'cardiology', label: 'Cardiology', icon: <Heart className="w-4 h-4" /> },
-    { id: 'pulmonology', label: 'Pulmonology', icon: <Wind className="w-4 h-4" /> },
-    { id: 'sepsis', label: 'Sepsis/Shock', icon: <AlertTriangle className="w-4 h-4" /> },
-    { id: 'trauma', label: 'Trauma/surgical', icon: <Droplets className="w-4 h-4" /> },
-    { id: 'neurology', label: 'Neurology', icon: <Activity className="w-4 h-4" /> },
-    { id: 'toxicology', label: 'Toxicology', icon: <FlaskIcon className="w-4 h-4" /> },
-    { id: 'pediatrics', label: 'Pediatrics', icon: <Baby className="w-4 h-4" /> },
-    { id: 'obgyn', label: 'OB/GYN', icon: <Microscope className="w-4 h-4" /> },
-    { id: 'gi_hepatology', label: 'GI & Hepatology', icon: <StethoscopeIcon className="w-4 h-4" /> },
-    { id: 'endocrinology', label: 'Endocrinology', icon: <Syringe className="w-4 h-4" /> },
-    { id: 'psychiatry', label: 'Psychiatry', icon: <Brain className="w-4 h-4 text-clinical-amber" /> },
-  ];
-
   const difficulties = [
     { id: 'intern', label: 'Intern', desc: 'Clear clinical signs, classic presentations.' },
     { id: 'resident', label: 'Resident', desc: 'Mixed clues, requires differential thinking.' },
@@ -56,6 +157,19 @@ export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps)
     { id: 'rural', label: 'Rural Clinic', icon: <Crosshair className="w-4 h-4" />, desc: 'Limited labs/imaging, slow results.' },
     { id: 'prehospital', label: 'EMS Environment', icon: <Truck className="w-4 h-4" />, desc: 'Field setting, monitor only.' },
   ];
+
+  const handleSelectSpecialty = (id: string) => onSelectCase(selectedDifficulty, id, selectedEnv);
+
+  // ── Search filtering ────────────────────────────────────────────────────────
+  const trimmedQuery = searchQuery.trim().toLowerCase();
+  const isFiltering = trimmedQuery.length > 0;
+
+  const filteredFlatList: Specialty[] = useMemo(() => {
+    if (!isFiltering) return [];
+    return SPECIALTY_GROUPS.flatMap(g => g.specialties).filter(s =>
+      s.label.toLowerCase().includes(trimmedQuery)
+    );
+  }, [isFiltering, trimmedQuery]);
 
   return (
     <AnimatePresence>
@@ -148,7 +262,7 @@ export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps)
                     <h3 className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest border-b border-clinical-line pb-1 flex-1">Choose Specialty Pathway</h3>
                   </div>
                   {/* Search bar */}
-                  <div className="relative mb-4">
+                  <div className="relative mb-5">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-clinical-slate/50" />
                     <input
                       type="text"
@@ -158,52 +272,60 @@ export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps)
                       className="w-full pl-9 pr-8 py-2 bg-clinical-bg border border-clinical-line rounded-lg text-xs focus:outline-none focus:border-clinical-blue/50 focus:ring-1 focus:ring-clinical-blue/30 transition-all"
                     />
                     {searchQuery && (
-                      <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-clinical-slate/50 hover:text-clinical-slate transition-colors">
+                      <button onClick={() => setSearchQuery('')} aria-label="Clear specialty filter" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-clinical-slate/50 hover:text-clinical-slate transition-colors">
                         <X className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
-                    {categories
-                      .filter(c => !searchQuery || c.label.toLowerCase().includes(searchQuery.toLowerCase()))
-                      .map(c => (
-                      <button
-                        key={c.id}
-                        onClick={() => onSelectCase(selectedDifficulty, c.id, selectedEnv)}
-                        aria-label={`Generate ${c.label} case`}
-                        className="group p-4 md:p-5 rounded-xl border border-clinical-line hover:border-clinical-blue hover:shadow-xl hover:-translate-y-1 transition-all text-left bg-clinical-surface relative overflow-hidden"
-                      >
-                        <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity scale-[4]" aria-hidden="true">
-                          {c.icon}
-                        </div>
-                        <div className="w-8 h-8 rounded-lg bg-clinical-bg border border-clinical-line flex items-center justify-center text-clinical-blue mb-3 group-hover:bg-clinical-blue group-hover:text-white transition-colors">
-                          {c.icon}
-                        </div>
-                        <div className="font-bold text-xs text-clinical-ink group-hover:text-clinical-blue transition-colors">{c.label}</div>
-                        <p className="text-[9px] text-clinical-slate mt-1 uppercase tracking-tighter opacity-60">Generate Scenario</p>
-                      </button>
-                    ))}
 
-                    {searchQuery && categories.filter(c => c.label.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
-                      <div className="sm:col-span-2 xl:col-span-3 py-8 text-center text-xs text-clinical-slate/50">
-                        No specialties match "{searchQuery}"
+                  {/* Flat filtered list when searching, grouped layout otherwise */}
+                  {isFiltering ? (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
+                        {filteredFlatList.map(s => (
+                          <SpecialtyCard key={s.id} specialty={s} onSelect={handleSelectSpecialty} />
+                        ))}
                       </div>
-                    )}
-
-                    <button
-                      onClick={() => onSelectCase(selectedDifficulty, 'any', selectedEnv)}
-                      aria-label="Generate random case from any specialty"
-                      className="sm:col-span-2 xl:col-span-3 p-4 md:p-5 rounded-xl border-2 border-dashed border-clinical-blue/30 hover:border-clinical-blue hover:bg-clinical-blue/5 transition-all text-center group"
-                    >
-                      <div className="flex items-center justify-center gap-3">
-                        <RefreshCw className="w-5 h-5 text-clinical-blue group-hover:rotate-180 transition-transform duration-700" />
-                        <div className="text-left">
-                          <div className="font-bold text-clinical-blue uppercase tracking-widest text-xs">Agnostic Emergency Intake</div>
-                          <p className="text-[9px] text-clinical-slate uppercase tracking-tighter opacity-60 italic">Pull from entire specialized pool</p>
+                      {filteredFlatList.length === 0 && (
+                        <div className="py-8 text-center text-xs text-clinical-slate/50">
+                          No specialties match "{searchQuery}"
                         </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {SPECIALTY_GROUPS.map(group => (
+                        <section key={group.id} aria-labelledby={`group-${group.id}`}>
+                          <h4
+                            id={`group-${group.id}`}
+                            className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest mb-3 border-b border-clinical-line/60 pb-1"
+                          >
+                            {group.label}
+                          </h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
+                            {group.specialties.map(s => (
+                              <SpecialtyCard key={s.id} specialty={s} onSelect={handleSelectSpecialty} />
+                            ))}
+                          </div>
+                        </section>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Pinned random-pick button — always at bottom */}
+                  <button
+                    onClick={() => onSelectCase(selectedDifficulty, 'any', selectedEnv)}
+                    aria-label="Generate random case from any specialty"
+                    className="mt-6 w-full p-4 md:p-5 rounded-xl border-2 border-dashed border-clinical-blue/30 hover:border-clinical-blue hover:bg-clinical-blue/5 transition-all text-center group"
+                  >
+                    <div className="flex items-center justify-center gap-3">
+                      <RefreshCw className="w-5 h-5 text-clinical-blue group-hover:rotate-180 transition-transform duration-700" />
+                      <div className="text-left">
+                        <div className="font-bold text-clinical-blue uppercase tracking-widest text-xs">Agnostic Emergency Intake</div>
+                        <p className="text-[9px] text-clinical-slate uppercase tracking-tighter opacity-60 italic">Pull from entire specialized pool</p>
                       </div>
-                    </button>
-                  </div>
+                    </div>
+                  </button>
                 </div>
               </div>
             </div>
