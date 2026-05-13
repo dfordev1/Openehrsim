@@ -10,9 +10,22 @@ function trimCase(mc: MedicalCase): Partial<MedicalCase> {
 }
 
 async function post<T>(url: string, body: object): Promise<T> {
+  // Include Supabase auth token if available so server can identify the user
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  try {
+    const { getSupabase } = await import('../lib/supabase');
+    const supabase = getSupabase();
+    if (supabase) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+    }
+  } catch { /* no-op if supabase unavailable */ }
+
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   });
   if (!res.ok) {

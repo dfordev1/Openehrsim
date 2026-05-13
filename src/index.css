@@ -213,11 +213,11 @@
 /* Phase 4: Mobile bottom nav */
 @media (max-width: 1023px) {
   .mobile-bottom-nav {
-    @apply fixed bottom-0 left-0 right-0 bg-clinical-surface border-t border-clinical-line flex items-center justify-around py-2 px-1 z-50;
+    @apply fixed bottom-0 left-0 right-0 bg-clinical-surface border-t border-clinical-line flex items-center justify-around py-1.5 px-1 z-50;
   }
 
   .mobile-bottom-nav-item {
-    @apply flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg text-clinical-slate transition-colors;
+    @apply flex flex-col items-center gap-0.5 px-1.5 py-1 rounded text-clinical-slate transition-colors;
   }
 
   .mobile-bottom-nav-item.active {
@@ -225,7 +225,7 @@
   }
 
   .mobile-bottom-nav-item span {
-    @apply text-[9px] font-medium;
+    @apply text-[8px] font-medium;
   }
 }
 

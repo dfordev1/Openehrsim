@@ -527,7 +527,7 @@ export function DiagnosisPad({
     // Collapsed peek ≈ 52% of viewport (room for active tab content);
     // expanded ≈ 88% to give a near-full-screen editor. These match
     // Healer/Epic Haiku's two-snap bottom-sheet convention.
-    const height = sheetExpanded ? '88vh' : '52vh';
+    const height = sheetExpanded ? '88vh' : '60vh';
     return (
       <>
         <motion.div
