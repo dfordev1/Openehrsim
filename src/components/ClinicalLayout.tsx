@@ -95,6 +95,7 @@ export function ClinicalLayout() {
 
 function ClinicalLayoutInner() {
   const [moreMenuOpen, setMoreMenuOpen] = React.useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = React.useState(false);
 
   // Pure UI state — only needed in this component, not shared globally
   const [vitalsExpanded, setVitalsExpanded] = React.useState(false);
@@ -272,9 +273,31 @@ function ClinicalLayoutInner() {
             <RefreshCw className="w-4 h-4" />
           </button>
           {!isAuthLoading && (user ? (
-            <button onClick={handleLogout} className="w-6 h-6 bg-gray-900 rounded-full flex items-center justify-center text-[10px] font-medium text-white" aria-label="Account">
-              {user.email?.[0].toUpperCase()}
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setAccountMenuOpen(p => !p)}
+                className="w-6 h-6 bg-gray-900 rounded-full flex items-center justify-center text-[10px] font-medium text-white"
+                aria-label="Account menu"
+              >
+                {user.email?.[0].toUpperCase()}
+              </button>
+              {accountMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setAccountMenuOpen(false)} />
+                  <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-xl shadow-lg py-2 px-1 min-w-[160px] z-50">
+                    <p className="px-3 py-1 text-[10px] text-gray-400 truncate">{user.email}</p>
+                    <div className="border-t border-gray-100 mt-1 pt-1">
+                      <button
+                        onClick={() => { setAccountMenuOpen(false); handleLogout(); }}
+                        className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           ) : isSupabaseConfigured ? (
             <button onClick={() => setIsAuthOpen(true)} className="text-xs text-gray-400 hover:text-gray-700" aria-label="Sign in">Sign in</button>
           ) : null)}

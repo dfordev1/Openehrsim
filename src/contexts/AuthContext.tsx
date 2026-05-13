@@ -42,10 +42,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsAuthLoading(false);
       return;
     }
-    supabase.auth.getUser().then(({ data }) => {
-      setUser((data as any).user ?? null);
-      setIsAuthLoading(false);
-    });
+    supabase.auth.getUser()
+      .then(({ data }) => setUser((data as any).user ?? null))
+      .finally(() => setIsAuthLoading(false));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
       if (event === 'PASSWORD_RECOVERY') {
