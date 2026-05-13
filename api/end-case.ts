@@ -225,11 +225,22 @@ USER NOTES: ${userNotes || "none"}${reasoningContext}`,
     // ── Persist result to simulation_results table ────────────────────────────
     const db = getServerSupabase();
     if (db) {
+      // Extract user_id from the Authorization header (Supabase anon JWT)
+      let userId: string | null = null;
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith('Bearer ')) {
+        try {
+          const { data: { user } } = await (db as any).auth.getUser(authHeader.replace('Bearer ', ''));
+          userId = user?.id ?? null;
+        } catch { /* ignore auth errors — save without user_id */ }
+      }
+
       // Build payload; include reasoning_score only if the column exists in the
       // user's schema — if not, we retry without it so an unmigrated DB doesn't
       // silently lose the whole row.
       const basePayload: Record<string, any> = {
         case_id:              caseId,
+        user_id:              userId,
         patient_name:         trimmed.patientName,
         age:                  trimmed.age,
         category:             trimmed.category,

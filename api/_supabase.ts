@@ -54,13 +54,17 @@ export async function getCaseServerSide(caseId: string): Promise<any | null> {
   return (data as any).full_case;
 }
 
-/** Update the persisted case after each intervention / time-advance. */
+/** Update the persisted case after each intervention / time-advance.
+ *  Uses upsert so the row is created if it doesn't exist (handles race
+ *  conditions between serverless function cold starts). */
 export async function updateCaseServerSide(caseId: string, fullCase: object): Promise<void> {
   const db = getServerSupabase();
   if (!db) { mem().set(caseId, fullCase); return; }
-  const { error } = await activeCases(db)
-    .update({ full_case: fullCase })
-    .eq("id", caseId);
+  const { error } = await activeCases(db).upsert({
+    id:         caseId,
+    full_case:  fullCase,
+    expires_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+  });
   if (error) throw new Error(`updateCaseServerSide: ${error.message}`);
 }
 
