@@ -135,7 +135,7 @@ export function StageCommitGate({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onCancel}
-            className="fixed inset-0 bg-clinical-ink/50 backdrop-blur-sm z-[150]"
+            className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-[150]"
             aria-hidden="true"
           />
           <motion.div
@@ -147,10 +147,10 @@ export function StageCommitGate({
             role="dialog"
             aria-modal="true"
             aria-label={`Commit reasoning before advancing to ${STAGE_LABELS[toStage]}`}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(640px,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] bg-clinical-surface border border-clinical-line rounded-xl shadow-2xl z-[151] overflow-hidden flex flex-col"
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(640px,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] bg-white border border-gray-200 rounded-xl shadow-2xl z-[151] overflow-hidden flex flex-col"
           >
             {/* Header */}
-            <div className="bg-clinical-teal text-white px-5 py-3 flex items-center justify-between shrink-0">
+            <div className="bg-gray-900 text-white px-5 py-3 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
                 <Lightbulb className="w-4 h-4" />
                 <div>
@@ -174,7 +174,7 @@ export function StageCommitGate({
             <div className="flex-1 overflow-y-auto p-5 space-y-5">
               {/* Requirements checklist */}
               <section>
-                <label className="text-[10px] font-bold text-clinical-slate uppercase tracking-wide mb-2 block">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-2 block">
                   Stage Requirements
                 </label>
                 <ul className="space-y-1.5">
@@ -184,8 +184,8 @@ export function StageCommitGate({
                       className={cn(
                         'flex items-center gap-2 text-xs px-3 py-1.5 rounded-md border',
                         c.ok
-                          ? 'bg-clinical-green/10 border-clinical-green/30 text-clinical-green'
-                          : 'bg-clinical-amber/10 border-clinical-amber/30 text-clinical-amber',
+                          ? 'bg-green-50 border-green-200 text-green-700'
+                          : 'bg-amber-50 border-amber-200 text-amber-700',
                       )}
                     >
                       {c.ok ? (
@@ -202,19 +202,19 @@ export function StageCommitGate({
 
               {/* PR editor */}
               <section>
-                <label className="text-[10px] font-bold text-clinical-teal uppercase tracking-wide flex items-center gap-1.5 mb-2">
+                <label className="text-[10px] font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5 mb-2">
                   <PenTool className="w-3 h-3" />
                   Problem Representation
-                  <span className="ml-1 text-clinical-slate/60 font-normal normal-case">
+                  <span className="ml-1 text-gray-400 font-normal normal-case">
                     — update with what you've learned during {STAGE_LABELS[fromStage]}
                   </span>
                 </label>
                 {previousPrSnapshot && (
-                  <details className="mb-2 text-[10px] text-clinical-slate">
-                    <summary className="cursor-pointer hover:text-clinical-ink">
+                  <details className="mb-2 text-[10px] text-gray-500">
+                    <summary className="cursor-pointer hover:text-gray-700">
                       Previous snapshot from {STAGE_LABELS[previousPrSnapshot.stage]} (T+{previousPrSnapshot.simTime}m)
                     </summary>
-                    <div className="mt-1.5 p-2.5 bg-clinical-bg border border-clinical-line rounded text-clinical-ink italic">
+                    <div className="mt-1.5 p-2.5 bg-gray-50 border border-gray-200 rounded text-gray-700 italic">
                       "{previousPrSnapshot.text}"
                     </div>
                   </details>
@@ -223,10 +223,10 @@ export function StageCommitGate({
                   value={localPr}
                   onChange={e => setLocalPr(e.target.value)}
                   placeholder="A [age]-year-old [gender] with [PMH] presenting with [duration] of [symptoms], notable for [key findings], concerning for [suspected diagnoses]..."
-                  className="w-full h-28 bg-clinical-bg border border-clinical-line rounded-lg p-3 text-sm leading-relaxed focus:outline-none focus:border-clinical-teal focus:ring-1 focus:ring-clinical-teal/30 resize-none"
+                  className="w-full h-28 bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm leading-relaxed focus:outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-300 resize-none"
                   aria-label="Problem representation"
                 />
-                <div className="text-[10px] text-clinical-slate/60 text-right mt-1">
+                <div className="text-[10px] text-gray-400 text-right mt-1">
                   {localPr.trim().length} / {req.minPrLength} required
                 </div>
               </section>
@@ -234,7 +234,7 @@ export function StageCommitGate({
               {/* Lead chooser — only when required */}
               {req.requiresLead && differentials.length > 0 && (
                 <section>
-                  <label className="text-[10px] font-bold text-clinical-slate uppercase tracking-wide mb-2 block">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-2 block">
                     Commit to a Lead Diagnosis
                   </label>
                   <div className="space-y-1.5">
@@ -245,14 +245,14 @@ export function StageCommitGate({
                         className={cn(
                           'w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-xs text-left transition-all',
                           d.isLead
-                            ? 'bg-clinical-teal-soft border-clinical-teal/40 ring-1 ring-clinical-teal/30 text-clinical-teal font-medium'
-                            : 'bg-clinical-bg/50 border-clinical-line hover:border-clinical-teal/30',
+                            ? 'bg-gray-100 border-gray-300 ring-1 ring-gray-300 text-gray-900 font-medium'
+                            : 'bg-gray-50 border-gray-200 hover:border-gray-300',
                         )}
                       >
                         <Star
                           className={cn(
                             'w-3.5 h-3.5 shrink-0',
-                            d.isLead ? 'text-clinical-teal fill-current' : 'text-clinical-slate/40',
+                            d.isLead ? 'text-gray-900 fill-current' : 'text-gray-300',
                           )}
                         />
                         <span className="flex-1">{d.diagnosis}</span>
@@ -260,10 +260,10 @@ export function StageCommitGate({
                           className={cn(
                             'text-[10px] capitalize',
                             d.confidence === 'high'
-                              ? 'text-clinical-green'
+                              ? 'text-green-600'
                               : d.confidence === 'moderate'
-                              ? 'text-clinical-amber'
-                              : 'text-clinical-slate/60',
+                              ? 'text-amber-600'
+                              : 'text-gray-400',
                           )}
                         >
                           {d.confidence}
@@ -275,31 +275,31 @@ export function StageCommitGate({
               )}
 
               {/* Summary of what's about to be committed */}
-              <section className="bg-clinical-teal-soft/40 border border-clinical-teal/30 rounded-lg p-3 text-xs text-clinical-ink">
-                <p className="text-[10px] font-semibold text-clinical-teal uppercase mb-1">
+              <section className="bg-gray-100 border border-gray-200 rounded-lg p-3 text-xs text-gray-700">
+                <p className="text-[10px] font-semibold text-gray-900 uppercase mb-1">
                   Committing this snapshot will:
                 </p>
-                <ul className="list-disc list-inside space-y-0.5 text-clinical-slate">
+                <ul className="list-disc list-inside space-y-0.5 text-gray-500">
                   <li>Record your problem representation as v{/* future-ordering */}{'X'} for this case</li>
                   <li>Save your current differential ({differentials.length} dx) as the state at {STAGE_LABELS[fromStage]}</li>
-                  {lead && <li>Flag <strong className="text-clinical-teal">{lead.diagnosis}</strong> as your working lead</li>}
+                  {lead && <li>Flag <strong className="text-gray-900">{lead.diagnosis}</strong> as your working lead</li>}
                   <li>Unlock navigation to {STAGE_LABELS[toStage]}</li>
                 </ul>
               </section>
             </div>
 
             {/* Footer */}
-            <div className="bg-clinical-bg border-t border-clinical-line px-5 py-3 flex items-center gap-3 shrink-0">
+            <div className="bg-gray-50 border-t border-gray-200 px-5 py-3 flex items-center gap-3 shrink-0">
               <button
                 onClick={onCancel}
-                className="text-xs font-medium text-clinical-slate hover:text-clinical-ink transition-colors"
+                className="text-xs font-medium text-gray-500 hover:text-gray-900 transition-colors"
               >
                 Keep working on {STAGE_LABELS[fromStage]}
               </button>
               <button
                 onClick={handleCommit}
                 disabled={!canCommit || localPr.trim().length < req.minPrLength}
-                className="ml-auto flex items-center gap-2 bg-clinical-teal hover:bg-clinical-teal-strong disabled:bg-clinical-line disabled:text-clinical-slate/50 text-white text-xs font-medium px-4 py-2 rounded-lg transition-all"
+                className="ml-auto flex items-center gap-2 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-medium px-4 py-2 rounded-lg transition-all"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 Commit &amp; advance to {STAGE_LABELS[toStage]}
