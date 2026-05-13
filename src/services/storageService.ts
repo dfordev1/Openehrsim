@@ -44,10 +44,10 @@ export async function getRecentSimulations() {
   if (!user) return [];
 
   const { data, error } = await (supabase.from('simulation_results') as any)
-    .select('category, difficulty, score, created_at')
+    .select('case_id, patient_name, age, category, difficulty, score, correct_diagnosis, feedback, reasoning_score, created_at')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
-    .limit(8);
+    .limit(20);
 
   if (error) {
     console.error('Error fetching simulations:', error);
