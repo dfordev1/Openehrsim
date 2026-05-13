@@ -1,5 +1,10 @@
 /**
  * CaseContext — all case-related state & handlers extracted from App.tsx.
+ *
+ * TODO: Split handler logic into dedicated hooks for readability:
+ *   - src/hooks/useInterventionHandlers.ts (handlePerformIntervention, handleOrderTest, handleAdvanceTime)
+ *   - src/hooks/useCommsHandlers.ts (handleStaffCall, handleConsult)
+ *   - src/hooks/useEvaluationHandlers.ts (handleEndCase)
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
