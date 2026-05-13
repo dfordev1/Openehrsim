@@ -54,6 +54,17 @@ Explanation: ${fullCase.explanation || ""}`
 
     const openai = new OpenAI({ apiKey: process.env.DEEPSEEK_API_KEY, baseURL: "https://api.deepseek.com" });
 
+    // Separate already-resulted labs from still-pending ones so the AI can evolve their values
+    const resultedLabs = (medicalCase.labs || []).filter(
+      (l: any) => typeof l.availableAt === "number" && l.availableAt <= (medicalCase.simulationTime || 0)
+    );
+    const pendingLabs = (medicalCase.labs || []).filter(
+      (l: any) => typeof l.availableAt !== "number" || l.availableAt > (medicalCase.simulationTime || 0)
+    );
+    const evolveLabsInstruction = resultedLabs.length > 0
+      ? `\n\nEVOLVING LABS — ${resultedLabs.length} lab(s) already resulted. Based on the interventions given and time elapsed, update their values to reflect the patient's current physiological state. Return updated values ONLY in a separate top-level "evolvedLabs" field: [{name, value, unit, normalRange, status, clinicalNote?}]. Do NOT modify the main labs[] array.`
+      : "";
+
     const aiRes = await openai.chat.completions.create({
       model: "deepseek-chat",
       messages: [
@@ -77,14 +88,14 @@ RULES:
    - "deceased" if HR<20 or HR>200 or SBP<50 or SpO2<60 or temp<32 or temp>42
    - "critical_deterioration" if trend is 'critical' and vitals worsening
    - otherwise "alive"
-8. DO NOT modify labs or imaging arrays — those are managed separately.
-9. DO NOT include correctDiagnosis or explanation in the response.
+8. DO NOT include correctDiagnosis or explanation in the response.${evolveLabsInstruction}
 
 Return the ENTIRE updated MedicalCase JSON. Schema: ${MEDICAL_CASE_SCHEMA}`,
         },
         {
           role: "user",
           content: `Current state: ${JSON.stringify(trimCase(medicalCase))}
+${resultedLabs.length > 0 ? `\nCurrently resulted labs (evolve their values): ${JSON.stringify(resultedLabs.map((l: any) => ({ name: l.name, value: l.value, unit: l.unit, status: l.status })))}` : ""}
 ${intervention ? `Intervention: ${intervention}` : "Time advancement only — no active intervention."}
 Time advances by ${waitTime} min (${medicalCase.simulationTime} → ${newSimTime}).`,
         },
@@ -98,13 +109,24 @@ Time advances by ${waitTime} min (${medicalCase.simulationTime} → ${newSimTime
     const updated = JSON.parse(content);
     if (!updated.vitals) throw new Error("AI returned incomplete case.");
 
+    // Merge AI-evolved lab values back into resulted labs
+    const evolvedFromAI: any[] = Array.isArray(updated.evolvedLabs) ? updated.evolvedLabs : [];
+    delete updated.evolvedLabs;
+    const mergedResulted = resultedLabs.map((rl: any) => {
+      const ev = evolvedFromAI.find((e: any) => e.name?.toLowerCase() === rl.name?.toLowerCase());
+      return ev
+        ? { ...rl, value: ev.value ?? rl.value, unit: ev.unit ?? rl.unit, normalRange: ev.normalRange ?? rl.normalRange, status: ev.status ?? rl.status, clinicalNote: ev.clinicalNote ?? rl.clinicalNote }
+        : rl;
+    });
+
     // Deterministic overrides — never trust the AI to do arithmetic correctly
     updated.id             = medicalCase.id;
     updated.simulationTime = newSimTime;   // always the server-calculated value
     updated.availableTests = medicalCase.availableTests || updated.availableTests;
+    updated.priorRecords   = medicalCase.priorRecords   || updated.priorRecords;
 
-    // Merge ordered tests back (AI must not wipe them)
-    updated.labs    = medicalCase.labs    || [];
+    // Restore labs (merged resulted + still-pending); keep ordered imaging
+    updated.labs    = [...mergedResulted, ...pendingLabs];
     updated.imaging = medicalCase.imaging || [];
 
     // ── Write updated full case back to Supabase ──────────────────────────────
@@ -120,6 +142,8 @@ Time advances by ${waitTime} min (${medicalCase.simulationTime} → ${newSimTime
         clinicalActions:     updated.clinicalActions,
         patientOutcome:      updated.patientOutcome,
         currentCondition:    updated.currentCondition,
+        labs:                updated.labs,    // persist evolved lab values
+        imaging:             updated.imaging,
       });
     }
 

@@ -35,9 +35,15 @@ export interface ImagingResult {
   availableAt?: number;
 }
 
+export interface AvailableTest {
+  name: string;
+  stat: number;    // turnaround in sim-minutes when ordered STAT
+  routine: number; // turnaround in sim-minutes when ordered routine
+}
+
 export interface AvailableTests {
-  labs: string[];
-  imaging: string[];
+  labs: AvailableTest[];
+  imaging: AvailableTest[];
 }
 
 export interface ClinicalAction {

@@ -47,9 +47,11 @@ export const MEDICAL_CASE_SCHEMA = `
       orderedAt?: number;
       availableAt?: number;
     }[];
-    availableTests: {                  // Catalog the user can order from
-      labs: string[];
-      imaging: string[];
+    availableTests: {
+      // Each entry declares its OWN turnaround times — no hard-coded lookup table needed.
+      // stat/routine in sim-minutes. Use real clinical knowledge for each specific test.
+      labs: { name: string; stat: number; routine: number }[];
+      imaging: { name: string; stat: number; routine: number }[];
     };
     medications: {
       id: string;
