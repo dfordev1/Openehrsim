@@ -11,6 +11,7 @@ interface TreatmentTabProps {
   interventionInput: string;
   intervening: boolean;
   transferExpanded: boolean;
+  simTime: number;
   onInterventionChange: (val: string) => void;
   onExecuteOrder: () => void;
   onWait: (minutes: number) => void;
@@ -26,6 +27,7 @@ export function TreatmentTab({
   interventionInput,
   intervening,
   transferExpanded,
+  simTime,
   onInterventionChange,
   onExecuteOrder,
   onWait,
@@ -34,6 +36,8 @@ export function TreatmentTab({
   onOrderTest,
   onAdvanceTime,
 }: TreatmentTabProps) {
+  const trend = medicalCase.physiologicalTrend;
+  const penaltyLevel = simTime >= 90 ? 'high' : simTime >= 60 ? 'moderate' : simTime >= 45 ? 'low' : null;
   return (
     <motion.div
       key="treatment"
@@ -41,10 +45,36 @@ export function TreatmentTab({
       animate={{ opacity: 1 }}
       className="flex flex-col gap-8 py-8"
     >
-      {/* Vitals line */}
-      <p className="text-xs text-gray-400 font-mono">
-        HR {medicalCase.vitals.heartRate} · BP {medicalCase.vitals.bloodPressure} · SpO2 {medicalCase.vitals.oxygenSaturation}% · RR {medicalCase.vitals.respiratoryRate} · {medicalCase.vitals.temperature}°C
-      </p>
+      {/* Vitals + trend */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <p className="text-xs text-gray-400 font-mono">
+          HR {medicalCase.vitals.heartRate} · BP {medicalCase.vitals.bloodPressure} · SpO2 {medicalCase.vitals.oxygenSaturation}% · RR {medicalCase.vitals.respiratoryRate} · {medicalCase.vitals.temperature}°C
+        </p>
+        {trend && trend !== 'stable' && (
+          <span className={cn(
+            'text-[10px] font-semibold px-2 py-0.5 rounded-full',
+            trend === 'improving'              && 'bg-green-50 text-green-600',
+            trend === 'declining'              && 'bg-amber-50 text-amber-600',
+            trend === 'critical'               && 'bg-red-50 text-red-600 animate-pulse',
+          )}>
+            {trend === 'improving' ? '↑ Improving' : trend === 'declining' ? '↓ Declining' : '⚠ Critical'}
+          </span>
+        )}
+      </div>
+
+      {/* Time pressure warning */}
+      {penaltyLevel && (
+        <p className={cn(
+          'text-xs',
+          penaltyLevel === 'low'      && 'text-amber-500',
+          penaltyLevel === 'moderate' && 'text-orange-500',
+          penaltyLevel === 'high'     && 'text-red-500 font-medium',
+        )}>
+          {penaltyLevel === 'low'      && `⏱ T+${simTime}m — efficiency score beginning to drop.`}
+          {penaltyLevel === 'moderate' && `⏱ T+${simTime}m — significant time penalty accumulating.`}
+          {penaltyLevel === 'high'     && `⏱ T+${simTime}m — major efficiency penalty. Expedite management.`}
+        </p>
+      )}
 
       {/* Hero: intervention input */}
       <div>
