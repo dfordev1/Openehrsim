@@ -8,7 +8,6 @@ interface AssessmentTabProps {
   simTime: number;
   userNotes: string;
   evaluation: CaseEvaluation | null;
-  feedback: { score: number; feedback: string } | null;
   submitting: boolean;
   logs: { time: string; text: string }[];
   onNotesChange: (val: string) => void;
@@ -23,7 +22,6 @@ export function AssessmentTab({
   simTime,
   userNotes,
   evaluation,
-  feedback,
   submitting,
   logs,
   onNotesChange,
@@ -32,9 +30,9 @@ export function AssessmentTab({
   onEndCase,
   onNewCase,
 }: AssessmentTabProps) {
-  const closed = !!(evaluation || feedback);
-  const score = evaluation?.score ?? feedback?.score ?? 0;
-  const feedbackText = evaluation?.feedback ?? feedback?.feedback ?? '';
+  const closed = !!evaluation;
+  const score = evaluation?.score ?? 0;
+  const feedbackText = evaluation?.feedback ?? '';
   const correctDx = evaluation?.correctDiagnosis ?? medicalCase.correctDiagnosis;
 
   // #6: Two-step end case confirmation

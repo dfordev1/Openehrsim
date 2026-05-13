@@ -123,7 +123,7 @@ function ClinicalLayoutInner() {
     userNotes,
     setUserNotes,
     evaluation,
-    feedback,
+
     submitting,
     differential,
     setDifferential,
@@ -378,7 +378,7 @@ function ClinicalLayoutInner() {
             )}
 
             {activeTab === 'assess' && medicalCase && (
-              <AssessmentTab key="assess" medicalCase={medicalCase} simTime={simTime} userNotes={userNotes} evaluation={evaluation} feedback={feedback} submitting={submitting} logs={logs} differential={differential} onDifferentialChange={setDifferential} onNotesChange={setUserNotes} onEndCase={handleEndCase} onNewCase={() => loadNewCase()} />
+              <AssessmentTab key="assess" medicalCase={medicalCase} simTime={simTime} userNotes={userNotes} evaluation={evaluation} submitting={submitting} logs={logs} differential={differential} onDifferentialChange={setDifferential} onNotesChange={setUserNotes} onEndCase={handleEndCase} onNewCase={() => loadNewCase()} />
             )}
 
             {activeTab === 'notes' && (

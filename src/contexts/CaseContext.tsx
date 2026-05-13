@@ -47,7 +47,6 @@ export interface CaseContextValue {
   userNotes: string;
   setUserNotes: React.Dispatch<React.SetStateAction<string>>;
   evaluation: CaseEvaluation | null;
-  feedback: { score: number; feedback: string } | null;
   submitting: boolean;
   differential: string;
   setDifferential: React.Dispatch<React.SetStateAction<string>>;
