@@ -48,9 +48,16 @@ export const MEDICAL_CASE_SCHEMA = `
       orderedAt?: number;
       availableAt?: number;
     }[];
-    availableTests: {                  // Comprehensive catalog — ≥30 labs, ≥15 imaging
-      labs: string[];
-      imaging: string[];
+    availableTests: {
+      // Each entry carries its OWN realistic turnaround times — no hard-coded lookup table.
+      // stat/routine are in sim-minutes. Use clinical knowledge: POC=2-5, standard=15-30,
+      // send-out/culture/specialized=hours to days. Examples:
+      //   {name:"Blood Glucose (POC)", stat:2, routine:5}
+      //   {name:"CBC", stat:15, routine:45}
+      //   {name:"ADAMTS13 Activity", stat:1440, routine:4320}
+      //   {name:"Blood Culture x2", stat:2880, routine:4320}
+      labs: { name: string; stat: number; routine: number }[];
+      imaging: { name: string; stat: number; routine: number }[];
     };
     medications: {
       id: string;

@@ -139,7 +139,15 @@ attending (MASTERY-LEVEL — career-defining cases):
   physicalExam          : { heent, cardiac, respiratory, abdomen, extremities, neurological } — 2-3 sentences each
   labs                  : full array with specific values — NO orderedAt/availableAt at generation time
   imaging               : full array with detailed multi-sentence findings — NO orderedAt/availableAt at generation time
-  availableTests        : { labs: string[], imaging: string[] } — comprehensive catalog
+  availableTests        : {
+                            labs:    { name: string; stat: number; routine: number }[],
+                            imaging: { name: string; stat: number; routine: number }[]
+                          }
+                          — comprehensive catalog; each entry carries its OWN turnaround times in sim-minutes.
+                            Use real clinical knowledge: POC glucose → stat:2,routine:5; CBC → stat:15,routine:45;
+                            ADAMTS13 → stat:1440,routine:4320; Blood Culture → stat:2880,routine:4320;
+                            CT Chest → stat:35,routine:75; MRI Brain → stat:75,routine:150.
+                            DO NOT use a flat number for every entry — vary them realistically.
   medications           : []
   activeAlarms          : [] or populated if vitals are critical
   currentCondition      : one-line clinical status
@@ -153,6 +161,17 @@ attending (MASTERY-LEVEL — career-defining cases):
   specialty_tags        : string[] — ALL specialties involved (min 2; match the difficulty contract)
   managementConflicts   : string[] — ALL active competing treatment priorities (NEVER empty)
   requiredConsultations : string[] — ALL subspecialties needed for optimal management
+  priorRecords          : {
+                            homeMedications: { name: string; dose: string; route: string; indication: string; startedYearsAgo?: number }[];
+                            allergies:       { substance: string; reaction: string; severity: "mild"|"moderate"|"severe" }[];
+                            baselineLabs:    { name: string; value: string|number; unit: string; daysAgo: number }[];
+                            priorHospitalizations: { reason: string; yearsAgo: number; outcome: string }[];
+                          }
+                          — REQUIRED on every case. Home medications must include dose, route, and clinical indication.
+                            Allergies must include reaction type and severity. Baseline labs should include
+                            at least 2-3 values that are relevant to the current presentation (e.g. baseline Cr
+                            for a patient with AKI, baseline Hb for a patient with anaemia). Prior hospitalizations
+                            are optional but should be present for patients with complex histories.
   patientOutcome        : "alive"
 
   // ANSWER KEY — server-side only, NEVER include in any client response:
@@ -186,9 +205,22 @@ Make it genuinely harrowing. This is the case that gets discussed at morning rep
     if (!fullCase.id) fullCase.id = `case-${Math.random().toString(36).slice(2, 9)}`;
 
     // Guarantee required new fields are present even if AI skips them
-    if (!Array.isArray(fullCase.specialty_tags))      fullCase.specialty_tags      = [];
-    if (!Array.isArray(fullCase.managementConflicts)) fullCase.managementConflicts = [];
+    if (!Array.isArray(fullCase.specialty_tags))        fullCase.specialty_tags        = [];
+    if (!Array.isArray(fullCase.managementConflicts))   fullCase.managementConflicts   = [];
     if (!Array.isArray(fullCase.requiredConsultations)) fullCase.requiredConsultations = [];
+    if (!fullCase.priorRecords || typeof fullCase.priorRecords !== "object") {
+      fullCase.priorRecords = { homeMedications: [], allergies: [], baselineLabs: [], priorHospitalizations: [] };
+    }
+    // Normalise availableTests: coerce any legacy string[] entries to {name, stat, routine}
+    if (fullCase.availableTests) {
+      for (const key of ["labs", "imaging"] as const) {
+        if (Array.isArray(fullCase.availableTests[key])) {
+          fullCase.availableTests[key] = fullCase.availableTests[key].map((t: any) =>
+            typeof t === "string" ? { name: t, stat: key === "labs" ? 20 : 30, routine: key === "labs" ? 45 : 60 } : t
+          );
+        }
+      }
+    }
 
     // ── Persist FULL case server-side (Supabase or in-memory fallback) ──────
     await storeCaseServerSide(fullCase.id, fullCase);
