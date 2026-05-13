@@ -8,6 +8,8 @@ interface KeyboardShortcutsOptions {
   onDiagnosis: () => void;
   onCommandPalette: () => void;
   onUndo: () => void;
+  /** Redo — bound to Cmd/Ctrl+Shift+Z (and Cmd/Ctrl+Y as a common alias). */
+  onRedo?: () => void;
   enabled: boolean;
 }
 
@@ -29,6 +31,7 @@ export function useKeyboardShortcuts({
   onDiagnosis,
   onCommandPalette,
   onUndo,
+  onRedo,
   enabled,
 }: KeyboardShortcutsOptions) {
   useEffect(() => {
@@ -45,6 +48,18 @@ export function useKeyboardShortcuts({
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         onCommandPalette();
+        return;
+      }
+
+      // Cmd/Ctrl + Shift + Z (or Cmd/Ctrl + Y) for redo. Checked before
+      // the plain undo case so the Shift modifier routes here.
+      if (
+        onRedo &&
+        (e.metaKey || e.ctrlKey) &&
+        ((e.key.toLowerCase() === 'z' && e.shiftKey) || e.key.toLowerCase() === 'y')
+      ) {
+        e.preventDefault();
+        onRedo();
         return;
       }
 
@@ -79,5 +94,5 @@ export function useKeyboardShortcuts({
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [enabled, onTabChange, onNewCase, onDiagnosis, onCommandPalette, onUndo]);
+  }, [enabled, onTabChange, onNewCase, onDiagnosis, onCommandPalette, onUndo, onRedo]);
 }

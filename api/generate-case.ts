@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import OpenAI from "openai";
 import { MEDICAL_CASE_SCHEMA } from "../src/lib/schema.js";
+import { LOCKED_SENTINEL } from "../src/lib/constants.js";
 import { storeCaseServerSide } from "./_supabase.js";
 
 function validateRequest(body: any) {
@@ -136,7 +137,7 @@ Output MUST be valid JSON matching: ${MEDICAL_CASE_SCHEMA}`,
 
     // Physical exam starts locked
     clientCase.physicalExam = Object.fromEntries(
-      Object.keys(fullCase.physicalExam || {}).map((k) => [k, "Not yet examined"])
+      Object.keys(fullCase.physicalExam || {}).map((k) => [k, LOCKED_SENTINEL])
     );
 
     res.json(clientCase);

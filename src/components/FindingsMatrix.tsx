@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Grid3x3, Plus, Minus, Star } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -19,25 +19,41 @@ interface FindingsMatrixProps {
 const SOURCE_COLOR: Record<ClinicalFinding['source'], string> = {
   history: 'bg-blue-400',
   exam: 'bg-indigo-400',
-  lab: 'bg-green-400',
+  lab: 'bg-clinical-green',
   imaging: 'bg-purple-400',
-  vitals: 'bg-red-400',
+  vitals: 'bg-clinical-red',
 };
 
-function Cell({
-  relevance,
-  onClick,
-}: {
+/** Cycle: none → positive → negative → none */
+function nextRelevance(current: Relevance): Relevance {
+  if (current === 'none') return 'positive';
+  if (current === 'positive') return 'negative';
+  return 'none';
+}
+
+// ── Memoized cell ──────────────────────────────────────────────────────────
+// Re-renders only when its own relevance changes or its callback identity
+// changes. Previously every cell in the matrix re-rendered on every parent
+// update, which starts hurting at ~50 findings × 10+ differentials.
+interface CellProps {
+  findingId: string;
+  differentialId: string;
   relevance: Relevance;
-  onClick: () => void;
-}) {
+  onUpdate: (findingId: string, differentialId: string, relevance: Relevance) => void;
+}
+
+const Cell = memo(function Cell({ findingId, differentialId, relevance, onUpdate }: CellProps) {
+  const handleClick = useCallback(
+    () => onUpdate(findingId, differentialId, nextRelevance(relevance)),
+    [findingId, differentialId, relevance, onUpdate],
+  );
   const base =
-    'w-full h-full flex items-center justify-center transition-colors focus:outline-none focus:ring-1 focus:ring-teal-500';
+    'w-full h-full flex items-center justify-center transition-colors focus:outline-none focus:ring-1 focus:ring-clinical-teal';
   if (relevance === 'positive') {
     return (
       <button
-        onClick={onClick}
-        className={cn(base, 'bg-green-100 hover:bg-green-200 text-green-700')}
+        onClick={handleClick}
+        className={cn(base, 'bg-clinical-green/15 hover:bg-clinical-green/25 text-clinical-green')}
         aria-label="Pertinent positive — click to toggle"
       >
         <Plus className="w-3 h-3" />
@@ -47,8 +63,8 @@ function Cell({
   if (relevance === 'negative') {
     return (
       <button
-        onClick={onClick}
-        className={cn(base, 'bg-red-100 hover:bg-red-200 text-red-600')}
+        onClick={handleClick}
+        className={cn(base, 'bg-clinical-red/15 hover:bg-clinical-red/25 text-clinical-red')}
         aria-label="Pertinent negative — click to toggle"
       >
         <Minus className="w-3 h-3" />
@@ -57,21 +73,56 @@ function Cell({
   }
   return (
     <button
-      onClick={onClick}
+      onClick={handleClick}
       className={cn(base, 'bg-clinical-bg/60 hover:bg-clinical-bg text-clinical-slate/30')}
       aria-label="Unassigned — click to mark positive"
     >
       <span className="text-[10px]">·</span>
     </button>
   );
+});
+
+// ── Memoized row ───────────────────────────────────────────────────────────
+// Keeps the row static when unrelated findings change. We pass only the
+// minimal slice of each finding's relevanceByDx so cell identity is stable.
+interface RowProps {
+  finding: ClinicalFinding;
+  differentials: DifferentialEntry[];
+  onUpdateCell: (findingId: string, differentialId: string, relevance: Relevance) => void;
 }
 
-/** Cycle: none → positive → negative → none */
-function nextRelevance(current: Relevance): Relevance {
-  if (current === 'none') return 'positive';
-  if (current === 'positive') return 'negative';
-  return 'none';
-}
+const Row = memo(function Row({ finding, differentials, onUpdateCell }: RowProps) {
+  return (
+    <tr className="border-t border-clinical-line/40">
+      <td className="sticky left-0 z-10 bg-clinical-surface px-3 py-1.5 align-middle">
+        <div className="flex items-start gap-2">
+          <div
+            className={cn(
+              'w-1.5 h-1.5 rounded-full shrink-0 mt-1',
+              SOURCE_COLOR[finding.source],
+            )}
+            title={finding.source}
+          />
+          <span className="text-clinical-ink leading-snug">{finding.text}</span>
+        </div>
+      </td>
+      {differentials.map(d => {
+        const current: Relevance =
+          (finding.relevanceByDx && finding.relevanceByDx[d.id]) || 'none';
+        return (
+          <td key={d.id} className="border-l border-clinical-line/40 h-8 p-0">
+            <Cell
+              findingId={finding.id}
+              differentialId={d.id}
+              relevance={current}
+              onUpdate={onUpdateCell}
+            />
+          </td>
+        );
+      })}
+    </tr>
+  );
+});
 
 export function FindingsMatrix({
   findings,
@@ -121,8 +172,8 @@ export function FindingsMatrix({
           <Grid3x3 className="w-3 h-3" /> Findings × Differentials
         </span>
         <span className="font-normal">
-          Click a cell: · → <span className="text-green-600">+</span> →{' '}
-          <span className="text-red-600">−</span> → ·
+          Click a cell: · → <span className="text-clinical-green">+</span> →{' '}
+          <span className="text-clinical-red">−</span> → ·
         </span>
       </div>
 
@@ -142,18 +193,18 @@ export function FindingsMatrix({
                   <div className="flex flex-col items-center gap-0.5">
                     <div className="flex items-center gap-1 justify-center">
                       {d.isLead && (
-                        <Star className="w-2.5 h-2.5 text-teal-600 fill-current" />
+                        <Star className="w-2.5 h-2.5 text-clinical-teal fill-current" />
                       )}
                       <span className="font-semibold text-clinical-ink truncate max-w-[80px]">
                         {d.diagnosis}
                       </span>
                     </div>
                     <span className="text-[9px] text-clinical-slate/70 font-normal">
-                      <span className="text-green-600">
+                      <span className="text-clinical-green">
                         +{dxScores[d.id]?.pos ?? 0}
                       </span>
                       {' / '}
-                      <span className="text-red-600">
+                      <span className="text-clinical-red">
                         −{dxScores[d.id]?.neg ?? 0}
                       </span>
                     </span>
@@ -164,39 +215,12 @@ export function FindingsMatrix({
           </thead>
           <tbody>
             {findings.map(f => (
-              <tr key={f.id} className="border-t border-clinical-line/40">
-                <td className="sticky left-0 z-10 bg-clinical-surface px-3 py-1.5 align-middle">
-                  <div className="flex items-start gap-2">
-                    <div
-                      className={cn(
-                        'w-1.5 h-1.5 rounded-full shrink-0 mt-1',
-                        SOURCE_COLOR[f.source],
-                      )}
-                      title={f.source}
-                    />
-                    <span className="text-clinical-ink leading-snug">
-                      {f.text}
-                    </span>
-                  </div>
-                </td>
-                {differentials.map(d => {
-                  const current =
-                    (f.relevanceByDx && f.relevanceByDx[d.id]) || 'none';
-                  return (
-                    <td
-                      key={d.id}
-                      className="border-l border-clinical-line/40 h-8 p-0"
-                    >
-                      <Cell
-                        relevance={current}
-                        onClick={() =>
-                          onUpdateCell(f.id, d.id, nextRelevance(current))
-                        }
-                      />
-                    </td>
-                  );
-                })}
-              </tr>
+              <Row
+                key={f.id}
+                finding={f}
+                differentials={differentials}
+                onUpdateCell={onUpdateCell}
+              />
             ))}
           </tbody>
         </table>

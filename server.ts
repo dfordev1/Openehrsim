@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import OpenAI from "openai";
 import { GoogleGenAI, Type } from "@google/genai";
 import { MEDICAL_CASE_SCHEMA } from "./src/lib/schema";
+import { LOCKED_SENTINEL } from "./src/lib/constants";
 import { MedicalCase } from "./src/types";
 
 // ── In-memory case store for dev mode ─────────────────────────────────────────
@@ -138,7 +139,7 @@ Output MUST be valid JSON adhering to: ${MEDICAL_CASE_SCHEMA}`,
       // Physical exam starts locked
       if (fullCase.physicalExam) {
         clientCase.physicalExam = Object.fromEntries(
-          Object.keys(fullCase.physicalExam).map((k) => [k, "Not yet examined"])
+          Object.keys(fullCase.physicalExam).map((k) => [k, LOCKED_SENTINEL])
         );
       }
 
@@ -330,7 +331,7 @@ Time advances by ${waitTime} min (${medicalCase.simulationTime} → ${newSimTime
       if (!fullCase) return res.status(404).json({ error: "Case not found. Please start a new case." });
 
       const finding = fullCase.physicalExam?.[system];
-      if (!finding || finding === "Not yet examined") {
+      if (!finding || finding === LOCKED_SENTINEL) {
         return res.status(404).json({ error: `No finding for system "${system}" in this case.` });
       }
 
