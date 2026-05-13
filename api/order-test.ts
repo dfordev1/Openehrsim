@@ -6,7 +6,7 @@
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getCaseServerSide } from "./_supabase.js";
-import { normaliseTestName, inferTurnaround } from "../src/utils/normaliseTestName.js";
+import { TURNAROUND, normaliseTestName } from "../src/utils/normaliseTestName.js";
 
 function validateRequest(body: any) {
   if (!body || typeof body !== "object") throw new Error("Request body must be a JSON object.");
@@ -32,34 +32,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Normalise: "Troponin I" → "Troponin", "EKG" → "ECG", "CT Brain" → "CT Head", etc.
     const testName = normaliseTestName(rawName);
 
+    // Use known turnaround if available, otherwise use sensible defaults
+    const delays = TURNAROUND[testName] || (testType === "lab"
+      ? { stat: 20, routine: 45 }
+      : { stat: 30, routine: 60 });
+
+    const orderedAt   = currentSimTime;
+    const availableAt = currentSimTime + delays[priority];
+
     const fullCase = await getCaseServerSide(caseId);
     if (!fullCase) {
       return res.status(404).json({ error: "Case not found. Please start a new case." });
     }
 
-    // Look up timing from the AI-declared catalog first; fall back to keyword inference.
-    const catalog: any[] = testType === "lab"
-      ? (fullCase.availableTests?.labs || [])
-      : (fullCase.availableTests?.imaging || []);
-
-    const catalogEntry = catalog.find((t: any) => {
-      const n = typeof t === "string" ? t : t.name;
-      return (
-        normaliseTestName(n).toLowerCase() === testName.toLowerCase() ||
-        n.toLowerCase() === rawName.toLowerCase()
-      );
-    });
-
-    const delays =
-      catalogEntry && typeof catalogEntry === "object" && catalogEntry.stat != null
-        ? { stat: catalogEntry.stat, routine: catalogEntry.routine }
-        : inferTurnaround(testName, testType);
-
-    const orderedAt   = currentSimTime;
-    const availableAt = currentSimTime + delays[priority];
-
     let result: any;
     if (testType === "lab") {
+      // Try exact match first, then fuzzy match by checking if names contain each other
       const match = (fullCase.labs || []).find(
         (l: any) => normaliseTestName(l.name) === testName
       ) || (fullCase.labs || []).find(
