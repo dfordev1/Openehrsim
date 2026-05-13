@@ -64,22 +64,21 @@ Explanation: ${fullCase.explanation || ""}`
 ${pathologyCtx}
 
 RULES:
-1. Set simulationTime = ${newSimTime}.
-2. Evolve vitals realistically based on the hidden pathology + interventions given.
+1. Evolve vitals realistically based on the hidden pathology + interventions given.
    - Correct treatment → improving trend
    - No/wrong treatment → worsening; untreated sepsis/shock WILL deteriorate
-3. If intervention is a medication, add to medications[] (with timestamp ${newSimTime}).
+2. If intervention is a medication, add to medications[] (with timestamp ${newSimTime}).
    IV fluids → isIVFluid:true, volumeML:[appropriate].
-4. Update activeAlarms based on current vitals (e.g. "Hypotension", "Tachycardia").
-5. Update physiologicalTrend: improving | stable | declining | critical.
-6. If "Transfer to X", update currentLocation.
-7. Append one entry to clinicalActions (timestamp: ${newSimTime}).
-8. patientOutcome:
+3. Update activeAlarms based on current vitals (e.g. "Hypotension", "Tachycardia").
+4. Update physiologicalTrend: improving | stable | declining | critical.
+5. If "Transfer to X", update currentLocation.
+6. Append one entry to clinicalActions (timestamp: ${newSimTime}).
+7. patientOutcome:
    - "deceased" if HR<20 or HR>200 or SBP<50 or SpO2<60 or temp<32 or temp>42
    - "critical_deterioration" if trend is 'critical' and vitals worsening
    - otherwise "alive"
-9. DO NOT modify labs or imaging arrays — those are managed separately.
-10. DO NOT include correctDiagnosis or explanation in the response.
+8. DO NOT modify labs or imaging arrays — those are managed separately.
+9. DO NOT include correctDiagnosis or explanation in the response.
 
 Return the ENTIRE updated MedicalCase JSON. Schema: ${MEDICAL_CASE_SCHEMA}`,
         },
@@ -99,8 +98,9 @@ Time advances by ${waitTime} min (${medicalCase.simulationTime} → ${newSimTime
     const updated = JSON.parse(content);
     if (!updated.vitals) throw new Error("AI returned incomplete case.");
 
-    // Safety: preserve id & availableTests
+    // Deterministic overrides — never trust the AI to do arithmetic correctly
     updated.id             = medicalCase.id;
+    updated.simulationTime = newSimTime;   // always the server-calculated value
     updated.availableTests = medicalCase.availableTests || updated.availableTests;
 
     // Merge ordered tests back (AI must not wipe them)
