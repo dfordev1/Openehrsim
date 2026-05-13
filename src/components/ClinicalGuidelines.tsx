@@ -1,35 +1,22 @@
-import React, { useState } from 'react';
-import {
-  BookOpen, Search, ChevronRight, CheckCircle2, ShieldAlert, Zap,
-  Thermometer, Heart, Wind, Activity, Syringe, Brain, Droplets,
-  AlertTriangle, FlaskConical,
-} from 'lucide-react';
-import { EmptyState } from './EmptyState';
-import { cn } from '../lib/utils';
+import { useState } from 'react';
+import { motion } from 'motion/react';
 
 interface GuidelineStep {
   text: string;
-  critical?: boolean;  // highlight as time-critical
+  critical?: boolean;
 }
 
 interface Guideline {
   id: string;
   title: string;
-  category: string;
-  icon: React.ReactNode;
-  colour: string;       // accent colour class
   steps: GuidelineStep[];
-  pearl?: string;       // clinical pearl at the bottom
+  pearl?: string;
 }
 
 const GUIDELINES: Guideline[] = [
-  // ── Existing ─────────────────────────────────────────────────────────────
   {
     id: 'acls',
     title: 'ACLS — Cardiac Arrest',
-    category: 'Cardiology',
-    icon: <Zap className="w-4 h-4" />,
-    colour: 'text-clinical-amber',
     steps: [
       { text: 'Start high-quality CPR: 100–120/min, 5–6 cm depth, allow full recoil.', critical: true },
       { text: 'Give oxygen; attach monitor/defibrillator within 10 seconds.' },
@@ -45,9 +32,6 @@ const GUIDELINES: Guideline[] = [
   {
     id: 'sepsis',
     title: 'Sepsis — 1-Hour Bundle',
-    category: 'Critical Care',
-    icon: <Thermometer className="w-4 h-4" />,
-    colour: 'text-clinical-blue',
     steps: [
       { text: 'Draw blood cultures ×2 (before antibiotics).' },
       { text: 'Measure serum Lactate (repeat at 2 h if ≥ 2 mmol/L).', critical: true },
@@ -62,9 +46,6 @@ const GUIDELINES: Guideline[] = [
   {
     id: 'stroke',
     title: 'Acute Ischaemic Stroke',
-    category: 'Neurology',
-    icon: <ShieldAlert className="w-4 h-4" />,
-    colour: 'text-clinical-red',
     steps: [
       { text: 'Document Last Known Well (LKW) time precisely.', critical: true },
       { text: 'Stat Non-Contrast CT Head to exclude haemorrhage.' },
@@ -76,14 +57,9 @@ const GUIDELINES: Guideline[] = [
     ],
     pearl: '"Time is brain" — 1.9 million neurons lost every minute without reperfusion.',
   },
-
-  // ── New ───────────────────────────────────────────────────────────────────
   {
     id: 'stemi',
     title: 'STEMI — Acute MI',
-    category: 'Cardiology',
-    icon: <Heart className="w-4 h-4" />,
-    colour: 'text-clinical-red',
     steps: [
       { text: '12-lead ECG within 10 minutes; confirm ≥ 2 mm ST elevation in ≥ 2 contiguous leads.', critical: true },
       { text: 'Aspirin 324 mg PO (chewed) + Ticagrelor 180 mg or Clopidogrel 600 mg immediately.', critical: true },
@@ -98,9 +74,6 @@ const GUIDELINES: Guideline[] = [
   {
     id: 'pe',
     title: 'Pulmonary Embolism',
-    category: 'Pulmonology',
-    icon: <Wind className="w-4 h-4" />,
-    colour: 'text-clinical-blue',
     steps: [
       { text: 'Risk-stratify: Wells Score / PERC Rule to guide imaging.' },
       { text: 'CT Pulmonary Angiography (CTPA) — gold standard; V/Q scan if contrast allergy/renal impairment.' },
@@ -115,9 +88,6 @@ const GUIDELINES: Guideline[] = [
   {
     id: 'dka',
     title: 'Diabetic Ketoacidosis',
-    category: 'Endocrinology',
-    icon: <FlaskConical className="w-4 h-4" />,
-    colour: 'text-clinical-amber',
     steps: [
       { text: 'Confirm diagnosis: BGL > 14, pH < 7.3, bicarb < 15, ketonaemia/uria.' },
       { text: 'IV access × 2; send: BGL, VBG, U&E, BUN, FBC, cultures, ECG.' },
@@ -132,9 +102,6 @@ const GUIDELINES: Guideline[] = [
   {
     id: 'anaphylaxis',
     title: 'Anaphylaxis',
-    category: 'Immunology',
-    icon: <AlertTriangle className="w-4 h-4" />,
-    colour: 'text-clinical-red',
     steps: [
       { text: 'Epinephrine 0.5 mg IM (anterolateral thigh) — give IMMEDIATELY.', critical: true },
       { text: 'Call for help; place supine; elevate legs (unless dyspnoea).' },
@@ -149,9 +116,6 @@ const GUIDELINES: Guideline[] = [
   {
     id: 'status_epilepticus',
     title: 'Status Epilepticus',
-    category: 'Neurology',
-    icon: <Brain className="w-4 h-4" />,
-    colour: 'text-clinical-amber',
     steps: [
       { text: '0–5 min: Airway, Breathing, Circulation; check BGL, IV access, oxygen.' },
       { text: '5 min: Lorazepam 4 mg IV (or Diazepam 10 mg IV) — first-line benzodiazepine.', critical: true },
@@ -165,9 +129,6 @@ const GUIDELINES: Guideline[] = [
   {
     id: 'hypertensive_emergency',
     title: 'Hypertensive Emergency',
-    category: 'Cardiology',
-    icon: <Activity className="w-4 h-4" />,
-    colour: 'text-clinical-red',
     steps: [
       { text: 'Confirm end-organ damage: fundoscopy, ECG, troponin, creatinine, UA, CXR.' },
       { text: 'Reduce MAP by ≤ 25% in first hour — too fast causes ischaemia.', critical: true },
@@ -182,9 +143,6 @@ const GUIDELINES: Guideline[] = [
   {
     id: 'trauma',
     title: 'Trauma — ATLS Primary Survey',
-    category: 'Trauma',
-    icon: <Droplets className="w-4 h-4" />,
-    colour: 'text-clinical-slate',
     steps: [
       { text: 'A — Airway with C-spine control: chin-lift/jaw-thrust, RSI if GCS ≤ 8.', critical: true },
       { text: 'B — Breathing: bilateral breath sounds, treat pneumothorax (needle then chest drain).' },
@@ -199,9 +157,6 @@ const GUIDELINES: Guideline[] = [
   {
     id: 'aki',
     title: 'Acute Kidney Injury',
-    category: 'Nephrology',
-    icon: <Syringe className="w-4 h-4" />,
-    colour: 'text-clinical-blue',
     steps: [
       { text: 'Classify by KDIGO staging: creatinine rise ≥ 26 µmol/L in 48 h, or ≥ 1.5× baseline.' },
       { text: 'Identify cause: Pre-renal (hypovolaemia), Intrinsic (ATN, GN), Post-renal (obstruction).' },
@@ -220,123 +175,70 @@ export function ClinicalGuidelines() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const filtered = GUIDELINES.filter(g =>
-    g.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    g.category.toLowerCase().includes(searchTerm.toLowerCase())
+    g.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Group by category
-  const categories = Array.from(new Set(filtered.map(g => g.category)));
-
   return (
-    <div className="flex flex-col gap-4 h-full">
-      <div className="panel flex flex-col flex-1 min-h-0">
-        <div className="panel-header shrink-0">
-          <div className="flex items-center gap-2">
-            <BookOpen className="w-3.5 h-3.5 text-clinical-blue" />
-            <span className="panel-title">Clinical Protocols</span>
-            <span className="text-[9px] bg-clinical-blue/10 text-clinical-blue px-1.5 py-0.5 rounded-full font-medium">
-              {GUIDELINES.length}
-            </span>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-clinical-slate/40" />
-            <input
-              type="text"
-              placeholder="Search protocols…"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-clinical-bg border border-clinical-line rounded-md h-8 pl-8 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-clinical-blue/50 transition-all w-44"
-            />
-          </div>
-        </div>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="flex flex-col gap-8 py-8"
+    >
+      {/* Search */}
+      <div>
+        <input
+          type="text"
+          placeholder="Search protocols..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full bg-transparent border-b border-gray-200 pb-2 text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-gray-400 transition-colors"
+        />
+      </div>
 
-        <div className="flex-1 overflow-y-auto divide-y divide-clinical-line/50">
-          {filtered.length === 0 ? (
-            <EmptyState
-              icon={<Search className="w-10 h-10" />}
-              title="No protocols found"
-              description={`No results for "${searchTerm}"`}
-            />
-          ) : (
-            categories.map(cat => (
-              <div key={cat}>
-                {/* Category header */}
-                <div className="px-4 py-1.5 bg-clinical-bg/50 border-b border-clinical-line/50">
-                  <span className="text-[9px] font-bold text-clinical-slate/60 uppercase tracking-widest">{cat}</span>
-                </div>
+      {/* Protocol list */}
+      <div className="flex flex-col gap-1">
+        {filtered.length === 0 && (
+          <p className="text-sm text-gray-300 italic">No protocols match &ldquo;{searchTerm}&rdquo;</p>
+        )}
 
-                {filtered.filter(g => g.category === cat).map(g => (
-                  <div key={g.id}>
-                    <button
-                      onClick={() => setSelectedId(selectedId === g.id ? null : g.id)}
-                      className="w-full p-4 flex items-center justify-between hover:bg-clinical-bg/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          'w-8 h-8 rounded-lg bg-clinical-bg border border-clinical-line flex items-center justify-center',
-                          g.colour
-                        )}>
-                          {g.icon}
-                        </div>
-                        <div className="text-left">
-                          <div className="text-sm font-medium text-clinical-ink">{g.title}</div>
-                          <div className="text-[10px] text-clinical-slate">{g.steps.length} steps</div>
-                        </div>
-                      </div>
-                      <ChevronRight className={cn(
-                        'w-4 h-4 text-clinical-slate/40 transition-transform shrink-0',
-                        selectedId === g.id && 'rotate-90'
-                      )} />
-                    </button>
+        {filtered.map((g) => (
+          <div key={g.id}>
+            <button
+              onClick={() => setSelectedId(selectedId === g.id ? null : g.id)}
+              className={
+                selectedId === g.id
+                  ? 'text-sm font-medium text-gray-900 py-1'
+                  : 'text-sm text-gray-500 hover:text-gray-900 transition-colors py-1'
+              }
+            >
+              {g.title}
+            </button>
 
-                    {selectedId === g.id && (
-                      <div className="bg-clinical-bg/30 px-4 pb-4 animate-in slide-in-from-top-2">
-                        <div className="space-y-2">
-                          {g.steps.map((step, i) => (
-                            <div key={i} className={cn(
-                              'flex items-start gap-3 p-3 rounded-lg border',
-                              step.critical
-                                ? 'bg-clinical-red/5 border-clinical-red/20'
-                                : 'bg-clinical-surface border-clinical-line'
-                            )}>
-                              {step.critical
-                                ? <AlertTriangle className="w-3.5 h-3.5 text-clinical-red shrink-0 mt-0.5" />
-                                : <CheckCircle2 className="w-3.5 h-3.5 text-clinical-blue shrink-0 mt-0.5" />
-                              }
-                              <span className="text-xs text-clinical-ink leading-relaxed">{step.text}</span>
-                            </div>
-                          ))}
-
-                          {/* Clinical pearl */}
-                          {g.pearl && (
-                            <div className="flex gap-3 mt-3 bg-clinical-blue/5 border border-clinical-blue/20 rounded-lg p-3">
-                              <BookOpen className="w-3.5 h-3.5 text-clinical-blue shrink-0 mt-0.5" />
-                              <p className="text-xs text-clinical-ink leading-relaxed">
-                                <strong className="text-clinical-blue">Pearl: </strong>{g.pearl}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+            {/* Expanded inline content */}
+            {selectedId === g.id && (
+              <div className="pl-4 mt-2 mb-4 flex flex-col gap-1">
+                {g.steps.map((step, i) => (
+                  <p
+                    key={i}
+                    className={
+                      step.critical
+                        ? 'text-sm text-gray-900 font-medium'
+                        : 'text-sm text-gray-700'
+                    }
+                  >
+                    {i + 1}. {step.text}
+                  </p>
                 ))}
+                {g.pearl && (
+                  <p className="text-sm text-gray-500 italic mt-2">
+                    {g.pearl}
+                  </p>
+                )}
               </div>
-            ))
-          )}
-        </div>
+            )}
+          </div>
+        ))}
       </div>
-
-      <div className="p-4 bg-clinical-blue/5 border border-clinical-blue/10 rounded-lg flex gap-3 shrink-0">
-        <ShieldAlert className="w-4 h-4 text-clinical-blue shrink-0 mt-0.5" />
-        <div>
-          <p className="text-xs font-medium text-clinical-blue mb-0.5">Evidence-Based Medicine</p>
-          <p className="text-xs text-clinical-slate leading-relaxed">
-            Based on current ILCOR, AHA, Surviving Sepsis Campaign, ESC, and NICE guidelines.
-            <span className="text-clinical-red"> Red steps</span> are time-critical interventions.
-          </p>
-        </div>
-      </div>
-    </div>
+    </motion.div>
   );
 }
