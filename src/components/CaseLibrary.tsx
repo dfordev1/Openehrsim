@@ -5,6 +5,7 @@ import {
   FlaskConical as FlaskIcon, Brain, Syringe, Crosshair, Truck, Building2,
   Search, X, GitBranch, Zap, Bug, Bone, Eye, Ear, Dna,
   Shield, Feather, Dumbbell, Sparkles, Accessibility, TestTubes,
+  Play, CheckCircle2, Clock,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getRecentSimulations } from '../services/storageService';
@@ -105,30 +106,8 @@ const SPECIALTY_GROUPS: SpecialtyGroup[] = [
   },
 ];
 
-// ── Reusable specialty card ───────────────────────────────────────────────────
-interface SpecialtyCardProps {
-  specialty: Specialty;
-  onSelect: (id: string) => void;
-}
-
-function SpecialtyCard({ specialty, onSelect }: SpecialtyCardProps) {
-  return (
-    <button
-      onClick={() => onSelect(specialty.id)}
-      aria-label={`Generate ${specialty.label} case`}
-      className="group p-4 md:p-5 rounded-xl border border-clinical-line hover:border-clinical-blue hover:shadow-xl hover:-translate-y-1 transition-all text-left bg-clinical-surface relative overflow-hidden"
-    >
-      <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity scale-[4]" aria-hidden="true">
-        {specialty.icon}
-      </div>
-      <div className="w-8 h-8 rounded-lg bg-clinical-bg border border-clinical-line flex items-center justify-center text-clinical-blue mb-3 group-hover:bg-clinical-blue group-hover:text-white transition-colors">
-        {specialty.icon}
-      </div>
-      <div className="font-bold text-xs text-clinical-ink group-hover:text-clinical-blue transition-colors">{specialty.label}</div>
-      <p className="text-[9px] text-clinical-slate mt-1 uppercase tracking-tighter opacity-60">Generate Scenario</p>
-    </button>
-  );
-}
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+type LibraryTab = 'practice' | 'generate';
 
 export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps) {
   const [recentCases, setRecentCases] = useState<any[]>([]);
@@ -136,6 +115,7 @@ export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps)
   const [selectedDifficulty, setSelectedDifficulty] = useState('resident');
   const [selectedEnv, setSelectedEnv] = useState('tertiary');
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeLibTab, setActiveLibTab] = useState<LibraryTab>('practice');
 
   useEffect(() => {
     if (isOpen) {
@@ -171,6 +151,16 @@ export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps)
     );
   }, [isFiltering, trimmedQuery]);
 
+  // Filter recent cases by search
+  const filteredRecent = useMemo(() => {
+    if (!trimmedQuery) return recentCases;
+    return recentCases.filter(rc =>
+      (rc.patient_name || '').toLowerCase().includes(trimmedQuery) ||
+      (rc.category || '').toLowerCase().includes(trimmedQuery) ||
+      (rc.correct_diagnosis || '').toLowerCase().includes(trimmedQuery)
+    );
+  }, [recentCases, trimmedQuery]);
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -180,7 +170,7 @@ export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps)
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-clinical-ink/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 md:p-6"
+            className="fixed inset-0 bg-clinical-ink/60 backdrop-blur-sm z-[100]"
             aria-hidden="true"
           />
           <motion.div
@@ -192,175 +182,290 @@ export function CaseLibrary({ isOpen, onClose, onSelectCase }: CaseLibraryProps)
             aria-label="Clinical Case Library"
             className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-5xl bg-clinical-surface rounded-lg shadow-2xl z-[101] overflow-hidden max-h-[90vh] flex flex-col"
           >
-            <div className="bg-clinical-surface border-b border-clinical-line p-4 md:p-6 flex justify-between items-center shrink-0">
+            {/* ── Header ── */}
+            <div className="bg-clinical-ink text-white px-5 py-4 flex items-center justify-between shrink-0">
               <div>
-                <h2 className="text-lg md:text-xl font-bold text-clinical-ink">Clinical Case Library</h2>
-                <p className="text-xs text-clinical-slate uppercase tracking-widest font-medium mt-1">Select simulation parameters for real-time generation</p>
+                <h2 className="text-base font-bold">Try a Case</h2>
+                <p className="text-[10px] text-white/50 mt-0.5">Practice or generate a new simulation</p>
               </div>
               <button
                 onClick={onClose}
                 aria-label="Close case library"
-                className="p-2 hover:bg-clinical-bg rounded-lg transition-colors text-clinical-slate"
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
               >
-                <Plus className="w-6 h-6 rotate-45" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto">
-              <div className="grid grid-cols-1 lg:grid-cols-4">
-                <div className="p-4 md:p-6 border-b lg:border-b-0 lg:border-r border-clinical-line bg-clinical-bg/30 space-y-6 md:space-y-8">
-                  <div>
-                    <h3 className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest mb-4 border-b border-clinical-line pb-1">Difficulty Level</h3>
-                    <div className="space-y-2">
-                      {difficulties.map(d => (
-                        <button
-                          key={d.id}
-                          onClick={() => setSelectedDifficulty(d.id)}
-                          aria-pressed={selectedDifficulty === d.id}
-                          className={cn(
-                            "w-full text-left p-3 rounded-lg border transition-all",
-                            selectedDifficulty === d.id
-                              ? "bg-clinical-blue text-white border-clinical-blue shadow-md"
-                              : "bg-clinical-surface border-clinical-line hover:border-clinical-blue/40 text-clinical-ink"
-                          )}
-                        >
-                          <div className="font-bold text-[10px] uppercase tracking-wider mb-0.5">{d.label}</div>
-                          <div className={cn("text-[9px] leading-tight opacity-70", selectedDifficulty === d.id ? "text-white/80" : "text-clinical-slate")}>{d.desc}</div>
-                        </button>
-                      ))}
+            {/* ── Tab bar ── */}
+            <div className="flex border-b border-clinical-line shrink-0 bg-clinical-bg/50">
+              <button
+                onClick={() => setActiveLibTab('practice')}
+                className={cn(
+                  'px-5 py-3 text-xs font-semibold uppercase tracking-wide transition-colors border-b-2',
+                  activeLibTab === 'practice'
+                    ? 'text-clinical-ink border-clinical-teal'
+                    : 'text-clinical-slate border-transparent hover:text-clinical-ink'
+                )}
+              >
+                Practice
+              </button>
+              <button
+                onClick={() => setActiveLibTab('generate')}
+                className={cn(
+                  'px-5 py-3 text-xs font-semibold uppercase tracking-wide transition-colors border-b-2',
+                  activeLibTab === 'generate'
+                    ? 'text-clinical-ink border-clinical-teal'
+                    : 'text-clinical-slate border-transparent hover:text-clinical-ink'
+                )}
+              >
+                Generate New
+              </button>
+            </div>
+
+            {/* ── Practice Tab (Healer-style table) ── */}
+            {activeLibTab === 'practice' && (
+              <div className="flex-1 overflow-y-auto">
+                <div className="p-5">
+                  {/* Search */}
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-bold text-clinical-ink">PRACTICE</h3>
+                    <div className="relative w-56">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-clinical-slate/50" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search"
+                        className="w-full pl-9 pr-3 py-2 bg-clinical-bg border border-clinical-line rounded-lg text-xs focus:outline-none focus:border-clinical-blue/50"
+                      />
                     </div>
                   </div>
 
-                  <div>
-                    <h3 className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest mb-4 border-b border-clinical-line pb-1">Care Environment</h3>
-                    <div className="space-y-2">
-                      {environments.map(e => (
-                        <button
-                          key={e.id}
-                          onClick={() => setSelectedEnv(e.id)}
-                          aria-pressed={selectedEnv === e.id}
-                          className={cn(
-                            "w-full text-left p-3 rounded-lg border transition-all flex flex-col gap-1",
-                            selectedEnv === e.id
-                              ? "bg-clinical-ink text-white border-clinical-ink shadow-md"
-                              : "bg-clinical-surface border-clinical-line hover:border-clinical-ink/40 text-clinical-ink"
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            {e.icon}
-                            <div className="font-bold text-[10px] uppercase tracking-wider">{e.label}</div>
-                          </div>
-                          <div className={cn("text-[9px] leading-tight opacity-70", selectedEnv === e.id ? "text-white/80" : "text-clinical-slate")}>{e.desc}</div>
-                        </button>
-                      ))}
+                  {/* Table */}
+                  {loadingRecent ? (
+                    <div className="flex items-center justify-center py-12 gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-clinical-blue" />
+                      <span className="text-xs text-clinical-slate">Loading history...</span>
                     </div>
-                  </div>
-                </div>
-
-                <div className="lg:col-span-3 p-4 md:p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <h3 className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest border-b border-clinical-line pb-1 flex-1">Choose Specialty Pathway</h3>
-                  </div>
-                  {/* Search bar */}
-                  <div className="relative mb-5">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-clinical-slate/50" />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Filter specialties…"
-                      className="w-full pl-9 pr-8 py-2 bg-clinical-bg border border-clinical-line rounded-lg text-xs focus:outline-none focus:border-clinical-blue/50 focus:ring-1 focus:ring-clinical-blue/30 transition-all"
-                    />
-                    {searchQuery && (
-                      <button onClick={() => setSearchQuery('')} aria-label="Clear specialty filter" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-clinical-slate/50 hover:text-clinical-slate transition-colors">
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Flat filtered list when searching, grouped layout otherwise */}
-                  {isFiltering ? (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
-                        {filteredFlatList.map(s => (
-                          <SpecialtyCard key={s.id} specialty={s} onSelect={handleSelectSpecialty} />
-                        ))}
-                      </div>
-                      {filteredFlatList.length === 0 && (
-                        <div className="py-8 text-center text-xs text-clinical-slate/50">
-                          No specialties match "{searchQuery}"
-                        </div>
-                      )}
+                  ) : filteredRecent.length > 0 ? (
+                    <div className="border border-clinical-line rounded-lg overflow-hidden">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="bg-clinical-bg/50 border-b border-clinical-line">
+                            <th className="px-4 py-3 text-[10px] font-bold text-clinical-slate uppercase tracking-wider">Case</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-clinical-blue uppercase tracking-wider">Chief Concern</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-clinical-slate uppercase tracking-wider text-center">Score</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-clinical-slate uppercase tracking-wider text-center">Time</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-clinical-slate uppercase tracking-wider text-center">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredRecent.map((rc, i) => (
+                            <tr key={i} className="border-b border-clinical-line/50 last:border-b-0 hover:bg-clinical-bg/30 transition-colors">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-clinical-bg border border-clinical-line flex items-center justify-center text-clinical-slate/50">
+                                    <StethoscopeIcon className="w-3.5 h-3.5" />
+                                  </div>
+                                  <div>
+                                    <p className="text-xs font-medium text-clinical-ink">{rc.patient_name || 'Unknown'}</p>
+                                    <p className="text-[10px] text-clinical-slate capitalize">{rc.difficulty || 'resident'}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className="text-xs text-clinical-ink capitalize">{rc.category?.replace(/_/g, ' ') || 'General'}</span>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span className={cn(
+                                  'text-xs font-bold px-2 py-0.5 rounded',
+                                  rc.score >= 80 ? 'text-clinical-green bg-green-50' :
+                                  rc.score >= 60 ? 'text-clinical-amber bg-amber-50' :
+                                  'text-clinical-red bg-red-50'
+                                )}>
+                                  {rc.score}%
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span className="text-[10px] text-clinical-slate">
+                                  {rc.simulation_time ? `${rc.simulation_time}m` : '—'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <button
+                                  onClick={() => onSelectCase(rc.difficulty || 'resident', rc.category || 'any', 'tertiary')}
+                                  className="p-1.5 text-clinical-blue hover:bg-clinical-blue/10 rounded transition-colors"
+                                  title="Try similar case"
+                                >
+                                  <Play className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   ) : (
-                    <div className="space-y-6">
-                      {SPECIALTY_GROUPS.map(group => (
-                        <section key={group.id} aria-labelledby={`group-${group.id}`}>
-                          <h4
-                            id={`group-${group.id}`}
-                            className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest mb-3 border-b border-clinical-line/60 pb-1"
-                          >
-                            {group.label}
-                          </h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
-                            {group.specialties.map(s => (
-                              <SpecialtyCard key={s.id} specialty={s} onSelect={handleSelectSpecialty} />
-                            ))}
-                          </div>
-                        </section>
-                      ))}
+                    <div className="text-center py-16 space-y-3">
+                      <div className="w-12 h-12 mx-auto rounded-full bg-clinical-bg border border-clinical-line flex items-center justify-center">
+                        <StethoscopeIcon className="w-5 h-5 text-clinical-slate/30" />
+                      </div>
+                      <p className="text-sm text-clinical-slate/70">No completed cases yet</p>
+                      <p className="text-xs text-clinical-slate/50">Generate a new case to start practicing</p>
+                      <button
+                        onClick={() => setActiveLibTab('generate')}
+                        className="mt-3 px-4 py-2 bg-clinical-blue text-white rounded-lg text-xs font-medium hover:bg-clinical-blue/90 transition-colors"
+                      >
+                        Generate New Case
+                      </button>
                     </div>
                   )}
+                </div>
 
-                  {/* Pinned random-pick button — always at bottom */}
+                {/* Quick generate row at bottom */}
+                <div className="border-t border-clinical-line p-4 bg-clinical-bg/30">
                   <button
                     onClick={() => onSelectCase(selectedDifficulty, 'any', selectedEnv)}
-                    aria-label="Generate random case from any specialty"
-                    className="mt-6 w-full p-4 md:p-5 rounded-xl border-2 border-dashed border-clinical-blue/30 hover:border-clinical-blue hover:bg-clinical-blue/5 transition-all text-center group"
+                    className="w-full p-3 rounded-lg border border-dashed border-clinical-blue/30 hover:border-clinical-blue hover:bg-clinical-blue/5 transition-all flex items-center justify-center gap-2 group"
                   >
-                    <div className="flex items-center justify-center gap-3">
-                      <RefreshCw className="w-5 h-5 text-clinical-blue group-hover:rotate-180 transition-transform duration-700" />
-                      <div className="text-left">
-                        <div className="font-bold text-clinical-blue uppercase tracking-widest text-xs">Agnostic Emergency Intake</div>
-                        <p className="text-[9px] text-clinical-slate uppercase tracking-tighter opacity-60 italic">Pull from entire specialized pool</p>
-                      </div>
-                    </div>
+                    <RefreshCw className="w-4 h-4 text-clinical-blue group-hover:rotate-180 transition-transform duration-500" />
+                    <span className="text-xs font-medium text-clinical-blue">Quick Generate — Random Case</span>
                   </button>
                 </div>
               </div>
-            </div>
+            )}
 
-            <div className="bg-clinical-bg p-3 md:p-4 border-t border-clinical-line shrink-0">
-              <h3 className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest mb-3 border-b border-clinical-line pb-1">Recent Clinical Performance</h3>
-              <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
-                {loadingRecent ? (
-                  <div className="flex items-center gap-2 text-[10px] text-clinical-slate uppercase py-2">
-                    <Loader2 className="w-3 h-3 animate-spin" /> Fetching history...
-                  </div>
-                ) : recentCases.length > 0 ? (
-                  recentCases.map((rc, i) => (
-                    <div key={i} className="min-w-[200px] bg-clinical-surface border border-clinical-line rounded p-3 shadow-sm hover:border-clinical-blue transition-colors">
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="text-[10px] font-bold text-clinical-ink">{rc.category?.toUpperCase() || 'GENERAL'}</span>
-                        <span className={cn(
-                          "text-[9px] font-black px-1.5 py-0.5 rounded",
-                          rc.score >= 80 ? "bg-clinical-green/10 text-clinical-green" : "bg-clinical-amber/10 text-clinical-amber"
-                        )}>{rc.score}%</span>
+            {/* ── Generate Tab (specialty picker) ── */}
+            {activeLibTab === 'generate' && (
+              <div className="flex-1 overflow-y-auto">
+                <div className="grid grid-cols-1 lg:grid-cols-4">
+                  {/* Sidebar config */}
+                  <div className="p-4 md:p-5 border-b lg:border-b-0 lg:border-r border-clinical-line bg-clinical-bg/30 space-y-5">
+                    <div>
+                      <h3 className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest mb-3">Difficulty</h3>
+                      <div className="space-y-1.5">
+                        {difficulties.map(d => (
+                          <button
+                            key={d.id}
+                            onClick={() => setSelectedDifficulty(d.id)}
+                            aria-pressed={selectedDifficulty === d.id}
+                            className={cn(
+                              "w-full text-left p-2.5 rounded-lg border transition-all",
+                              selectedDifficulty === d.id
+                                ? "bg-clinical-blue text-white border-clinical-blue"
+                                : "bg-clinical-surface border-clinical-line hover:border-clinical-blue/40 text-clinical-ink"
+                            )}
+                          >
+                            <div className="font-bold text-[10px] uppercase tracking-wider">{d.label}</div>
+                            <div className={cn("text-[9px] leading-tight mt-0.5", selectedDifficulty === d.id ? "text-white/70" : "text-clinical-slate/60")}>{d.desc}</div>
+                          </button>
+                        ))}
                       </div>
-                      <div className="text-xs font-bold text-clinical-slate leading-tight truncate">{rc.patient_name}</div>
-                      <div className="text-[9px] text-clinical-slate opacity-60 mt-1 uppercase">DX: {rc.correct_diagnosis}</div>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-[10px] text-clinical-slate uppercase opacity-40 py-2">No recent clinical history found.</div>
-                )}
-              </div>
-            </div>
 
-            <div className="bg-clinical-bg p-3 border-t border-clinical-line flex items-center justify-center gap-3 shrink-0">
-              <div className="w-1.5 h-1.5 bg-clinical-blue rounded-full animate-pulse" aria-hidden="true" />
-              <p className="text-[9px] text-clinical-slate uppercase font-bold tracking-widest">Generative engine creates unique, non-repeating patient profiles on every pick.</p>
-            </div>
+                    <div>
+                      <h3 className="text-[10px] font-bold text-clinical-slate uppercase tracking-widest mb-3">Environment</h3>
+                      <div className="space-y-1.5">
+                        {environments.map(e => (
+                          <button
+                            key={e.id}
+                            onClick={() => setSelectedEnv(e.id)}
+                            aria-pressed={selectedEnv === e.id}
+                            className={cn(
+                              "w-full text-left p-2.5 rounded-lg border transition-all",
+                              selectedEnv === e.id
+                                ? "bg-clinical-ink text-white border-clinical-ink"
+                                : "bg-clinical-surface border-clinical-line hover:border-clinical-ink/40 text-clinical-ink"
+                            )}
+                          >
+                            <div className="flex items-center gap-2">
+                              {e.icon}
+                              <div className="font-bold text-[10px] uppercase tracking-wider">{e.label}</div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Specialty grid */}
+                  <div className="lg:col-span-3 p-4 md:p-5">
+                    {/* Search */}
+                    <div className="relative mb-4">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-clinical-slate/50" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Filter specialties…"
+                        className="w-full pl-9 pr-8 py-2 bg-clinical-bg border border-clinical-line rounded-lg text-xs focus:outline-none focus:border-clinical-blue/50"
+                      />
+                      {searchQuery && (
+                        <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-clinical-slate/50 hover:text-clinical-slate">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {isFiltering ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {filteredFlatList.map(s => (
+                          <button
+                            key={s.id}
+                            onClick={() => handleSelectSpecialty(s.id)}
+                            className="p-3 rounded-lg border border-clinical-line hover:border-clinical-blue hover:bg-clinical-blue/5 transition-all text-left group"
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className="text-clinical-blue">{s.icon}</div>
+                              <span className="text-xs font-medium text-clinical-ink group-hover:text-clinical-blue">{s.label}</span>
+                            </div>
+                          </button>
+                        ))}
+                        {filteredFlatList.length === 0 && (
+                          <div className="col-span-full py-8 text-center text-xs text-clinical-slate/50">
+                            No specialties match "{searchQuery}"
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {SPECIALTY_GROUPS.map(group => (
+                          <section key={group.id}>
+                            <h4 className="text-[9px] font-bold text-clinical-slate/60 uppercase tracking-widest mb-2">{group.label}</h4>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {group.specialties.map(s => (
+                                <button
+                                  key={s.id}
+                                  onClick={() => handleSelectSpecialty(s.id)}
+                                  className="p-3 rounded-lg border border-clinical-line hover:border-clinical-blue hover:bg-clinical-blue/5 transition-all text-left group"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <div className="text-clinical-blue">{s.icon}</div>
+                                    <span className="text-xs font-medium text-clinical-ink group-hover:text-clinical-blue">{s.label}</span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </section>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Random pick */}
+                    <button
+                      onClick={() => onSelectCase(selectedDifficulty, 'any', selectedEnv)}
+                      className="mt-4 w-full p-3 rounded-lg border-2 border-dashed border-clinical-blue/30 hover:border-clinical-blue hover:bg-clinical-blue/5 transition-all text-center group"
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        <RefreshCw className="w-4 h-4 text-clinical-blue group-hover:rotate-180 transition-transform duration-500" />
+                        <span className="text-xs font-bold text-clinical-blue uppercase">Random Case</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </motion.div>
         </>
       )}
