@@ -3,7 +3,7 @@
  * Any test name the AI generates must resolve to one of these.
  */
 export const TURNAROUND: Record<string, { stat: number; routine: number }> = {
-  // Labs
+  // Labs — Common
   "CBC":               { stat: 15, routine: 30 },
   "BMP":               { stat: 15, routine: 30 },
   "CMP":               { stat: 20, routine: 45 },
@@ -20,6 +20,35 @@ export const TURNAROUND: Record<string, { stat: number; routine: number }> = {
   "Procalcitonin":     { stat: 25, routine: 50 },
   "D-Dimer":           { stat: 20, routine: 40 },
   "BNP":               { stat: 20, routine: 40 },
+  // Labs — Extended
+  "Blood Glucose":     { stat:  5, routine: 15 },
+  "HbA1c":             { stat: 30, routine: 60 },
+  "Magnesium":         { stat: 15, routine: 30 },
+  "Calcium":           { stat: 15, routine: 30 },
+  "Phosphate":         { stat: 15, routine: 30 },
+  "CRP":               { stat: 20, routine: 45 },
+  "ESR":               { stat: 30, routine: 60 },
+  "Fibrinogen":        { stat: 20, routine: 40 },
+  "Ammonia":           { stat: 20, routine: 45 },
+  "Cortisol":          { stat: 30, routine: 60 },
+  "Urine Culture":     { stat: 60, routine: 120 },
+  "Type and Screen":   { stat: 30, routine: 60 },
+  "Crossmatch":        { stat: 30, routine: 60 },
+  "VBG":               { stat:  5, routine: 15 },
+  "Blood Gas":         { stat:  5, routine: 15 },
+  "Ferritin":          { stat: 30, routine: 60 },
+  "Iron Studies":      { stat: 30, routine: 60 },
+  "Reticulocyte Count":{ stat: 20, routine: 45 },
+  "Haptoglobin":       { stat: 25, routine: 50 },
+  "LDH":               { stat: 20, routine: 45 },
+  "Uric Acid":         { stat: 20, routine: 45 },
+  "Creatine Kinase":   { stat: 20, routine: 45 },
+  "Potassium":         { stat: 10, routine: 20 },
+  "Sodium":            { stat: 10, routine: 20 },
+  "Creatinine":        { stat: 15, routine: 30 },
+  "BUN":               { stat: 15, routine: 30 },
+  "Albumin":           { stat: 20, routine: 45 },
+  "Bilirubin":         { stat: 20, routine: 45 },
   // Imaging
   "ECG":               { stat:  5, routine: 10 },
   "Chest X-ray":       { stat: 20, routine: 45 },
@@ -30,6 +59,11 @@ export const TURNAROUND: Record<string, { stat: number; routine: number }> = {
   "Ultrasound":        { stat: 25, routine: 50 },
   "Echocardiogram":    { stat: 30, routine: 60 },
   "MRI Brain":         { stat: 45, routine: 90 },
+  "X-ray":             { stat: 15, routine: 30 },
+  "CT Angiogram":      { stat: 35, routine: 70 },
+  "CT Spine":          { stat: 35, routine: 70 },
+  "FAST Exam":         { stat:  5, routine: 10 },
+  "V/Q Scan":          { stat: 45, routine: 90 },
 };
 
 /**
@@ -153,6 +187,74 @@ export const ALIASES: Record<string, string> = {
   "abdominal ultrasound":      "Ultrasound",
   // Blood culture
   "blood cultures":            "Blood Culture",
+  // Blood Glucose
+  "glucose":                   "Blood Glucose",
+  "bgl":                       "Blood Glucose",
+  "blood sugar":               "Blood Glucose",
+  "finger stick":              "Blood Glucose",
+  "fingerstick glucose":       "Blood Glucose",
+  "point of care glucose":     "Blood Glucose",
+  // VBG
+  "venous blood gas":          "VBG",
+  // CRP
+  "c-reactive protein":        "CRP",
+  "c reactive protein":        "CRP",
+  // Magnesium
+  "mag":                       "Magnesium",
+  "mg level":                  "Magnesium",
+  "serum magnesium":           "Magnesium",
+  // Calcium
+  "ca level":                  "Calcium",
+  "serum calcium":             "Calcium",
+  "ionized calcium":           "Calcium",
+  // Potassium
+  "k level":                   "Potassium",
+  "serum potassium":           "Potassium",
+  // Creatinine
+  "creat":                     "Creatinine",
+  "serum creatinine":          "Creatinine",
+  // CK
+  "ck":                        "Creatine Kinase",
+  "cpk":                       "Creatine Kinase",
+  "creatine phosphokinase":    "Creatine Kinase",
+  // Type and screen
+  "type and cross":            "Type and Screen",
+  "crossmatch":                "Crossmatch",
+  "blood bank":                "Type and Screen",
+  // Iron
+  "iron":                      "Iron Studies",
+  "iron panel":                "Iron Studies",
+  "serum iron":                "Iron Studies",
+  // LDH
+  "lactate dehydrogenase":     "LDH",
+  // Ammonia
+  "serum ammonia":             "Ammonia",
+  "nh3":                       "Ammonia",
+  // Cortisol
+  "random cortisol":           "Cortisol",
+  "am cortisol":               "Cortisol",
+  // Imaging extras
+  "fast":                      "FAST Exam",
+  "fast exam":                 "FAST Exam",
+  "focused assessment":        "FAST Exam",
+  "vq scan":                   "V/Q Scan",
+  "ventilation perfusion":     "V/Q Scan",
+  "v/q":                       "V/Q Scan",
+  "ct angiogram":              "CT Angiogram",
+  "cta":                       "CT Angiogram",
+  "ct angio":                  "CT Angiogram",
+  "ct spine":                  "CT Spine",
+  "ct c-spine":                "CT Spine",
+  "ct cervical spine":         "CT Spine",
+  "x-ray":                     "X-ray",
+  "xray":                      "X-ray",
+  "x ray":                     "X-ray",
+  "pelvic xray":               "X-ray",
+  "ankle xray":                "X-ray",
+  "wrist xray":                "X-ray",
+  "knee xray":                 "X-ray",
+  "abdominal xray":            "X-ray",
+  "kub":                       "X-ray",
 };
 
 /**
@@ -163,8 +265,8 @@ export const ALIASES: Record<string, string> = {
  *  2. Exact lookup in ALIASES (covers every known variant)
  *  3. Prefix match against ALIASES entries (min length 4, no "ct" ambiguity)
  *
- * Returns the raw string unchanged if nothing matches
- * (the caller will return a 400 with the available list).
+ * Returns the raw string unchanged if nothing matches — the caller
+ * should use DEFAULT_TURNAROUND instead of rejecting the order.
  */
 export function normaliseTestName(raw: string): string {
   const lower = raw.trim().toLowerCase();
@@ -184,3 +286,10 @@ export function normaliseTestName(raw: string): string {
 
   return raw;
 }
+
+/** Default turnaround times for tests not in the canonical list.
+ *  Used so we never reject a valid clinical order. */
+export const DEFAULT_TURNAROUND = {
+  lab:     { stat: 20, routine: 45 },
+  imaging: { stat: 30, routine: 60 },
+};

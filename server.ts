@@ -271,12 +271,10 @@ Time advances by ${waitTime} min (${medicalCase.simulationTime} → ${newSimTime
       const { normaliseTestName, TURNAROUND } = await import("./src/utils/normaliseTestName");
       const testName = normaliseTestName(rawName);
 
-      const delays = TURNAROUND[testName];
-      if (!delays) {
-        return res.status(400).json({
-          error: `Unknown test "${rawName}". Available: ${Object.keys(TURNAROUND).join(", ")}`,
-        });
-      }
+      // Use known turnaround if available, otherwise sensible defaults
+      const delays = TURNAROUND[testName] || (testType === "lab"
+        ? { stat: 20, routine: 45 }
+        : { stat: 30, routine: 60 });
 
       const orderedAt = currentSimTime;
       const availableAt = currentSimTime + delays[priority];
@@ -290,6 +288,9 @@ Time advances by ${waitTime} min (${medicalCase.simulationTime} → ${newSimTime
       if (testType === "lab") {
         const match = (fullCase.labs || []).find(
           (l: any) => normaliseTestName(l.name) === testName
+        ) || (fullCase.labs || []).find(
+          (l: any) => l.name.toLowerCase().includes(testName.toLowerCase()) ||
+                      testName.toLowerCase().includes(l.name.toLowerCase())
         );
         result = match
           ? { ...match, orderedAt, availableAt }
@@ -297,6 +298,9 @@ Time advances by ${waitTime} min (${medicalCase.simulationTime} → ${newSimTime
       } else {
         const match = (fullCase.imaging || []).find(
           (i: any) => normaliseTestName(i.type) === testName
+        ) || (fullCase.imaging || []).find(
+          (i: any) => i.type.toLowerCase().includes(testName.toLowerCase()) ||
+                      testName.toLowerCase().includes(i.type.toLowerCase())
         );
         result = match
           ? { ...match, orderedAt, availableAt }
