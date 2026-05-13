@@ -151,36 +151,54 @@ export function ArchiveView({ user }: ArchiveViewProps) {
                 <th scope="col">Difficulty</th>
                 <th scope="col">Category</th>
                 <th scope="col">Score</th>
+                <th scope="col">Reasoning</th>
                 <th scope="col">Diagnosis</th>
               </tr>
             </thead>
             <tbody>
-              {records.map((r, i) => (
-                <tr key={i} className="hover:bg-clinical-bg/50 transition-colors">
-                  <td className="text-xs font-mono whitespace-nowrap text-clinical-slate">
-                    {new Date(r.created_at).toLocaleDateString()} {new Date(r.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </td>
-                  <td className="font-medium text-clinical-ink">{r.patient_name} <span className="text-clinical-slate font-normal">({r.age}y)</span></td>
-                  <td>
-                    <span className={cn(
-                      'text-[10px] font-semibold px-2 py-0.5 rounded-full',
-                      r.difficulty === 'attending' ? 'bg-clinical-red/8 text-clinical-red' :
-                      r.difficulty === 'resident'  ? 'bg-clinical-amber/8 text-clinical-amber' :
-                                                     'bg-clinical-green/8 text-clinical-green'
-                    )}>{r.difficulty}</span>
-                  </td>
-                  <td className="text-xs text-clinical-slate capitalize">{r.category}</td>
-                  <td>
-                    <div className="flex items-center gap-2">
-                      <span className={cn('text-xs font-semibold', r.score >= 80 ? 'text-clinical-green' : 'text-clinical-amber')}>{r.score}%</span>
-                      <div className="w-12 h-1.5 bg-clinical-bg rounded-full overflow-hidden">
-                        <div className={cn('h-full rounded-full', r.score >= 80 ? 'bg-clinical-green' : 'bg-clinical-amber')} style={{ width: `${r.score}%` }} />
+              {records.map((r, i) => {
+                const rs = r.reasoning_score;
+                const reasoningOverall: number | null = rs?.overall ?? null;
+                return (
+                  <tr key={i} className="hover:bg-clinical-bg/50 transition-colors">
+                    <td className="text-xs font-mono whitespace-nowrap text-clinical-slate">
+                      {new Date(r.created_at).toLocaleDateString()} {new Date(r.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                    <td className="font-medium text-clinical-ink">
+                      {r.patient_name ?? '—'} <span className="text-clinical-slate font-normal">{r.age ? `(${r.age}y)` : ''}</span>
+                    </td>
+                    <td>
+                      <span className={cn(
+                        'text-[10px] font-semibold px-2 py-0.5 rounded-full',
+                        r.difficulty === 'attending' ? 'bg-clinical-red/8 text-clinical-red' :
+                        r.difficulty === 'resident'  ? 'bg-clinical-amber/8 text-clinical-amber' :
+                                                       'bg-clinical-green/8 text-clinical-green'
+                      )}>{r.difficulty}</span>
+                    </td>
+                    <td className="text-xs text-clinical-slate capitalize">{r.category}</td>
+                    <td>
+                      <div className="flex items-center gap-2">
+                        <span className={cn('text-xs font-semibold', r.score >= 80 ? 'text-clinical-green' : 'text-clinical-amber')}>{r.score}%</span>
+                        <div className="w-12 h-1.5 bg-clinical-bg rounded-full overflow-hidden">
+                          <div className={cn('h-full rounded-full', r.score >= 80 ? 'bg-clinical-green' : 'bg-clinical-amber')} style={{ width: `${r.score}%` }} />
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="text-xs text-clinical-slate italic max-w-[200px] truncate">{r.correct_diagnosis}</td>
-                </tr>
-              ))}
+                    </td>
+                    <td>
+                      {reasoningOverall !== null ? (
+                        <div className="flex items-center gap-1.5" title={`Data: ${rs.dataAcquisitionThoroughness} | PR: ${rs.problemRepresentation} | DDx: ${rs.differentialAccuracy}`}>
+                          <span className={cn('text-xs font-semibold', reasoningOverall >= 80 ? 'text-clinical-green' : reasoningOverall >= 60 ? 'text-clinical-blue' : 'text-clinical-amber')}>
+                            {reasoningOverall}%
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-clinical-slate/40">—</span>
+                      )}
+                    </td>
+                    <td className="text-xs text-clinical-slate italic max-w-[200px] truncate">{r.correct_diagnosis ?? '—'}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

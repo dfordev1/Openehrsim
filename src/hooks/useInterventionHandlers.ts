@@ -1,16 +1,44 @@
 import { useState, useCallback } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import type { MedicalCase } from '../types';
 import { performIntervention, orderTest } from '../services/geminiService';
 import type { UseClinicalReasoning } from './useClinicalReasoning';
 
 interface Deps {
   medicalCase: MedicalCase | null;
-  setMedicalCase: React.Dispatch<React.SetStateAction<MedicalCase | null>>;
+  setMedicalCase: Dispatch<SetStateAction<MedicalCase | null>>;
   pushUndo: (label: string, snapshot: MedicalCase) => void;
   addToast: (msg: string, type: 'success' | 'error' | 'info') => void;
   reasoning: UseClinicalReasoning;
-  setPatientOutcome: React.Dispatch<React.SetStateAction<'alive' | 'deceased' | 'critical_deterioration' | null>>;
-  setLogs: React.Dispatch<React.SetStateAction<{ time: string; text: string }[]>>;
+  setPatientOutcome: Dispatch<SetStateAction<'alive' | 'deceased' | 'critical_deterioration' | null>>;
+  setLogs: Dispatch<SetStateAction<{ time: string; text: string }[]>>;
+}
+
+function mergeUpdatedCase(prev: MedicalCase, updated: MedicalCase): MedicalCase {
+  return {
+    ...prev,
+    ...updated,
+    labs: updated.labs ?? prev.labs,
+    imaging: updated.imaging ?? prev.imaging,
+    clinicalActions: updated.clinicalActions ?? prev.clinicalActions,
+    availableTests: prev.availableTests,
+    vitals: { ...prev.vitals, ...(updated.vitals ?? {}) },
+  };
+}
+
+function notifyOutcome(
+  outcome: MedicalCase['patientOutcome'],
+  setPatientOutcome: Deps['setPatientOutcome'],
+  addToast: Deps['addToast'],
+) {
+  if (!outcome || outcome === 'alive') return;
+  setPatientOutcome(outcome);
+  addToast(
+    outcome === 'deceased'
+      ? '⚠️ Patient has expired. Case concluded.'
+      : '🔴 Critical deterioration — patient is unstable.',
+    'error',
+  );
 }
 
 export function useInterventionHandlers({
@@ -42,34 +70,14 @@ export function useInterventionHandlers({
       },
     ]);
     try {
-      const updated = await performIntervention(action, medicalCase, customWait || 5);
-      setMedicalCase((prev) =>
-        prev
-          ? {
-              ...prev,
-              ...updated,
-              labs: updated.labs || prev.labs,
-              imaging: updated.imaging || prev.imaging,
-              clinicalActions: updated.clinicalActions || prev.clinicalActions,
-              vitals: { ...prev.vitals, ...(updated.vitals || {}) },
-            }
-          : updated
-      );
-      if (updated.patientOutcome && updated.patientOutcome !== 'alive') {
-        setPatientOutcome(updated.patientOutcome);
-        addToast(
-          updated.patientOutcome === 'deceased'
-            ? '⚠️ Patient has expired. Case concluded.'
-            : '🔴 Critical deterioration — patient is unstable.',
-          'error'
-        );
-      }
+      const updated = await performIntervention(action, medicalCase, customWait ?? 5);
+      setMedicalCase((prev) => prev ? mergeUpdatedCase(prev, updated) : updated);
+      notifyOutcome(updated.patientOutcome, setPatientOutcome, addToast);
       setInterventionInput('');
       addToast(`Intervention executed: ${action}`, 'success');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Intervention failed';
+      addToast(err instanceof Error ? err.message : 'Intervention failed', 'error');
       console.error('Intervention failed:', err);
-      addToast(msg, 'error');
     } finally {
       setIntervening(false);
     }
@@ -83,19 +91,20 @@ export function useInterventionHandlers({
       const result = await orderTest(medicalCase.id, type, name, medicalCase.simulationTime, 'stat');
       setMedicalCase((prev) => {
         if (!prev) return prev;
+        const actions = [...(prev.clinicalActions ?? []), result.action];
         return type === 'lab'
-          ? { ...prev, labs: [...(prev.labs || []), result.testResult], clinicalActions: [...(prev.clinicalActions || []), result.action] }
-          : { ...prev, imaging: [...(prev.imaging || []), result.testResult], clinicalActions: [...(prev.clinicalActions || []), result.action] };
+          ? { ...prev, labs: [...(prev.labs ?? []), result.testResult], clinicalActions: actions }
+          : { ...prev, imaging: [...(prev.imaging ?? []), result.testResult], clinicalActions: actions };
       });
       reasoning.addFinding({
-        source: type === 'lab' ? 'lab' : 'imaging',
+        source: type,
         text: `${name} ordered (T+${medicalCase.simulationTime}m)`,
         relevance: 'none',
         addedAt: medicalCase.simulationTime,
       });
       addToast(result.message, 'success');
-    } catch (err: any) {
-      addToast(err.message || 'Failed to order test', 'error');
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Failed to order test', 'error');
     } finally {
       setIntervening(false);
     }
@@ -108,16 +117,11 @@ export function useInterventionHandlers({
     setLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), text: `ADVANCE TIME: +${minutes} min` }]);
     try {
       const updated = await performIntervention('', medicalCase, minutes);
-      setMedicalCase((prev) => prev
-        ? { ...prev, ...updated, labs: updated.labs ?? prev.labs, imaging: updated.imaging ?? prev.imaging, availableTests: prev.availableTests }
-        : updated);
-      if (updated.patientOutcome && updated.patientOutcome !== 'alive') {
-        setPatientOutcome(updated.patientOutcome);
-        addToast(updated.patientOutcome === 'deceased' ? '⚠️ Patient has expired.' : '🔴 Critical deterioration.', 'error');
-      }
+      setMedicalCase((prev) => prev ? mergeUpdatedCase(prev, updated) : updated);
+      notifyOutcome(updated.patientOutcome, setPatientOutcome, addToast);
       addToast(`Clock → T+${updated.simulationTime} min`, 'success');
-    } catch (err: any) {
-      addToast(err.message || 'Failed to advance time', 'error');
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Failed to advance time', 'error');
     } finally {
       setIntervening(false);
     }

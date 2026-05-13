@@ -1,14 +1,15 @@
 import { useState, useCallback } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import type { MedicalCase, ConsultantAdvice } from '../types';
 import { staffCall, performIntervention } from '../services/geminiService';
 import { getConsultantAdvice } from '../services/aiConsultantService';
 
 interface Deps {
   medicalCase: MedicalCase | null;
-  setMedicalCase: React.Dispatch<React.SetStateAction<MedicalCase | null>>;
+  setMedicalCase: Dispatch<SetStateAction<MedicalCase | null>>;
   pushUndo: (label: string, snapshot: MedicalCase) => void;
   addToast: (msg: string, type: 'success' | 'error' | 'info') => void;
-  setLogs: React.Dispatch<React.SetStateAction<{ time: string; text: string }[]>>;
+  setLogs: Dispatch<SetStateAction<{ time: string; text: string }[]>>;
 }
 
 export function useCommsHandlers({ medicalCase, setMedicalCase, pushUndo, addToast, setLogs }: Deps) {
@@ -33,9 +34,8 @@ export function useCommsHandlers({ medicalCase, setMedicalCase, pushUndo, addToa
       ]);
       addToast(`Staff call to ${callTarget} completed`, 'success');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Staff call failed';
+      addToast(err instanceof Error ? err.message : 'Staff call failed', 'error');
       console.error(err);
-      addToast(msg, 'error');
     } finally {
       setCalling(false);
     }
@@ -46,14 +46,20 @@ export function useCommsHandlers({ medicalCase, setMedicalCase, pushUndo, addToa
     setIsConsulting(true);
     setIsConsultOpen(true);
     try {
-      const advice = await getConsultantAdvice(medicalCase);
+      // Both calls read medicalCase independently — run in parallel
+      const [advice, updated] = await Promise.all([
+        getConsultantAdvice(medicalCase),
+        performIntervention('Requested Specialty Consultation', medicalCase, 10),
+      ]);
       setConsultantAdvice(advice);
-      const updated = await performIntervention('Requested Specialty Consultation', medicalCase, 10);
       setMedicalCase(updated);
-      setLogs((prev) => [{ time: `T + ${updated.simulationTime}`, text: 'Expert Consultation requested (+10 min)' }, ...prev]);
-    } catch (err: any) {
+      setLogs((prev) => [
+        ...prev,
+        { time: `T + ${updated.simulationTime}`, text: 'Expert Consultation requested (+10 min)' },
+      ]);
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Consultant is currently unavailable.', 'error');
       console.error(err);
-      addToast(err?.message || 'Consultant is currently unavailable.', 'error');
     } finally {
       setIsConsulting(false);
     }

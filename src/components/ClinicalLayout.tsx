@@ -95,6 +95,7 @@ export function ClinicalLayout() {
 
 function ClinicalLayoutInner() {
   const [moreMenuOpen, setMoreMenuOpen] = React.useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = React.useState(false);
 
   // Pure UI state — only needed in this component, not shared globally
   const [vitalsExpanded, setVitalsExpanded] = React.useState(false);
@@ -105,7 +106,7 @@ function ClinicalLayoutInner() {
   const [selectedLab, setSelectedLab] = React.useState<import('../types').LabResult | null>(null);
   const [revealedStudies, setRevealedStudies] = React.useState<string[]>([]);
 
-  const { user, isAuthOpen, setIsAuthOpen, handleLogout } = useAuth();
+  const { user, isAuthOpen, setIsAuthOpen, handleLogout, isSupabaseConfigured, isAuthLoading, isRecovery, clearRecovery } = useAuth();
   const {
     medicalCase,
     loading,
@@ -123,7 +124,7 @@ function ClinicalLayoutInner() {
     userNotes,
     setUserNotes,
     evaluation,
-    feedback,
+
     submitting,
     differential,
     setDifferential,
@@ -228,7 +229,7 @@ function ClinicalLayoutInner() {
       {/* Modals & overlays */}
       <VitalsExpanded isOpen={vitalsExpanded} onClose={() => setVitalsExpanded(false)} vitalsHistory={vitalsHistory} />
       <CaseLibrary isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} onSelectCase={(d, c, e) => { setIsLibraryOpen(false); loadNewCase(d, c, e); }} />
-      <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
+      <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} isRecovery={isRecovery} onRecoveryHandled={clearRecovery} />
       <CommandPalette
         isOpen={isCommandOpen}
         onClose={() => setIsCommandOpen(false)}
@@ -271,13 +272,35 @@ function ClinicalLayoutInner() {
           <button onClick={() => setIsLibraryOpen(true)} className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors" aria-label="New case">
             <RefreshCw className="w-4 h-4" />
           </button>
-          {user ? (
-            <button onClick={handleLogout} className="w-6 h-6 bg-gray-900 rounded-full flex items-center justify-center text-[10px] font-medium text-white" aria-label="Account">
-              {user.email?.[0].toUpperCase()}
-            </button>
-          ) : (
+          {!isAuthLoading && (user ? (
+            <div className="relative">
+              <button
+                onClick={() => setAccountMenuOpen(p => !p)}
+                className="w-6 h-6 bg-gray-900 rounded-full flex items-center justify-center text-[10px] font-medium text-white"
+                aria-label="Account menu"
+              >
+                {user.email?.[0].toUpperCase()}
+              </button>
+              {accountMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setAccountMenuOpen(false)} />
+                  <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-xl shadow-lg py-2 px-1 min-w-[160px] z-50">
+                    <p className="px-3 py-1 text-[10px] text-gray-400 truncate">{user.email}</p>
+                    <div className="border-t border-gray-100 mt-1 pt-1">
+                      <button
+                        onClick={() => { setAccountMenuOpen(false); handleLogout(); }}
+                        className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : isSupabaseConfigured ? (
             <button onClick={() => setIsAuthOpen(true)} className="text-xs text-gray-400 hover:text-gray-700" aria-label="Sign in">Sign in</button>
-          )}
+          ) : null)}
         </div>
       </header>
 
@@ -378,7 +401,7 @@ function ClinicalLayoutInner() {
             )}
 
             {activeTab === 'assess' && medicalCase && (
-              <AssessmentTab key="assess" medicalCase={medicalCase} simTime={simTime} userNotes={userNotes} evaluation={evaluation} feedback={feedback} submitting={submitting} logs={logs} differential={differential} onDifferentialChange={setDifferential} onNotesChange={setUserNotes} onEndCase={handleEndCase} onNewCase={() => loadNewCase()} />
+              <AssessmentTab key="assess" medicalCase={medicalCase} simTime={simTime} userNotes={userNotes} evaluation={evaluation} submitting={submitting} logs={logs} differential={differential} onDifferentialChange={setDifferential} onNotesChange={setUserNotes} onEndCase={handleEndCase} onNewCase={() => loadNewCase()} />
             )}
 
             {activeTab === 'notes' && (

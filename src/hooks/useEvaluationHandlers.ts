@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import type { MedicalCase, CaseEvaluation } from '../types';
 import { endCase } from '../services/geminiService';
 import { saveCCSResult } from '../services/storageService';
@@ -8,13 +9,12 @@ interface Deps {
   medicalCase: MedicalCase | null;
   reasoning: UseClinicalReasoning;
   addToast: (msg: string, type: 'success' | 'error' | 'info') => void;
-  setLogs: React.Dispatch<React.SetStateAction<{ time: string; text: string }[]>>;
+  setLogs: Dispatch<SetStateAction<{ time: string; text: string }[]>>;
 }
 
 export function useEvaluationHandlers({ medicalCase, reasoning, addToast, setLogs }: Deps) {
   const [userNotes, setUserNotes] = useState('');
   const [evaluation, setEvaluation] = useState<CaseEvaluation | null>(null);
-  const [feedback, setFeedback] = useState<{ score: number; feedback: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [differential, setDifferential] = useState('');
 
@@ -42,11 +42,7 @@ export function useEvaluationHandlers({ medicalCase, reasoning, addToast, setLog
         findingsCount: reasoning.findings.length,
         positiveFindings: reasoning.findings.filter(f => f.relevance === 'positive').map(f => f.text),
         negativeFindings: reasoning.findings.filter(f => f.relevance === 'negative').map(f => f.text),
-        prHistory: reasoning.prHistory.map(s => ({
-          stage: s.stage,
-          text: s.text,
-          simTime: s.simTime,
-        })),
+        prHistory: reasoning.prHistory.map(s => ({ stage: s.stage, text: s.text, simTime: s.simTime })),
         stageCommitments: reasoning.stageCommitments.map(c => {
           const lead = reasoning.differentials.find(d => d.id === c.leadDiagnosisId);
           return {
@@ -58,12 +54,13 @@ export function useEvaluationHandlers({ medicalCase, reasoning, addToast, setLog
         }),
         findingsByDx,
       });
+
       setEvaluation(result);
       setLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), text: `SCORE: ${result.score}/100` }]);
       saveCCSResult(medicalCase, result).catch(console.error);
       addToast(`Case scored — ${result.score}/100`, 'success');
-    } catch (err: any) {
-      addToast(err.message || 'Scoring failed', 'error');
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Scoring failed', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -73,8 +70,6 @@ export function useEvaluationHandlers({ medicalCase, reasoning, addToast, setLog
     userNotes,
     setUserNotes,
     evaluation,
-    feedback,
-    setFeedback,
     submitting,
     differential,
     setDifferential,
