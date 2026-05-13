@@ -47,6 +47,7 @@ export interface CaseContextValue {
   userNotes: string;
   setUserNotes: React.Dispatch<React.SetStateAction<string>>;
   evaluation: CaseEvaluation | null;
+  setEvaluation: React.Dispatch<React.SetStateAction<CaseEvaluation | null>>;
   submitting: boolean;
   differential: string;
   setDifferential: React.Dispatch<React.SetStateAction<string>>;
@@ -221,6 +222,7 @@ export function CaseProvider({ children }: { children: ReactNode }) {
     setLoadingStep('Connecting to clinical simulation engine…');
     evaluationHandlers.setUserNotes('');
     evaluationHandlers.setDifferential('');
+    evaluationHandlers.setEvaluation(null);
     setPatientOutcome(null);
     setLogs([{ time: new Date().toLocaleTimeString(), text: 'ADMIT: Patient registered in system.' }]);
     reasoning.resetReasoning();

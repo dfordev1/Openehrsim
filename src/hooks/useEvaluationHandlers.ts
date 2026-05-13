@@ -70,6 +70,7 @@ export function useEvaluationHandlers({ medicalCase, reasoning, addToast, setLog
     userNotes,
     setUserNotes,
     evaluation,
+    setEvaluation,
     submitting,
     differential,
     setDifferential,
