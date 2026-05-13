@@ -13,10 +13,11 @@ function getAcuityLevel(mc: MedicalCase): { level: number; label: string; color:
   const spo2 = mc.vitals.oxygenSaturation;
   const sbp = parseInt(mc.vitals.bloodPressure.split('/')[0]) || 120;
 
-  if (spo2 < 88 || sbp < 80 || hr > 150 || hr < 40) return { level: 1, label: 'Resuscitation', color: 'text-red-700 bg-red-50 border-red-300' };
-  if (spo2 < 92 || sbp < 90 || hr > 130 || rr > 28) return { level: 2, label: 'Emergent', color: 'text-orange-700 bg-orange-50 border-orange-300' };
+  if (spo2 < 88 || sbp < 80 || hr > 150 || hr < 40) return { level: 1, label: 'Resuscitation', color: 'text-red-700 bg-red-100 border-red-400' };
+  if (spo2 < 92 || sbp < 90 || hr > 130 || rr > 28) return { level: 2, label: 'Emergent', color: 'text-red-600 bg-red-50 border-red-300' };
   if (hr > 100 || rr > 22 || sbp > 160) return { level: 3, label: 'Urgent', color: 'text-amber-700 bg-amber-50 border-amber-300' };
-  return { level: 4, label: 'Less Urgent', color: 'text-green-700 bg-green-50 border-green-300' };
+  if (hr > 80 || rr > 18) return { level: 4, label: 'Less Urgent', color: 'text-blue-700 bg-blue-50 border-blue-300' };
+  return { level: 5, label: 'Non-Urgent', color: 'text-green-700 bg-green-50 border-green-300' };
 }
 
 export function TriageTab({ medicalCase }: TriageTabProps) {
@@ -37,14 +38,16 @@ export function TriageTab({ medicalCase }: TriageTabProps) {
         <div className="p-5 space-y-5">
           {/* Patient header */}
           <div className="flex flex-wrap items-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-teal-50 border-2 border-teal-200 flex items-center justify-center text-xl">
-              {medicalCase.gender?.toLowerCase().includes('f') ? '♀' : '♂'}
-            </div>
-            <div className="flex-1">
-              <h2 className="text-lg font-bold text-clinical-ink">{medicalCase.patientName}</h2>
-              <p className="text-sm text-clinical-slate">
-                {medicalCase.age}y {medicalCase.gender} · {medicalCase.currentLocation}
-              </p>
+            <div className="flex items-center gap-3 flex-1">
+              <div className="w-8 h-8 rounded-full bg-teal-50 border-2 border-teal-200 inline-flex items-center justify-center text-sm shrink-0">
+                {medicalCase.gender?.toLowerCase().includes('f') ? '♀' : '♂'}
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-clinical-ink">{medicalCase.patientName}</h2>
+                <p className="text-sm text-clinical-slate">
+                  {medicalCase.age}y {medicalCase.gender} · {medicalCase.currentLocation}
+                </p>
+              </div>
             </div>
             {medicalCase.difficulty && (
               <span className={cn(
@@ -83,11 +86,11 @@ export function TriageTab({ medicalCase }: TriageTabProps) {
       </div>
 
       {/* Vitals at triage */}
-      <div className="panel">
-        <div className="panel-header">
-          <span className="panel-title">Triage Vitals</span>
+      <details className="panel">
+        <summary className="panel-header cursor-pointer list-none">
+          <span className="panel-title">View initial vitals snapshot</span>
           <span className="text-[10px] text-clinical-slate">Obtained at presentation</span>
-        </div>
+        </summary>
         <div className="p-4">
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {[
@@ -113,7 +116,7 @@ export function TriageTab({ medicalCase }: TriageTabProps) {
             ))}
           </div>
         </div>
-      </div>
+      </details>
 
       {/* Quick info */}
       <div className="panel">

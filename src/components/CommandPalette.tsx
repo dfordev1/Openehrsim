@@ -16,7 +16,9 @@ import {
   RefreshCw,
   Command,
   Clock,
+  Moon,
 } from 'lucide-react';
+import { useNavigation } from '../contexts/NavigationContext';
 
 interface CommandItem {
   id: string;
@@ -42,6 +44,7 @@ export function CommandPalette({ isOpen, onClose, onNavigate, onNewCase, onConsu
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { toggleDark } = useNavigation();
 
   const commands: CommandItem[] = [
     { id: 'hpi', label: 'Go to History & Intake', icon: <Clipboard className="w-4 h-4" />, category: 'Navigation', action: () => onNavigate('hpi') },
@@ -56,6 +59,7 @@ export function CommandPalette({ isOpen, onClose, onNavigate, onNewCase, onConsu
     ...(hasArchive ? [{ id: 'archive', label: 'Go to Clinical Archive', icon: <History className="w-4 h-4" />, category: 'Navigation', action: () => onNavigate('archive') }] : []),
     { id: 'new-case', label: 'New Patient Case', icon: <RefreshCw className="w-4 h-4" />, category: 'Actions', action: onNewCase },
     { id: 'consult', label: 'AI Consultant', icon: <Sparkles className="w-4 h-4" />, category: 'Actions', action: onConsult },
+    { id: 'toggle-dark', label: 'Toggle dark mode', icon: <Moon className="w-4 h-4" />, category: 'Actions', action: toggleDark },
   ];
 
   const filtered = query

@@ -74,6 +74,7 @@ export function ClinicalVital({ label, value, unit, status: _passedStatus, isAla
       className={cn(
         'flex items-center gap-1 px-2 py-1 shrink-0 rounded transition-colors',
         (isAlarming || status === 'critical') && 'bg-red-50/80 ring-1 ring-clinical-red/20',
+        isAlarming && status === 'critical' && 'shadow-[0_0_8px_rgba(232,85,78,0.4)]',
         status === 'abnormal' && !isAlarming && 'bg-amber-50/60',
         onClick && 'hover:bg-clinical-bg cursor-pointer',
         !onClick && 'cursor-default'
