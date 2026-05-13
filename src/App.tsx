@@ -626,11 +626,11 @@ function ClinicalSimulator() {
     ...(user ? [{ id: 'archive', icon: <History className="w-4 h-4" />, label: 'Archive' }] : []),
   ];
   const mobileNavTabs = [
-    { id: 'triage',    icon: <AlertCircle className="w-4 h-4" />, label: 'Triage' },
-    { id: 'labs',      icon: <FlaskConical className="w-4 h-4" />,label: 'Labs'   },
-    { id: 'dxpause',   icon: <Brain className="w-4 h-4" />,       label: 'DxP'   },
-    { id: 'treatment', icon: <Activity className="w-4 h-4" />,    label: 'Orders' },
-    { id: 'assess',    icon: <CheckCircle2 className="w-4 h-4" />,label: 'Assess' },
+    { id: 'hpi',       icon: <Clipboard className="w-3.5 h-3.5" />,     label: 'Hx' },
+    { id: 'exam',      icon: <Stethoscope className="w-3.5 h-3.5" />,   label: 'PE' },
+    { id: 'labs',      icon: <FlaskConical className="w-3.5 h-3.5" />,  label: 'Labs' },
+    { id: 'treatment', icon: <Activity className="w-3.5 h-3.5" />,      label: 'Rx' },
+    { id: 'assess',    icon: <CheckCircle2 className="w-3.5 h-3.5" />,  label: 'Dx' },
   ];
 
   // ── Loading / error screen ────────────────────────────────────────────────
@@ -692,47 +692,33 @@ function ClinicalSimulator() {
       />
 
       {/* ── Header ── */}
-      <header className="h-11 bg-clinical-surface border-b border-clinical-line flex items-center px-4 shrink-0 z-30" role="banner">
-        <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-1.5 hover:bg-clinical-bg rounded-md mr-3" aria-label="Menu">
+      <header className="h-10 bg-clinical-surface border-b border-clinical-line/50 flex items-center px-3 shrink-0 z-30" role="banner">
+        <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-1 hover:bg-clinical-bg rounded mr-2" aria-label="Menu">
           <Menu className="w-4 h-4 text-clinical-slate" />
         </button>
-        <span className="text-sm font-semibold text-clinical-ink hidden sm:inline tracking-tight">OpenEHR</span>
-        <span className="w-px h-4 bg-clinical-line mx-3 hidden sm:inline-block" aria-hidden="true" />
-        <div className="flex items-center gap-2 text-sm text-clinical-slate flex-1 min-w-0">
-          <span className="font-medium text-clinical-ink truncate">{medicalCase?.patientName}</span>
-          {medicalCase?.currentLocation && (
-            <>
-              <span className="text-clinical-line hidden md:inline" aria-hidden="true">·</span>
-              <span className="text-xs text-clinical-slate/70 hidden md:inline truncate">{medicalCase?.currentLocation}</span>
-            </>
-          )}
-        </div>
-        <div className="flex items-center gap-3 ml-auto">
-          <button onClick={toggleDark} className="p-1.5 hover:bg-clinical-bg rounded-md transition-colors" aria-label={isDark ? 'Light mode' : 'Dark mode'}>
-            {isDark ? <Sun className="w-3.5 h-3.5 text-clinical-slate" /> : <Moon className="w-3.5 h-3.5 text-clinical-slate" />}
-          </button>
-          <button onClick={() => setIsCommandOpen(true)} className="hidden sm:flex items-center gap-1.5 text-xs text-clinical-slate/60 hover:text-clinical-slate bg-clinical-bg border border-clinical-line rounded-md px-2.5 py-1 transition-colors" aria-label="Command palette">
-            <Command className="w-3 h-3" />
-            <span className="font-mono text-[10px]">K</span>
-          </button>
+        <span className="text-xs font-medium text-clinical-ink truncate">{medicalCase?.patientName || 'OpenEHR'}</span>
+        <div className="flex items-center gap-2 ml-auto">
           <span className={cn(
-            'text-xs font-mono px-2 py-0.5 rounded-md font-semibold transition-colors',
-            simTime === 0 ? 'text-clinical-slate/60' :
-            simTime < 30  ? 'text-clinical-green bg-green-50/80' :
-            simTime < 60  ? 'text-clinical-amber bg-amber-50/80' :
-                            'text-clinical-red bg-red-50/80 animate-pulse'
-          )} title="Simulation elapsed time — faster decisions score better">
+            'text-[11px] font-mono px-1.5 py-0.5 rounded font-medium',
+            simTime === 0 ? 'text-clinical-slate/50' :
+            simTime < 30  ? 'text-clinical-green' :
+            simTime < 60  ? 'text-clinical-amber' :
+                            'text-clinical-red'
+          )} title="Simulation elapsed time">
             T+{simTime}m
           </span>
-          <button onClick={() => setIsLibraryOpen(true)} className="text-clinical-slate/50 hover:text-clinical-blue transition-colors" aria-label="New case">
+          <button onClick={toggleDark} className="p-1 hover:bg-clinical-bg rounded transition-colors" aria-label={isDark ? 'Light mode' : 'Dark mode'}>
+            {isDark ? <Sun className="w-3.5 h-3.5 text-clinical-slate/60" /> : <Moon className="w-3.5 h-3.5 text-clinical-slate/60" />}
+          </button>
+          <button onClick={() => setIsLibraryOpen(true)} className="p-1 text-clinical-slate/60 hover:text-clinical-blue transition-colors" aria-label="New case">
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
           {user ? (
-            <button onClick={handleLogout} className="w-6 h-6 bg-clinical-blue/80 rounded-full flex items-center justify-center text-[9px] font-medium text-white" aria-label="Account">
-              {user.email?.[0]}
+            <button onClick={handleLogout} className="w-5 h-5 bg-clinical-blue/80 rounded-full flex items-center justify-center text-[9px] font-medium text-white" aria-label="Account">
+              {user.email?.[0].toUpperCase()}
             </button>
           ) : (
-            <button onClick={() => setIsAuthOpen(true)} className="text-xs text-clinical-blue font-medium hover:underline" aria-label="Sign in">Sign in</button>
+            <button onClick={() => setIsAuthOpen(true)} className="text-[11px] text-clinical-blue font-medium hover:underline" aria-label="Sign in">Sign in</button>
           )}
         </div>
       </header>
@@ -742,14 +728,14 @@ function ClinicalSimulator() {
         {patientOutcome && patientOutcome !== 'alive' && (
           <motion.div
             initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            className={cn('border-b py-2 px-4 flex items-center gap-3 shrink-0', patientOutcome === 'deceased' ? 'bg-gray-900 border-gray-700' : 'bg-red-900/80 border-red-700')}
+            className={cn('border-b py-1.5 px-3 flex items-center gap-2 shrink-0', patientOutcome === 'deceased' ? 'bg-gray-800 border-gray-700' : 'bg-red-900/70 border-red-700')}
             role="alert" aria-live="assertive"
           >
-            <div className={cn('w-2 h-2 rounded-full shrink-0', patientOutcome === 'deceased' ? 'bg-gray-400' : 'bg-red-400 animate-pulse')} />
-            <span className={cn('text-xs font-semibold', patientOutcome === 'deceased' ? 'text-gray-200' : 'text-red-200')}>
-              {patientOutcome === 'deceased' ? '🕊 Patient Expired — Submit final diagnosis or start a new case.' : '🔴 Critical Deterioration — Immediate escalation required.'}
+            <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', patientOutcome === 'deceased' ? 'bg-gray-400' : 'bg-red-400')} />
+            <span className={cn('text-[11px] font-medium', patientOutcome === 'deceased' ? 'text-gray-200' : 'text-red-200')}>
+              {patientOutcome === 'deceased' ? 'Patient Expired — Submit diagnosis or start new case' : 'Critical Deterioration — Immediate escalation required'}
             </span>
-            <button onClick={() => loadNewCase()} className="ml-auto text-[10px] font-medium underline text-white/70 hover:text-white">New Case</button>
+            <button onClick={() => loadNewCase()} className="ml-auto text-[10px] font-medium underline text-white/60 hover:text-white/90">New Case</button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -757,9 +743,9 @@ function ClinicalSimulator() {
       {/* ── Alarm Banner ── */}
       <AnimatePresence>
         {(medicalCase?.activeAlarms || []).length > 0 && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-red-50/60 border-b border-red-100/80 py-1.5 px-4 flex items-center gap-3 overflow-hidden shrink-0" role="alert" aria-live="assertive">
-            <div className="w-1.5 h-1.5 bg-clinical-red/70 rounded-full animate-pulse shrink-0" />
-            <div className="flex gap-3 text-xs text-clinical-red/80 font-medium overflow-x-auto no-scrollbar">
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-red-50/40 border-b border-red-100/60 py-1 px-3 flex items-center gap-2 overflow-hidden shrink-0" role="alert" aria-live="assertive">
+            <div className="w-1 h-1 bg-clinical-red/50 rounded-full shrink-0" />
+            <div className="flex gap-2 text-[10px] text-clinical-red/70 font-medium overflow-x-auto no-scrollbar">
               {medicalCase?.activeAlarms.map((a, i) => <span key={i}>{a}</span>)}
             </div>
           </motion.div>
@@ -768,7 +754,7 @@ function ClinicalSimulator() {
 
       {/* ── Clinical Reasoning Workflow Progress ── */}
       {medicalCase && (
-        <div className="bg-clinical-surface border-b border-clinical-line/50 px-4 py-2 shrink-0">
+        <div className="bg-clinical-surface border-b border-clinical-line/50 px-3 py-1.5 shrink-0">
           <WorkflowProgress
             currentStage={reasoning.currentStage}
             onStageClick={(stage) => handleStageNavigate(stage)}
@@ -806,24 +792,12 @@ function ClinicalSimulator() {
       )}
 
       {/* ── Vitals Rail ── */}
-      <div className="h-11 bg-clinical-surface border-b border-clinical-line/50 flex items-center px-4 gap-3 shrink-0 overflow-x-auto no-scrollbar" role="region" aria-label="Vital signs">
-        <div className={cn('text-[10px] font-medium px-2 py-0.5 rounded-full',
-          medicalCase?.physiologicalTrend === 'improving' ? 'text-clinical-green bg-green-50/80' :
-          medicalCase?.physiologicalTrend === 'declining'  ? 'text-clinical-amber bg-amber-50/80' :
-          medicalCase?.physiologicalTrend === 'critical'   ? 'text-clinical-red bg-red-50/80' :
-          'text-clinical-slate bg-slate-50'
-        )}>
-          {medicalCase?.physiologicalTrend}
-        </div>
-        <div className="w-px h-5 bg-clinical-line/50" />
-        <ClinicalVital label="HR"   value={Math.round(vitalsHistory[vitalsHistory.length-1]?.hr || medicalCase?.vitals?.heartRate || 0)} unit="bpm"  status="normal" isAlarming={medicalCase?.activeAlarms.some(a => /HR|Pulse|Brady|Tachy/i.test(a))} trend={vitalsHistory.map(v => v.hr)}   onClick={() => setVitalsExpanded(true)} />
-        <ClinicalVital label="BP"   value={medicalCase?.vitals?.bloodPressure || '--'}           unit="mmHg" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => /BP|Pressure|Hypotension|Hypertension/i.test(a))} trend={vitalsHistory.map(v => v.sbp)} onClick={() => setVitalsExpanded(true)} />
-        <ClinicalVital label="SpO2" value={medicalCase?.vitals?.oxygenSaturation || 0}          unit="%"    status="normal" isAlarming={medicalCase?.activeAlarms.some(a => /SpO2|Saturation|Hypoxia/i.test(a))} trend={vitalsHistory.map(v => v.spo2)} onClick={() => setVitalsExpanded(true)} />
-        <ClinicalVital label="RR"   value={medicalCase?.vitals?.respiratoryRate || '--'}         unit="/min" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => /RR|Respiratory/i.test(a))} trend={vitalsHistory.map(v => v.rr)} onClick={() => setVitalsExpanded(true)} />
+      <div className="h-9 bg-clinical-surface border-b border-clinical-line/50 flex items-center px-3 gap-2 shrink-0 overflow-x-auto no-scrollbar" role="region" aria-label="Vital signs">
+        <ClinicalVital label="HR"   value={Math.round(vitalsHistory[vitalsHistory.length-1]?.hr || medicalCase?.vitals?.heartRate || 0)} unit="bpm"  status="normal" isAlarming={medicalCase?.activeAlarms.some(a => /HR|Pulse|Brady|Tachy/i.test(a))} onClick={() => setVitalsExpanded(true)} />
+        <ClinicalVital label="BP"   value={medicalCase?.vitals?.bloodPressure || '--'}           unit="mmHg" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => /BP|Pressure|Hypotension|Hypertension/i.test(a))} onClick={() => setVitalsExpanded(true)} />
+        <ClinicalVital label="SpO2" value={medicalCase?.vitals?.oxygenSaturation || 0}          unit="%"    status="normal" isAlarming={medicalCase?.activeAlarms.some(a => /SpO2|Saturation|Hypoxia/i.test(a))} onClick={() => setVitalsExpanded(true)} />
+        <ClinicalVital label="RR"   value={medicalCase?.vitals?.respiratoryRate || '--'}         unit="/min" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => /RR|Respiratory/i.test(a))} onClick={() => setVitalsExpanded(true)} />
         <ClinicalVital label="Temp" value={medicalCase?.vitals?.temperature || 0}               unit="°C"   status="normal" isAlarming={medicalCase?.activeAlarms.some(a => /Temp|Temperature|Fever/i.test(a))} onClick={() => setVitalsExpanded(true)} />
-        <button onClick={() => setVitalsExpanded(true)} className="ml-auto p-1 hover:bg-clinical-bg rounded transition-colors shrink-0" aria-label="Expand vitals">
-          <Maximize2 className="w-3.5 h-3.5 text-clinical-slate/50" />
-        </button>
       </div>
 
       <div className="flex flex-1 overflow-hidden relative">
@@ -833,17 +807,17 @@ function ClinicalSimulator() {
           {isSidebarOpen && (
             <>
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-clinical-ink/40 backdrop-blur-sm z-[100] lg:hidden" aria-hidden="true" />
-              <motion.div initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }} className="fixed top-0 left-0 bottom-0 w-60 bg-clinical-surface border-r border-clinical-line z-[101] lg:hidden flex flex-col" role="dialog" aria-modal="true" aria-label="Navigation menu">
-                <div className="flex items-center justify-between p-4 border-b border-clinical-line">
-                  <span className="text-sm font-semibold tracking-tight">OpenEHR</span>
-                  <button onClick={() => setIsSidebarOpen(false)} className="p-1.5 hover:bg-clinical-bg rounded-md" aria-label="Close navigation">
+              <motion.div initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }} className="fixed top-0 left-0 bottom-0 w-56 bg-clinical-surface border-r border-clinical-line z-[101] lg:hidden flex flex-col" role="dialog" aria-modal="true" aria-label="Navigation menu">
+                <div className="flex items-center justify-between p-3 border-b border-clinical-line">
+                  <span className="text-xs font-semibold tracking-tight">OpenEHR</span>
+                  <button onClick={() => setIsSidebarOpen(false)} className="p-1 hover:bg-clinical-bg rounded" aria-label="Close navigation">
                     <X className="w-4 h-4 text-clinical-slate" />
                   </button>
                 </div>
-                <nav className="flex-1 overflow-y-auto p-3 space-y-4" aria-label="Main navigation">
+                <nav className="flex-1 overflow-y-auto p-2 space-y-3" aria-label="Main navigation">
                   {[{ label: 'Patient Data', tabs: primaryTabs }, { label: 'Actions', tabs: actionTabs }, { label: 'Tools', tabs: toolTabs }].map(({ label, tabs }) => (
                     <div key={label}>
-                      <p className="text-[10px] font-semibold text-clinical-slate/60 uppercase tracking-wider px-3 mb-1">{label}</p>
+                      <p className="text-[9px] font-semibold text-clinical-slate/50 uppercase tracking-wider px-2.5 mb-0.5">{label}</p>
                       {tabs.map(tab => (
                         <NavTab key={tab.id} active={activeTab === tab.id} icon={tab.icon} label={tab.label} onClick={() => { setActiveTab(tab.id as any); setIsSidebarOpen(false); }} />
                       ))}
@@ -856,11 +830,11 @@ function ClinicalSimulator() {
         </AnimatePresence>
 
         {/* ── Desktop sidebar ── */}
-        <nav className="w-48 bg-clinical-surface border-r border-clinical-line/50 flex-col py-3 px-2 z-20 shrink-0 hidden lg:flex" aria-label="Main navigation">
-          <div className="space-y-4 flex-1">
+        <nav className="w-44 bg-clinical-surface border-r border-clinical-line/50 flex-col py-2 px-1.5 z-20 shrink-0 hidden lg:flex" aria-label="Main navigation">
+          <div className="space-y-3 flex-1">
             {[{ label: 'Patient Data', tabs: primaryTabs }, { label: 'Actions', tabs: actionTabs }, { label: 'Tools', tabs: toolTabs }].map(({ label, tabs }) => (
               <div key={label}>
-                <p className="text-[10px] font-semibold text-clinical-slate/50 uppercase tracking-wider px-3 mb-1">{label}</p>
+                <p className="text-[9px] font-semibold text-clinical-slate/50 uppercase tracking-wider px-2.5 mb-0.5">{label}</p>
                 <div className="space-y-0.5">
                   {tabs.map(tab => (
                     <NavTab key={tab.id} active={activeTab === tab.id} icon={tab.icon} label={tab.label} onClick={() => setActiveTab(tab.id as any)} />
@@ -869,8 +843,8 @@ function ClinicalSimulator() {
               </div>
             ))}
           </div>
-          <div className="pt-3 px-1 border-t border-clinical-line/50">
-            <button onClick={handleConsult} disabled={isConsulting || !medicalCase} className="w-full py-2 px-3 text-xs font-medium text-clinical-slate hover:text-clinical-blue hover:bg-clinical-blue/5 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40" aria-label="AI Consultant">
+          <div className="pt-2 px-1 border-t border-clinical-line/50">
+            <button onClick={handleConsult} disabled={isConsulting || !medicalCase} className="w-full py-1.5 px-2.5 text-[11px] font-medium text-clinical-slate hover:text-clinical-blue hover:bg-clinical-blue/5 rounded transition-colors flex items-center gap-2 disabled:opacity-40" aria-label="AI Consultant">
               {isConsulting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
               AI Consultant
             </button>

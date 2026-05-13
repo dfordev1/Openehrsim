@@ -25,8 +25,6 @@ export function WorkflowProgress({ currentStage, onStageClick, completedStages, 
     <div className="flex items-center w-full" role="navigation" aria-label="Clinical workflow stages">
       {STAGES.map((stage, idx) => {
         const isActive = stage.id === currentStage;
-        // A stage only counts as "done" in the visual if it is both marked
-        // completed AND is not the one the user is currently standing on.
         const isCompleted = !isActive && completedStages.includes(stage.id);
         const isPast = idx < currentIdx && !isCompleted;
 
@@ -36,8 +34,8 @@ export function WorkflowProgress({ currentStage, onStageClick, completedStages, 
               onClick={() => !disabled && onStageClick(stage.id)}
               disabled={disabled}
               className={cn(
-                'relative flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-all min-w-0',
-                isActive && 'bg-teal-50 ring-1 ring-teal-300',
+                'relative flex flex-col items-center gap-0.5 px-1.5 py-1 rounded transition-all min-w-0',
+                isActive && 'bg-teal-50/60',
                 !isActive && !disabled && 'hover:bg-clinical-bg cursor-pointer',
                 disabled && 'cursor-not-allowed opacity-60'
               )}
@@ -46,24 +44,24 @@ export function WorkflowProgress({ currentStage, onStageClick, completedStages, 
             >
               {/* Circle indicator */}
               <div className={cn(
-                'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border-2 transition-colors',
-                isActive ? 'bg-teal-600 border-teal-600 text-white shadow-sm shadow-teal-600/30' :
-                isCompleted ? 'bg-teal-100 border-teal-400 text-teal-700' :
-                isPast ? 'bg-clinical-bg border-clinical-slate/30 text-clinical-slate' :
-                'bg-white border-clinical-line text-clinical-slate/50'
+                'w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-semibold border transition-colors',
+                isActive ? 'bg-teal-600 border-teal-600 text-white' :
+                isCompleted ? 'bg-teal-100 border-teal-300 text-teal-700' :
+                isPast ? 'bg-clinical-bg border-clinical-line text-clinical-slate/50' :
+                'bg-white border-clinical-line text-clinical-slate/40'
               )}>
                 {isActive
                   ? idx + 1
                   : isCompleted
-                  ? <CheckCircle2 className="w-3.5 h-3.5" />
+                  ? <CheckCircle2 className="w-3 h-3" />
                   : idx + 1}
               </div>
               {/* Label */}
               <span className={cn(
-                'text-[9px] font-semibold uppercase tracking-wide whitespace-nowrap',
+                'text-[8px] font-medium uppercase tracking-wide whitespace-nowrap',
                 isActive ? 'text-teal-700' :
                 isCompleted ? 'text-teal-600' :
-                'text-clinical-slate/60'
+                'text-clinical-slate/50'
               )}>
                 <span className="hidden sm:inline">{stage.label}</span>
                 <span className="sm:hidden">{stage.shortLabel}</span>
@@ -73,9 +71,9 @@ export function WorkflowProgress({ currentStage, onStageClick, completedStages, 
             {/* Connector line */}
             {idx < STAGES.length - 1 && (
               <div className={cn(
-                'flex-1 h-0.5 mx-1 rounded-full transition-colors',
-                idx < currentIdx ? 'bg-teal-400' :
-                idx === currentIdx ? 'bg-teal-200' :
+                'flex-1 h-px mx-0.5 transition-colors',
+                idx < currentIdx ? 'bg-teal-300' :
+                idx === currentIdx ? 'bg-teal-200/50' :
                 'bg-clinical-line'
               )} />
             )}

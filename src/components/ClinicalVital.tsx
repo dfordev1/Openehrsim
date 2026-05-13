@@ -67,14 +67,12 @@ function trendArrow(trend?: number[]): { arrow: string; cls: string } | null {
 export function ClinicalVital({ label, value, unit, status: _passedStatus, isAlarming, trend, onClick }: ClinicalVitalProps) {
   const status = deriveStatus(label, value);
 
-  const arrow = trendArrow(trend);
-
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        'flex items-center gap-1.5 px-2.5 py-1 shrink-0 rounded-md transition-colors',
+        'flex items-center gap-1 px-2 py-1 shrink-0 rounded transition-colors',
         (isAlarming || status === 'critical') && 'bg-red-50/80 ring-1 ring-clinical-red/20',
         status === 'abnormal' && !isAlarming && 'bg-amber-50/60',
         onClick && 'hover:bg-clinical-bg cursor-pointer',
@@ -84,30 +82,15 @@ export function ClinicalVital({ label, value, unit, status: _passedStatus, isAla
       aria-label={`${label}: ${value} ${unit}`}
     >
       <div className="flex flex-col items-center">
-        <span className="text-[10px] text-clinical-slate/70 font-medium mb-0.5">{label}</span>
-        <div className="flex items-baseline gap-0.5">
-          <span className={cn(
-            'text-sm font-semibold font-mono leading-none',
-            (isAlarming || status === 'critical') ? 'text-clinical-red' :
-            status === 'abnormal'                 ? 'text-clinical-amber' :
-                                                    'text-clinical-ink'
-          )}>{value}</span>
-          {arrow && (
-            <span className={cn('text-[10px] font-bold leading-none', arrow.cls)}>{arrow.arrow}</span>
-          )}
-        </div>
-        <span className="text-[9px] text-clinical-slate/50 mt-0.5">{unit}</span>
+        <span className="text-[9px] text-clinical-slate/60 font-medium leading-tight">{label}</span>
+        <span className={cn(
+          'text-xs font-semibold font-mono leading-tight',
+          (isAlarming || status === 'critical') ? 'text-clinical-red' :
+          status === 'abnormal'                 ? 'text-clinical-amber' :
+                                                  'text-clinical-ink'
+        )}>{value}</span>
+        <span className="text-[8px] text-clinical-slate/50 leading-tight">{unit}</span>
       </div>
-      {trend && trend.length > 2 && (
-        <Sparkline
-          data={trend}
-          color={
-            (isAlarming || status === 'critical') ? 'var(--color-clinical-red)' :
-            status === 'abnormal'                 ? 'var(--color-clinical-amber)' :
-                                                    'var(--color-clinical-green)'
-          }
-        />
-      )}
     </button>
   );
 }
