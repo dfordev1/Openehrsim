@@ -62,10 +62,9 @@ async function startServer() {
         return res.status(500).json({ error: "DEEPSEEK_API_KEY is not configured in Secrets." });
       }
 
+      // Be permissive — default to "resident" if invalid
       const allowedDifficulties = ["intern", "resident", "attending"];
-      if (difficulty && !allowedDifficulties.includes(difficulty)) {
-        return res.status(400).json({ error: "Invalid difficulty value." });
-      }
+      const safeDifficulty = allowedDifficulties.includes(difficulty) ? difficulty : "resident";
 
       const envContext =
         environment === "rural"
@@ -326,17 +325,23 @@ Time advances by ${waitTime} min (${medicalCase.simulationTime} → ${newSimTime
   app.post("/api/examine-system", async (req, res) => {
     try {
       const { caseId, system } = req.body ?? {};
-      const SYSTEM_KEYS = ['heent', 'cardiac', 'respiratory', 'abdomen', 'extremities', 'neurological'];
 
       if (!caseId || typeof caseId !== "string") return res.status(400).json({ error: "Missing: caseId" });
-      if (!system || !SYSTEM_KEYS.includes(system)) return res.status(400).json({ error: `Invalid system. Must be one of: ${SYSTEM_KEYS.join(", ")}` });
+      if (!system || typeof system !== "string") return res.status(400).json({ error: "Missing: system" });
 
       const fullCase = casesStore.get(caseId) || null;
       if (!fullCase) return res.status(404).json({ error: "Case not found. Please start a new case." });
 
+      // Check against actual case keys instead of hardcoded list
       const finding = fullCase.physicalExam?.[system];
       if (!finding || finding === LOCKED_SENTINEL) {
-        return res.status(404).json({ error: `No finding for system "${system}" in this case.` });
+        // Try case-insensitive match
+        const examKeys = Object.keys(fullCase.physicalExam || {});
+        const match = examKeys.find((k: string) => k.toLowerCase() === system.toLowerCase());
+        if (match && fullCase.physicalExam[match] && fullCase.physicalExam[match] !== LOCKED_SENTINEL) {
+          return res.json({ system: match, finding: fullCase.physicalExam[match] });
+        }
+        return res.json({ system, finding: "Examination performed — findings within normal limits." });
       }
 
       res.json({ system, finding });

@@ -9,8 +9,6 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getCaseServerSide } from "./_supabase.js";
 import { LOCKED_SENTINEL } from "../src/lib/constants.js";
 
-const SYSTEM_KEYS = ['heent', 'cardiac', 'respiratory', 'abdomen', 'extremities', 'neurological'];
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -20,8 +18,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!caseId || typeof caseId !== "string") {
       return res.status(400).json({ error: "Missing: caseId" });
     }
-    if (!system || !SYSTEM_KEYS.includes(system)) {
-      return res.status(400).json({ error: `Invalid system. Must be one of: ${SYSTEM_KEYS.join(", ")}` });
+    if (!system || typeof system !== "string") {
+      return res.status(400).json({ error: "Missing: system" });
     }
 
     const fullCase = await getCaseServerSide(caseId);
@@ -29,10 +27,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ error: "Case not found. Please start a new case." });
     }
 
+    // Check against actual case keys instead of a hardcoded list
+    const examKeys = Object.keys(fullCase.physicalExam || {});
     const finding = fullCase.physicalExam?.[system];
 
     if (!finding || finding === LOCKED_SENTINEL) {
-      return res.status(404).json({ error: `No finding for system "${system}" in this case.` });
+      // Try case-insensitive match
+      const match = examKeys.find(k => k.toLowerCase() === system.toLowerCase());
+      if (match && fullCase.physicalExam[match] && fullCase.physicalExam[match] !== LOCKED_SENTINEL) {
+        return res.json({ system: match, finding: fullCase.physicalExam[match] });
+      }
+      return res.json({ system, finding: "Examination performed — findings within normal limits." });
     }
 
     res.json({ system, finding });
