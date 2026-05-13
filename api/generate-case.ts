@@ -46,32 +46,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       messages: [
         {
           role: "system",
-          content: `You are a high-fidelity USMLE Step 3 CCS simulation engine.
-Generate a COMPLETE case including the hidden answer key.
-
-DIFFICULTY:
-- intern:    Classic, textbook presentations (STEMI, uncomplicated Sepsis, DKA).
-- resident:  Mixed clues, moderate complexity (PE vs pneumonia, HHS, ACS vs GERD).
-- attending: Subtle / rare / diagnostic dilemmas (Thyroid Storm, Serotonin Syndrome, occult haemorrhage).
+          content: `You are a high-fidelity USMLE Step 3 CCS examiner creating a clinical simulation case.
+Generate a COMPLETE, CHALLENGING case including the hidden answer key.
 
 ${envCtx}
 ${historyCtx}
 
-REQUIRED FIELDS — include ALL of them:
+━━━ DIFFICULTY CONTRACT ━━━
+intern:
+  • Single-system illness, textbook presentation
+  • 2-3 differential diagnoses (one obvious, one plausible alternative)
+  • Vitals clearly abnormal; diagnosis apparent from initial data
+  • Comorbidities: 1 (e.g. hypertension only)
+  • No red herrings
+
+resident:
+  • Multi-system involvement or atypical age/gender presentation
+  • 4-6 differential diagnoses; correct diagnosis NOT the first obvious one
+  • ONE deliberate red herring (a finding that suggests a wrong diagnosis)
+  • Comorbidities: 2-3 that actively complicate management (e.g. CKD affecting dosing, anticoagulation, COPD changing O2 targets)
+  • Time-critical window: one key intervention has an explicit penalty if delayed >30 min
+  • Vitals: at least 2 abnormal values; one mild, one critical
+
+attending:
+  • Rare disease OR common disease with rare/atypical presentation OR two simultaneous conditions
+  • 6+ differential diagnoses; misleading initial picture that pivots after key test
+  • TWO red herrings — one in history, one in labs
+  • Comorbidities: 3-4 creating management conflicts (e.g. renal failure + sepsis + coagulopathy)
+  • Silent or masked symptoms (e.g. elderly/diabetic/immunocompromised with blunted response)
+  • Requires subspecialty-level reasoning to score >80%
+  • Vitals: subtle or paradoxically "normal-looking" despite critical underlying condition
+
+━━━ REALISM REQUIREMENTS (all difficulties) ━━━
+• HPI: 4-6 sentences with specific timeline (onset hours/days), aggravating/relieving factors, and 1-2 associated symptoms. Do NOT mention the diagnosis.
+• Vitals: must be physiologically consistent with the diagnosis (e.g. sepsis = tachycardia + low BP + high RR; pulmonary embolism = tachycardia + low SpO2 + normal temperature)
+• Labs: include at minimum 12 labs with SPECIFIC abnormal values, units, and normal ranges. Values must tell a coherent pathophysiological story. Include at least one spuriously reassuring normal value that could mislead.
+• Imaging: include 2-3 studies with detailed findings (multiple sentences) and impression. One imaging study should be non-specific or normal to add diagnostic uncertainty.
+• Physical exam: each system should have a 2-3 sentence detailed finding, not "normal" or one word. Subtle findings matter.
+• availableTests: provide a comprehensive catalogue of ≥20 labs and ≥8 imaging options the user can order.
+• underlyingPathology: detailed 4-6 sentence pathophysiology that explains how the patient will evolve — used to drive realistic deterioration if wrong treatment is given.
+
+━━━ REQUIRED JSON FIELDS ━━━
   id                  : unique short id e.g. "case-a1b2c3"
   patientName         : realistic full name
   age / gender
   chiefComplaint      : one sentence
-  historyOfPresentIllness : 2-3 sentences MAX — what triage / EMS knows
-  pastMedicalHistory  : string[]
-  initialAppearance   : vivid 1-sentence bedside impression ("Pale, diaphoretic, clutching chest")
+  historyOfPresentIllness : 4-6 sentences (see above)
+  pastMedicalHistory  : string[] — 2-4 relevant comorbidities with durations
+  initialAppearance   : vivid 2-sentence bedside impression including affect, skin, breathing pattern
   vitals              : { heartRate, bloodPressure, temperature, respiratoryRate, oxygenSaturation }
   physicalExam        : { heent, cardiac, respiratory, abdomen, extremities, neurological }
-  labs                : FULL array of relevant labs WITH values — but NO orderedAt/availableAt yet
-  imaging             : FULL array WITH findings/impression — but NO orderedAt/availableAt yet
-  availableTests      : { labs: string[], imaging: string[] }  — catalog the user can order from
-  medications         : []   (none given yet)
-  activeAlarms        : []   (or add if vitals are critical)
+  labs                : FULL array WITH specific values — NO orderedAt/availableAt yet
+  imaging             : FULL array WITH detailed findings/impression — NO orderedAt/availableAt yet
+  availableTests      : { labs: string[], imaging: string[] }
+  medications         : []
+  activeAlarms        : [] or critical alarms if vitals warrant
   currentCondition    : one-line clinical status
   physiologicalTrend  : "stable" | "declining"
   simulationTime      : 0
@@ -79,19 +108,19 @@ REQUIRED FIELDS — include ALL of them:
   communicationLog    : []
   clinicalActions     : []
   difficulty          : "${difficulty || "resident"}"
-  category            : one of cardiology|pulmonology|sepsis|trauma|neurology|toxicology
+  category            : pick the most accurate from: cardiology|pulmonology|neurology|nephrology|gastroenterology|endocrinology|hematology_oncology|infectious_disease|sepsis|toxicology|trauma|critical_care|obgyn|psychiatry|rheumatology|vascular_surgery|gi_hepatology|geriatrics
   patientOutcome      : "alive"
 
-  // ANSWER KEY — server-side only, never sent to client:
-  correctDiagnosis    : full diagnosis string
-  explanation         : 2-3 sentence teaching point
-  underlyingPathology : detailed pathophysiology used to evolve patient realistically
+  // ANSWER KEY — server-side only, NEVER send to client:
+  correctDiagnosis    : precise diagnosis string including aetiology where relevant
+  explanation         : 3-4 sentence teaching point covering why this diagnosis, key differentiating features, and the one action most residents miss
+  underlyingPathology : 4-6 sentences of detailed pathophysiology driving realistic patient evolution
 
 Output MUST be valid JSON matching: ${MEDICAL_CASE_SCHEMA}`,
         },
         {
           role: "user",
-          content: `Generate a ${difficulty || "resident"}-level case — category: ${category || "any"}.`,
+          content: `Generate a ${difficulty || "resident"}-level case — category: ${category || "any"}. Make it genuinely challenging. Do not default to the most common presentation.`,
         },
       ],
       response_format: { type: "json_object" },
