@@ -52,6 +52,18 @@ Underlying Pathology: ${fullCase.underlyingPathology || "not specified"}
 Explanation: ${fullCase.explanation || ""}`
       : "No server-side context available — evolve realistically based on current vitals.";
 
+    // ── Separate resulted labs (can evolve) from pending labs (must not change) ──
+    const resultedLabs = (medicalCase.labs || []).filter(
+      (l: any) => typeof l.availableAt === 'number' && l.availableAt <= (medicalCase.simulationTime || 0)
+    );
+    const pendingLabs = (medicalCase.labs || []).filter(
+      (l: any) => typeof l.availableAt !== 'number' || l.availableAt > (medicalCase.simulationTime || 0)
+    );
+
+    const evolveLabsCtx = resultedLabs.length > 0
+      ? `\n\nEVOLVING LABS — these results are already available to the clinician. Update their values based on disease progression and treatment given. Preserve name/unit/normalRange/orderedAt/availableAt. Return updated values in "evolvedLabs": [{name, value, unit, normalRange, status, clinicalNote?}]\n${resultedLabs.map((l: any) => `  ${l.name}: ${l.value} ${l.unit} (range: ${l.normalRange})`).join('\n')}`
+      : '';
+
     const openai = new OpenAI({ apiKey: process.env.DEEPSEEK_API_KEY, baseURL: "https://api.deepseek.com" });
 
     const aiRes = await openai.chat.completions.create({
@@ -63,24 +75,45 @@ Explanation: ${fullCase.explanation || ""}`
 
 ${pathologyCtx}
 
-RULES:
-1. Evolve vitals realistically based on the hidden pathology + interventions given.
-   - Correct treatment → improving trend
-   - No/wrong treatment → worsening; untreated sepsis/shock WILL deteriorate
-2. If intervention is a medication, add to medications[] (with timestamp ${newSimTime}).
-   IV fluids → isIVFluid:true, volumeML:[appropriate].
-3. Update activeAlarms based on current vitals (e.g. "Hypotension", "Tachycardia").
-4. Update physiologicalTrend: improving | stable | declining | critical.
-5. If "Transfer to X", update currentLocation.
-6. Append one entry to clinicalActions (timestamp: ${newSimTime}).
-7. patientOutcome:
-   - "deceased" if HR<20 or HR>200 or SBP<50 or SpO2<60 or temp<32 or temp>42
-   - "critical_deterioration" if trend is 'critical' and vitals worsening
-   - otherwise "alive"
-8. DO NOT modify labs or imaging arrays — those are managed separately.
-9. DO NOT include correctDiagnosis or explanation in the response.
+EVOLUTION RULES:
+1. Set simulationTime = ${newSimTime}.
 
-Return the ENTIRE updated MedicalCase JSON. Schema: ${MEDICAL_CASE_SCHEMA}`,
+2. VITALS EVOLUTION — be specific and physiologically rigorous:
+   • Correct targeted treatment → gradual, realistic improvement (HR drops 10-20 bpm over 15-30 min; BP rises 10-15 mmHg; SpO2 improves 2-4% per cycle with oxygen therapy)
+   • Supportive-only treatment (fluids without treating the underlying cause) → brief stabilisation then continued decline
+   • Wrong treatment or untreated: deteriorate decisively — untreated septic shock WILL progress to multi-organ failure; untreated PE WILL cause RV strain; untreated stroke WILL expand
+   • Comorbidities affect response: β-blocker patients cannot mount expected tachycardia; dialysis patients will not auto-correct electrolytes; immunocompromised patients will not mount expected fever
+
+3. MULTI-ORGAN CASCADE — this is a complex multi-specialty case:
+   • Wrong management of the primary condition should trigger secondary organ involvement
+   • Deterioration should cross specialty lines: e.g., haemodynamic compromise → AKI → electrolyte crisis; respiratory failure → cerebral hypoxia; hepatic dysfunction → coagulopathy
+   • If a management conflict exists (e.g., treating one condition worsens another), reflect this in vitals and currentCondition
+   • Name specific complications that are developing in currentCondition
+
+4. MEDICATIONS: if intervention is a medication, add to medications[] (timestamp: ${newSimTime}). IV fluids → isIVFluid:true, volumeML:[appropriate amount]. Inappropriate medication dose or route should NOT improve the patient.
+
+5. ALARMS: update activeAlarms to reflect current vitals precisely. Multiple simultaneous alarms are realistic for a deteriorating multi-system patient.
+
+6. TREND: physiologicalTrend must reflect the TRAJECTORY, not just the current state:
+   • improving: vitals moving toward normal range due to correct targeted treatment
+   • stable: no significant change (may still be critically ill but not worsening)
+   • declining: measurable worsening trend
+   • critical: rapid deterioration, imminent organ failure or death without immediate intervention
+
+7. LOCATION: update currentLocation if intervention is a transfer order.
+
+8. CLINICAL ACTIONS: append one entry (timestamp: ${newSimTime}) describing what happened and its impact.
+
+9. OUTCOME:
+   • "deceased" if HR<20 or HR>200, SBP<50, SpO2<55%, temp<31°C or temp>43°C sustained, or documented cardiac arrest
+   • "critical_deterioration" if physiologicalTrend is "critical" and vitals are worsening each cycle
+   • "alive" otherwise
+
+10. LABS: do NOT include a "labs" array in your response — lab values are merged server-side.
+11. NEVER include correctDiagnosis, explanation, or underlyingPathology in the response.
+${evolveLabsCtx}
+
+Return the ENTIRE updated MedicalCase JSON (without labs[]). Schema: ${MEDICAL_CASE_SCHEMA}`,
         },
         {
           role: "user",
@@ -103,8 +136,18 @@ Time advances by ${waitTime} min (${medicalCase.simulationTime} → ${newSimTime
     updated.simulationTime = newSimTime;   // always the server-calculated value
     updated.availableTests = medicalCase.availableTests || updated.availableTests;
 
-    // Merge ordered tests back (AI must not wipe them)
-    updated.labs    = medicalCase.labs    || [];
+    // Evolve already-resulted labs; keep pending labs untouched
+    const evolvedFromAI: any[] = Array.isArray(updated.evolvedLabs) ? updated.evolvedLabs : [];
+    delete updated.evolvedLabs;
+    const mergedResulted = resultedLabs.map((rl: any) => {
+      const update = evolvedFromAI.find(
+        (e: any) => e.name?.toLowerCase() === rl.name?.toLowerCase()
+      );
+      return update
+        ? { ...rl, value: update.value, status: update.status ?? rl.status, clinicalNote: update.clinicalNote ?? rl.clinicalNote }
+        : rl;
+    });
+    updated.labs    = [...mergedResulted, ...pendingLabs];
     updated.imaging = medicalCase.imaging || [];
 
     // ── Write updated full case back to Supabase ──────────────────────────────

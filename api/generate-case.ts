@@ -121,11 +121,32 @@ attending (MASTERY-LEVEL — career-defining cases):
 • Vitals: physiologically consistent with ALL active pathology AND comorbidities simultaneously. A patient on β-blockers will not have the expected tachycardia. A diabetic may not have expected fever with infection.
 • Physical exam: 2-3 sentences per system. Include subtle, easily-overlooked findings. At least one finding should appear in an "unexpected" system. Findings must be consistent with the pathophysiology.
 • Labs: every value must have name, specific numeric value, unit, normal range, status. The set of all labs must form a coherent multi-organ pathophysiological story. Include ≥2 values that are mildly abnormal but easy to dismiss, and ≥1 that is near-normal but represents active serious pathology.
-• Imaging: 2-3 studies. Each must have multi-sentence detailed findings AND a specific impression. At least 1 study should be non-specific or misleading. Never use vague findings like "no acute findings" alone.
+• Imaging: 2-3 studies. Each must have multi-sentence detailed findings AND a specific impression. At least 1 study should be non-specific or misleading. ALWAYS include a 12-lead ECG in the imaging array — see ECG requirements below.
 • managementConflicts: always populated. Examples: "Anticoagulation needed for PE vs. active GI bleed", "Aggressive IVF needed for sepsis vs. acute decompensated heart failure", "Steroids needed for inflammatory process vs. active infection requiring immunocompetence"
 • underlyingPathology: 6-8 sentences. Describes the complete pathophysiological cascade: how the disease originated, how multi-organ involvement developed, what will happen organ-by-organ if untreated (with timeline), how the comorbidities interact, and which single intervention is most critical.
 • correctDiagnosis: state PRIMARY diagnosis + any secondary/contributing diagnosis (e.g., "Thrombotic thrombocytopenic purpura (acquired ADAMTS13 deficiency) precipitated by concurrent Clostridioides difficile infection")
 • explanation: 4-5 sentences covering: (1) the discriminating features that confirm this over the top alternatives, (2) the most dangerous management trap, (3) the single action most clinicians miss, (4) the expected outcomes with correct vs. incorrect management.
+
+━━━ 12-LEAD ECG REQUIREMENTS ━━━
+Every case MUST include an ECG in the imaging array with type "ECG (12-Lead)". The findings must be a complete, authentic cardiology-level interpretation:
+  Rate: [exact bpm from HR]
+  Rhythm: [sinus/AF/flutter/junctional/etc. — be specific]
+  Axis: [normal / LAD / RAD / extreme — with degrees if abnormal]
+  Intervals: PR [value]ms, QRS [value]ms, QT [value]ms, QTc [value]ms (Bazett)
+  P waves: [morphology — present/absent/inverted, amplitude, duration]
+  QRS morphology: [narrow/wide, LBBB/RBBB/LAFB/LPFB, delta waves, fragmented QRS]
+  ST segments: [elevation in leads — specify mm and leads; depression in leads; J-point; Wellens pattern; de Winter T-waves]
+  T waves: [inversion in leads; hyperacute; peaked; biphasic]
+  Other: [Q waves, LVH criteria, RVH criteria, Brugada, long QT, epsilon wave, early repolarisation]
+  IMPRESSION: [definitive interpretation — e.g., "Sinus tachycardia with new anterolateral ST elevation (2mm in V1-V4, 1.5mm in I, aVL) consistent with acute anterior STEMI. Reciprocal ST depression in II, III, aVF."]
+The ECG must be physiologically consistent with the diagnosis and may serve as the pivotal diagnostic finding OR as a misleading red herring.
+
+━━━ PRIOR MEDICAL RECORDS REQUIREMENTS ━━━
+Every case MUST include priorRecords containing authentic medical history from before this presentation:
+• homeMedications: ≥3 medications with EXACT doses, routes, and clinical indications. Include medications that create management conflicts (e.g., warfarin, β-blockers, steroids, immunosuppressants, nephrotoxins). Include a medication the patient recently started or changed dose of.
+• allergies: 1-3 allergies with specific reaction types (anaphylaxis vs. rash vs. GI intolerance). Include at least one allergy to a drug that would otherwise be first-line treatment.
+• baselineLabs: 4-6 labs from 3-6 months ago showing the patient's TRUE baseline — e.g., baseline creatinine 1.4 (now 3.1), baseline Hgb 11.2 (now 7.8). This allows trend interpretation.
+• priorHospitalizations: 0-2 prior hospitalizations with reasons, timing, and outcomes relevant to current presentation.
 
 ━━━ REQUIRED JSON FIELDS ━━━
   id                    : unique short id e.g. "case-a1b2c3"
@@ -138,8 +159,9 @@ attending (MASTERY-LEVEL — career-defining cases):
   vitals                : { heartRate, bloodPressure, temperature, respiratoryRate, oxygenSaturation }
   physicalExam          : { heent, cardiac, respiratory, abdomen, extremities, neurological } — 2-3 sentences each
   labs                  : full array with specific values — NO orderedAt/availableAt at generation time
-  imaging               : full array with detailed multi-sentence findings — NO orderedAt/availableAt at generation time
-  availableTests        : { labs: string[], imaging: string[] } — comprehensive catalog
+  imaging               : full array including 12-lead ECG — NO orderedAt/availableAt at generation time
+  availableTests        : { labs: string[], imaging: string[] } — must include "ECG (12-Lead)" in imaging list
+  priorRecords          : { homeMedications, allergies, baselineLabs, priorHospitalizations } — see requirements above
   medications           : []
   activeAlarms          : [] or populated if vitals are critical
   currentCondition      : one-line clinical status
@@ -185,10 +207,13 @@ Make it genuinely harrowing. This is the case that gets discussed at morning rep
     const fullCase = JSON.parse(content);
     if (!fullCase.id) fullCase.id = `case-${Math.random().toString(36).slice(2, 9)}`;
 
-    // Guarantee required new fields are present even if AI skips them
-    if (!Array.isArray(fullCase.specialty_tags))      fullCase.specialty_tags      = [];
-    if (!Array.isArray(fullCase.managementConflicts)) fullCase.managementConflicts = [];
+    // Guarantee required fields are present even if AI skips them
+    if (!Array.isArray(fullCase.specialty_tags))        fullCase.specialty_tags        = [];
+    if (!Array.isArray(fullCase.managementConflicts))   fullCase.managementConflicts   = [];
     if (!Array.isArray(fullCase.requiredConsultations)) fullCase.requiredConsultations = [];
+    if (!fullCase.priorRecords) fullCase.priorRecords = {
+      homeMedications: [], allergies: [], baselineLabs: [], priorHospitalizations: [],
+    };
 
     // ── Persist FULL case server-side (Supabase or in-memory fallback) ──────
     await storeCaseServerSide(fullCase.id, fullCase);
