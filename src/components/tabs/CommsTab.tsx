@@ -3,13 +3,20 @@ import { Loader2 } from 'lucide-react';
 import type { MedicalCase } from '../../types';
 
 const STAFF_TARGETS = [
-  'Nursing',
-  'Radiology',
-  'Lab',
-  'Cardiology',
-  'Surgery',
-  'ICU',
-  'Pharmacy',
+  // Core services
+  'Nursing', 'Pharmacy', 'Lab', 'Radiology', 'Blood Bank',
+  // Critical care
+  'ICU', 'Anesthesia', 'Respiratory Therapy',
+  // Medicine specialties
+  'Cardiology', 'Pulmonology', 'Neurology', 'Nephrology',
+  'Gastroenterology', 'Endocrinology', 'Hematology', 'Oncology',
+  'Infectious Disease', 'Rheumatology',
+  // Surgery
+  'General Surgery', 'Vascular Surgery', 'Cardiothoracic Surgery',
+  'Neurosurgery', 'Orthopedics', 'Urology', 'OB/GYN',
+  // Other
+  'Psychiatry', 'Pediatrics', 'Palliative Care',
+  'Social Work', 'Case Management',
 ];
 
 interface CommsTabProps {
