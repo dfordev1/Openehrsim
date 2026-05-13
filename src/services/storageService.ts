@@ -35,13 +35,28 @@ export async function saveSimulationResult(
   return data;
 }
 
-/** Save a full CCS evaluation (richer than the basic saveSimulationResult). */
+/** Save a full CCS evaluation (richer than the basic saveSimulationResult).
+ *  NOTE: The server-side /api/end-case already persists the result with the
+ *  user_id extracted from the auth header. This client-side call is kept as
+ *  a fallback only for cases where the server insert might have failed
+ *  (e.g. missing reasoning columns). */
 export async function saveCCSResult(
   medicalCase: MedicalCase,
   evaluation: CaseEvaluation
 ) {
+  // Server already saves — only attempt client-side if Supabase is configured
+  // and we want to ensure the result is saved with user context.
   const supabase = getSupabase();
   if (!supabase) return null;
+
+  // Check if server already saved this result (by case_id)
+  const { data: existing } = await (supabase.from('simulation_results') as any)
+    .select('id')
+    .eq('case_id', medicalCase.id)
+    .limit(1);
+  
+  // If server already saved it, skip client-side insert
+  if (existing && existing.length > 0) return existing;
 
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -52,7 +67,7 @@ export async function saveCCSResult(
     age:                  medicalCase.age,
     category:             medicalCase.category,
     difficulty:           medicalCase.difficulty,
-    user_diagnosis:       null,                        // CCS scores management, not diagnosis guess
+    user_diagnosis:       null,
     correct_diagnosis:    evaluation.correctDiagnosis,
     score:                evaluation.score,
     feedback:             evaluation.feedback,
