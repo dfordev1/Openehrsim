@@ -40,6 +40,39 @@ export interface AvailableTests {
   imaging: string[];
 }
 
+export interface PriorMedication {
+  name: string;
+  dose: string;
+  route: string;
+  indication: string;
+}
+
+export interface Allergy {
+  agent: string;
+  reaction: string;
+  severity: 'mild' | 'moderate' | 'severe';
+}
+
+export interface BaselineLab {
+  name: string;
+  value: string;
+  unit: string;
+  collectedDaysAgo: number;
+}
+
+export interface PriorHospitalization {
+  reason: string;
+  daysAgo: number;
+  outcome: string;
+}
+
+export interface PriorRecords {
+  homeMedications: PriorMedication[];
+  allergies: Allergy[];
+  baselineLabs: BaselineLab[];
+  priorHospitalizations: PriorHospitalization[];
+}
+
 export interface ClinicalAction {
   id: string;
   timestamp: number; // sim-minutes (number, not string)
@@ -82,6 +115,7 @@ export interface MedicalCase {
   labs: LabResult[];
   imaging: ImagingResult[];
   availableTests?: AvailableTests;  // CCS: catalog of orderable tests
+  priorRecords?: PriorRecords;      // Home meds, allergies, baseline labs, prior admissions
   medications: MedicationRecord[];
   activeAlarms: string[];
   currentCondition: string;
