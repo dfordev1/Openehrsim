@@ -52,6 +52,30 @@ export const MEDICAL_CASE_SCHEMA = `
       labs: string[];
       imaging: string[];
     };
+    priorRecords: {
+      homeMedications: {
+        name: string;
+        dose: string;
+        route: string;
+        indication: string;
+      }[];
+      allergies: {
+        agent: string;
+        reaction: string;
+        severity: 'mild' | 'moderate' | 'severe';
+      }[];
+      baselineLabs: {              // Labs from 3-6 months ago showing pre-illness baseline
+        name: string;
+        value: string;
+        unit: string;
+        collectedDaysAgo: number;
+      }[];
+      priorHospitalizations: {
+        reason: string;
+        daysAgo: number;
+        outcome: string;
+      }[];
+    };
     medications: {
       id: string;
       name: string;
