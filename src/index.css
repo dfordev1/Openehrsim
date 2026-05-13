@@ -14,6 +14,9 @@
   --color-clinical-red: var(--clinical-red);
   --color-clinical-amber: var(--clinical-amber);
   --color-clinical-green: var(--clinical-green);
+  --color-clinical-teal: var(--clinical-teal);
+  --color-clinical-teal-soft: var(--clinical-teal-soft);
+  --color-clinical-teal-strong: var(--clinical-teal-strong);
 
   --color-panel-dark: var(--panel-dark);
   --color-panel-dark-border: var(--panel-dark-border);
@@ -31,6 +34,12 @@
   --clinical-red: #E8554E;
   --clinical-amber: #E09B3D;
   --clinical-green: #3DA877;
+  /* Dedicated accent for the clinical-reasoning layer (Diagnosis Pad,
+     StageCommitGate). Kept separate from --clinical-blue so the
+     reasoning UI remains visually distinct from primary CTAs. */
+  --clinical-teal: #0F766E;           /* teal-700 equiv */
+  --clinical-teal-strong: #115E59;    /* teal-800 — hovers */
+  --clinical-teal-soft: #CCFBF1;      /* teal-100 — subtle backgrounds */
   --panel-dark: #1B1F2A;
   --panel-dark-border: #2A2F3C;
   --panel-muted: #F3F5F8;
@@ -47,6 +56,11 @@
   --clinical-red: #F87171;
   --clinical-amber: #FBBF24;
   --clinical-green: #4ADE80;
+  /* Reasoning accent — brighter and higher-contrast in dark mode so it
+     remains legible against the dark surfaces. */
+  --clinical-teal: #5EEAD4;           /* teal-300 equiv */
+  --clinical-teal-strong: #2DD4BF;    /* teal-400 — hovers */
+  --clinical-teal-soft: #134E4A;      /* teal-900 — subtle backgrounds */
   --panel-dark: #0D0F14;
   --panel-dark-border: #1F232E;
   --panel-muted: #1A1D27;

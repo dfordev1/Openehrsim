@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronRight, Stethoscope, Eye, Heart, Wind, Activity, Hand, Brain } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { LOCKED_SENTINEL } from '../../lib/constants';
 import { MedicalCase } from '../../types';
 
 const GCS_MAPPING = {
@@ -48,9 +49,6 @@ interface ExamTabProps {
   /** Called when the user examines a system — adds a clinical action */
   onExamineSystem?: (system: string, finding: string) => void;
 }
-
-/** Sentinel value set by generate-case.ts for all locked systems */
-const LOCKED_SENTINEL = 'Not yet examined';
 
 export function ExamTab({
   medicalCase,

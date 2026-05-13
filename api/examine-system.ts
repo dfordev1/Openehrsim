@@ -7,6 +7,7 @@
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getCaseServerSide } from "./_supabase.js";
+import { LOCKED_SENTINEL } from "../src/lib/constants.js";
 
 const SYSTEM_KEYS = ['heent', 'cardiac', 'respiratory', 'abdomen', 'extremities', 'neurological'];
 
@@ -30,7 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const finding = fullCase.physicalExam?.[system];
 
-    if (!finding || finding === "Not yet examined") {
+    if (!finding || finding === LOCKED_SENTINEL) {
       return res.status(404).json({ error: `No finding for system "${system}" in this case.` });
     }
 

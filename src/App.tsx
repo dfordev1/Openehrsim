@@ -56,11 +56,15 @@ import type { PadTab } from './components/DiagnosisPad';
 import { StageCommitGate } from './components/StageCommitGate';
 import { ReasoningNudges } from './components/ReasoningNudges';
 import { WorkflowProgress } from './components/WorkflowProgress';
+import { OnboardingTour } from './components/OnboardingTour';
 import { useUrlTab } from './hooks/useUrlTab';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useUndoStack } from './hooks/useUndoStack';
 import { useDarkMode } from './hooks/useDarkMode';
+import { useVitalsPoll } from './hooks/useVitalsPoll';
+import { useDebouncedValue } from './hooks/useDebouncedValue';
 import { useClinicalReasoning, STAGE_ORDER } from './hooks/useClinicalReasoning';
+import { PR_DRAFT_STORAGE_PREFIX } from './lib/constants';
 import type { WorkflowStage } from './types';
 
 // ── Tab components ────────────────────────────────────────────────────────────
@@ -179,12 +183,49 @@ function ClinicalSimulator() {
 
   // ── Dark mode / undo ─────────────────────────────────────────────────────
   const [isDark, toggleDark] = useDarkMode();
-  const { pushUndo, popUndo, canUndo, lastAction } = useUndoStack();
+  const { pushUndo, popUndo, popRedo, canUndo, canRedo, lastAction, nextRedoAction } = useUndoStack();
 
   // ── Clinical Reasoning (Healer-style) ─────────────────────────────────────
   const reasoning = useClinicalReasoning();
   const [isDxPadOpen, setIsDxPadOpen] = useState(true);
   const [dxPadInitialTab, setDxPadInitialTab] = useState<PadTab | undefined>(undefined);
+
+  // ── PR draft autosave ────────────────────────────────────────────────────
+  // Persists the working PR to localStorage (keyed by case id) so a
+  // tab refresh or accidental nav-away doesn't lose uncommitted prose.
+  // Only the *draft* is saved — committed snapshots live in
+  // reasoning.prHistory. We debounce to avoid a write per keystroke.
+  const debouncedPr = useDebouncedValue(reasoning.problemRepresentation, 500);
+  useEffect(() => {
+    if (!medicalCase?.id || typeof window === 'undefined') return;
+    try {
+      const key = `${PR_DRAFT_STORAGE_PREFIX}${medicalCase.id}`;
+      if (debouncedPr.trim().length === 0) {
+        window.localStorage.removeItem(key);
+      } else {
+        window.localStorage.setItem(key, debouncedPr);
+      }
+    } catch {
+      /* storage disabled — no-op */
+    }
+  }, [debouncedPr, medicalCase?.id]);
+
+  // Rehydrate any saved draft when a case id first appears.
+  useEffect(() => {
+    if (!medicalCase?.id || typeof window === 'undefined') return;
+    try {
+      const saved = window.localStorage.getItem(`${PR_DRAFT_STORAGE_PREFIX}${medicalCase.id}`);
+      if (saved && saved.length > reasoning.problemRepresentation.length) {
+        reasoning.setProblemRepresentation(saved);
+        addToast('Restored draft problem representation from last session', 'info');
+      }
+    } catch {
+      /* no-op */
+    }
+    // Intentionally only on case-id change; don't depend on reasoning.*
+    // to avoid a restore loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [medicalCase?.id]);
 
   /** When the user tries to advance forward through a stage that has
    *  unmet gate requirements, we store the *target* stage here and show
@@ -200,12 +241,21 @@ function ClinicalSimulator() {
     }
   }, [popUndo, addToast]);
 
+  const handleRedo = useCallback(() => {
+    const entry = popRedo();
+    if (entry) {
+      setMedicalCase(entry.caseSnapshot);
+      addToast(`Redid: ${entry.label}`, 'info');
+    }
+  }, [popRedo, addToast]);
+
   useKeyboardShortcuts({
     onTabChange: setActiveTab,
     onNewCase: () => setIsLibraryOpen(true),
     onDiagnosis: () => setActiveTab('assess'),
     onCommandPalette: () => setIsCommandOpen((p) => !p),
     onUndo: handleUndo,
+    onRedo: handleRedo,
     enabled: !isCommandOpen && !isLibraryOpen && !isConsultOpen,
   });
 
@@ -243,32 +293,21 @@ function ClinicalSimulator() {
     });
   }, [medicalCase?.simulationTime, medicalCase?.vitals]);
 
-  useEffect(() => {
-    if (!medicalCase) return;
-    const interval = setInterval(() => {
-      setVitalsHistory((prev) => {
-        const last = prev[prev.length - 1];
-        if (!last) return prev;
-        return [
-          ...prev.slice(1),
-          {
-            time: new Date().toLocaleTimeString(),
-            hr: (medicalCase.vitals?.heartRate || 75) + (Math.random() * 2 - 1),
-            sbp: last.sbp + (Math.random() * 1 - 0.5),
-            rr: last.rr + (Math.random() * 0.4 - 0.2),
-            spo2: Math.min(100, last.spo2 + (Math.random() * 0.2 - 0.1)),
-          },
-        ];
-      });
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [medicalCase]);
+  // Live vitals sampling (jitter) — extracted to a reusable hook.
+  useVitalsPoll({
+    medicalCase,
+    setVitalsHistory,
+    enabled: patientOutcome !== 'deceased',
+  });
 
   // ── Loading progress ──────────────────────────────────────────────────────
   const [loadingStep, setLoadingStep] = useState('Initialising…');
 
   // ── Load case ─────────────────────────────────────────────────────────────
   const loadNewCase = useCallback(async (difficulty?: string, category?: string, environment?: string) => {
+    // Close the library modal *immediately* so the user sees the loading
+    // skeleton rather than an invalidated picker.
+    setIsLibraryOpen(false);
     setLoading(true);
     setError(null);
     setLoadingStep('Connecting to clinical simulation engine…');
@@ -310,7 +349,6 @@ function ClinicalSimulator() {
           spo2: Math.min(100, spo2Base + (Math.random() * 1 - 0.5)),
         }))
       );
-      setIsLibraryOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Clinical database connection failure.');
     } finally {
@@ -640,6 +678,7 @@ function ClinicalSimulator() {
 
       <CaseLibrary isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} onSelectCase={(d, c, e) => loadNewCase(d, c, e)} />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
+      <OnboardingTour />
       <CommandPalette
         isOpen={isCommandOpen}
         onClose={() => setIsCommandOpen(false)}
@@ -1080,17 +1119,28 @@ function ClinicalSimulator() {
         />
       )}
 
-      {/* ── Undo bar ── */}
+      {/* ── Undo / Redo bar ── */}
       <AnimatePresence>
-        {canUndo && (
+        {(canUndo || canRedo) && (
           <motion.div
             initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             className="fixed bottom-20 lg:bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-clinical-ink text-white px-4 py-2.5 rounded-lg shadow-xl border border-white/10"
           >
             <Undo2 className="w-3.5 h-3.5 text-clinical-amber" />
-            <span className="text-xs font-medium">{lastAction}</span>
-            <button onClick={handleUndo} className="ml-2 px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-xs font-medium transition-colors">Undo</button>
+            <span className="text-xs font-medium max-w-[180px] truncate">
+              {canUndo ? lastAction : `Redo: ${nextRedoAction}`}
+            </span>
+            {canUndo && (
+              <button onClick={handleUndo} className="ml-2 px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-xs font-medium transition-colors" aria-label="Undo (Cmd+Z)">
+                Undo
+              </button>
+            )}
+            {canRedo && (
+              <button onClick={handleRedo} className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-xs font-medium transition-colors" aria-label="Redo (Cmd+Shift+Z)">
+                Redo
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

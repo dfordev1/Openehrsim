@@ -221,8 +221,14 @@ export default function VitalsExpanded({ isOpen, onClose, vitalsHistory }: Vital
                             formatter={(v: any) => [`${Math.round(Number(v))} ${chart.unit}`, chart.title]}
                           />
                           {/* Normal range reference band */}
-                          <ReferenceLine y={chart.normal.low}  stroke={chart.color} strokeDasharray="3 3" strokeOpacity={0.4} />
+                          <ReferenceLine y={chart.normal.low}  stroke={chart.color} strokeDasharray="3 3" strokeOpacity={0.4} label={{ value: 'Normal', position: 'insideBottomLeft', fontSize: 9, fill: chart.color, fillOpacity: 0.7 }} />
                           <ReferenceLine y={chart.normal.high} stroke={chart.color} strokeDasharray="3 3" strokeOpacity={0.4} />
+                          {/* Abnormal thresholds */}
+                          <ReferenceLine y={chart.abnormal.low}  stroke="#E09B3D" strokeDasharray="2 4" strokeOpacity={0.55} />
+                          <ReferenceLine y={chart.abnormal.high} stroke="#E09B3D" strokeDasharray="2 4" strokeOpacity={0.55} label={{ value: 'Abnormal', position: 'insideTopRight', fontSize: 9, fill: '#E09B3D' }} />
+                          {/* Critical thresholds */}
+                          <ReferenceLine y={chart.critical.low}  stroke="#E8554E" strokeDasharray="1 3" strokeOpacity={0.65} />
+                          <ReferenceLine y={chart.critical.high} stroke="#E8554E" strokeDasharray="1 3" strokeOpacity={0.65} label={{ value: 'Critical', position: 'insideTopLeft', fontSize: 9, fill: '#E8554E' }} />
                           <Line
                             type="monotone"
                             dataKey={chart.dataKey}

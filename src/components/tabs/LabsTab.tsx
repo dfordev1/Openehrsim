@@ -116,7 +116,18 @@ export function LabsTab({ medicalCase, simTime, selectedLab, onSelectLab, onOrde
                             [Order]
                           </button>
                         ) : isPending ? (
-                          <span className="text-[10px] font-medium text-clinical-amber animate-pulse">Pending...</span>
+                          <span
+                            className="text-[10px] font-medium text-clinical-amber animate-pulse"
+                            title={
+                              lab.availableAt !== undefined
+                                ? `Results expected at T+${lab.availableAt}m`
+                                : undefined
+                            }
+                          >
+                            {lab.availableAt !== undefined
+                              ? `~${Math.max(1, lab.availableAt - simTime)}m ETA`
+                              : 'Pending...'}
+                          </span>
                         ) : (
                           <div className="flex items-center gap-1.5">
                             <div

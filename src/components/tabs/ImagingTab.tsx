@@ -100,7 +100,15 @@ export function ImagingTab({
                     )}
                   </div>
                   <div className="text-[10px] text-clinical-slate/60 flex justify-between">
-                    <span>{isAvailable ? 'Completed' : isPending ? 'Pending...' : 'Unordered'}</span>
+                    <span>
+                      {isAvailable
+                        ? 'Completed'
+                        : isPending
+                        ? img.availableAt !== undefined
+                          ? `Pending · ~${Math.max(1, img.availableAt - simTime)}m ETA`
+                          : 'Pending...'
+                        : 'Unordered'}
+                    </span>
                     {img.orderedAt && <span>T+{img.orderedAt}m</span>}
                   </div>
                   {!img.orderedAt && (
