@@ -6,37 +6,15 @@ import { storeCaseServerSide } from "./_supabase.js";
 
 function validateRequest(body: any) {
   if (!body || typeof body !== "object") throw new Error("Request body must be a JSON object.");
-  if (body.difficulty && !["intern", "resident", "attending"].includes(body.difficulty))
-    throw new Error("Invalid difficulty value.");
-  const allowedCategories = [
-    // Cardiovascular & Respiratory
-    "cardiology", "pulmonology", "vascular_surgery", "cardiothoracic",
-    // Neurosciences
-    "neurology", "neurosurgery", "psychiatry", "pain_medicine",
-    // Internal Medicine
-    "gastroenterology", "gi_hepatology", "nephrology", "endocrinology",
-    "hematology_oncology", "rheumatology", "allergy_immunology",
-    "dermatology", "geriatrics",
-    // Infectious & Critical
-    "infectious_disease", "sepsis", "toxicology", "critical_care",
-    // Surgery & Trauma
-    "trauma", "orthopaedics", "urology", "sports_medicine",
-    // Sensory & Head/Neck
-    "ophthalmology", "ent",
-    // Women, Children & Lifecycle
-    "obgyn", "pediatrics", "neonatology", "palliative_care",
-    // Wildcard
-    "any",
-  ];
-  if (body.category && !allowedCategories.includes(body.category))
-    throw new Error("Invalid category value.");
-  if (body.environment && !["rural","prehospital","tertiary"].includes(body.environment))
-    throw new Error("Invalid environment value.");
+  // Be permissive — pass any category/difficulty/environment to the AI.
+  // Default difficulty to "resident", environment to "tertiary" if invalid.
+  const validDifficulties = ["intern", "resident", "attending"];
+  const validEnvironments = ["rural", "prehospital", "tertiary"];
   return {
-    category:    body.category    as string | undefined,
-    difficulty:  body.difficulty  as string | undefined,
+    category:    typeof body.category === "string" ? body.category : undefined,
+    difficulty:  validDifficulties.includes(body.difficulty) ? body.difficulty : "resident",
     history:     Array.isArray(body.history) ? body.history : [],
-    environment: body.environment as string | undefined,
+    environment: validEnvironments.includes(body.environment) ? body.environment : "tertiary",
   };
 }
 
