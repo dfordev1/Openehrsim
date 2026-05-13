@@ -90,6 +90,9 @@ export interface MedicalCase {
   simulationTime: number;
   currentLocation: string;
   communicationLog: CommunicationMessage[];
+  specialty_tags?: string[];
+  managementConflicts?: string[];
+  requiredConsultations?: string[];
   difficulty?: 'intern' | 'resident' | 'attending';
   category?:
     // Cardiovascular & Respiratory

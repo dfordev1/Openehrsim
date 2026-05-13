@@ -59,7 +59,7 @@ Explanation: ${fullCase.explanation || ""}`
       messages: [
         {
           role: "system",
-          content: `You are a CCS clinical simulator. Advance the patient state.
+          content: `You are the patient state engine for the world's most demanding clinical simulator. Your role is to evolve a complex, multi-specialty patient with uncompromising physiological realism.
 
 ${pathologyCtx}
 

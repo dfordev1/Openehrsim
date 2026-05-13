@@ -12,9 +12,9 @@ export const MEDICAL_CASE_SCHEMA = `
     age: number;
     gender: string;
     chiefComplaint: string;
-    historyOfPresentIllness: string;   // Brief — 2-3 sentences max
-    pastMedicalHistory: string[];
-    initialAppearance: string;         // Vivid 1-sentence bedside impression
+    historyOfPresentIllness: string;   // 4-6 sentences: onset, character, severity, radiation, aggravating/relieving, 2 associated symptoms
+    pastMedicalHistory: string[];      // 2-4 comorbidities with durations, each relevant to management
+    initialAppearance: string;         // Vivid 2-sentence bedside impression: affect, skin, breathing, posture
     vitals: {
       heartRate: number;
       bloodPressure: string;           // e.g. "118/76"
@@ -23,12 +23,12 @@ export const MEDICAL_CASE_SCHEMA = `
       oxygenSaturation: number;        // %
     };
     physicalExam: {
-      heent: string;
-      cardiac: string;
-      respiratory: string;
-      abdomen: string;
-      extremities: string;
-      neurological: string;
+      heent: string;     // 2-3 sentences — subtle findings matter
+      cardiac: string;   // 2-3 sentences
+      respiratory: string; // 2-3 sentences
+      abdomen: string;   // 2-3 sentences
+      extremities: string; // 2-3 sentences
+      neurological: string; // 2-3 sentences
     };
     labs: {
       name: string;
@@ -43,12 +43,12 @@ export const MEDICAL_CASE_SCHEMA = `
     imaging: {
       type: string;
       technique?: string;
-      findings?: string;
+      findings?: string;              // multi-sentence detailed findings
       impression?: string;
       orderedAt?: number;
       availableAt?: number;
     }[];
-    availableTests: {                  // Catalog the user can order from
+    availableTests: {                  // Comprehensive catalog — ≥30 labs, ≥15 imaging
       labs: string[];
       imaging: string[];
     };
@@ -67,7 +67,10 @@ export const MEDICAL_CASE_SCHEMA = `
     simulationTime: number;            // minutes elapsed
     currentLocation: string;
     difficulty: 'intern' | 'resident' | 'attending';
-    category: 'cardiology' | 'pulmonology' | 'sepsis' | 'trauma' | 'neurology' | 'toxicology';
+    category: string;                  // primary specialty category
+    specialty_tags: string[];          // ALL specialties involved — min 2
+    managementConflicts: string[];     // explicit competing treatment priorities
+    requiredConsultations: string[];   // specialties that MUST be consulted for correct management
     communicationLog: {
       id: string;
       timestamp: number;
@@ -87,8 +90,8 @@ export const MEDICAL_CASE_SCHEMA = `
     patientOutcome?: 'alive' | 'deceased' | 'critical_deterioration';
 
     // SERVER-SIDE ONLY — never send to client during active case
-    correctDiagnosis?: string;
-    explanation?: string;
-    underlyingPathology?: string;
+    correctDiagnosis?: string;         // primary + secondary diagnosis
+    explanation?: string;              // 4-5 sentence teaching point
+    underlyingPathology?: string;      // 6-8 sentence full pathophysiological cascade
   }
 `;

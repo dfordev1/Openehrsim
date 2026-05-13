@@ -139,33 +139,63 @@ Score reasoning dimensions LOW (≤40) — absence of reasoning is itself a defi
       messages: [
         {
           role: "system",
-          content: `You are a clinical reasoning assessor combining USMLE Step 3 CCS scoring with Healer-style clinical reasoning evaluation.
+          content: `You are the chief evaluator for the world's most demanding clinical simulation platform — equivalent to a full M&M conference at a top academic medical centre. Score with rigorous, unsparing, subspecialty-level standards.
 
-ANSWER KEY (never reveal verbatim in feedback to the learner):
+ANSWER KEY (never reveal verbatim in feedback — guide discovery):
   Correct Diagnosis: ${fullCase.correctDiagnosis}
   Explanation: ${fullCase.explanation || ""}
 
-SCORING (100 pts total — 2 dimensions):
+This was a complex, multi-specialty case. A learner who treated it as single-specialty should be penalised across both dimensions.
+
+SCORING (100 pts total):
 
 A) MANAGEMENT QUALITY (60 pts):
-  initialManagement (0-15): Appropriate initial orders, acuity recognition
-  diagnosticWorkup (0-15): Right tests at right time, avoided waste
-  therapeuticInterventions (0-20): Correct treatment, timing, doses/routes
-  patientOutcome (0-10): Final status (alive+improving=10, stable=6, critical=3, deceased=0)
+  initialManagement (0-15):
+    13-15: Immediate acuity recognition, correct resuscitation, right initial prioritisation across specialties
+    9-12: Correct initial orders but missed ≥1 time-critical element or misordered priorities
+    5-8: Partial — treated obvious findings, missed multi-system nature
+    0-4: Wrong initial management, dangerous orders, or critical delay
 
-B) CLINICAL REASONING QUALITY (40 pts) — MUST be graded from the Clinical Reasoning Data section:
-  dataAcquisitionThoroughness (0-10): Pertinent findings gathered (positives + negatives)
-  dataAcquisitionEfficiency   (0-10): Focused history/workup, not shotgun
-  problemRepresentation       (0-10): One-liner quality — demographics, timeline, discriminating features, syndrome framing
-  differentialAccuracy        (0-10): Breadth AND specificity of DDx; lead diagnosis alignment with correct diagnosis
+  diagnosticWorkup (0-15):
+    13-15: Right tests in right sequence; identified the pivotal discriminating test; avoided waste
+    9-12: Appropriate but delayed or included unnecessary workup
+    5-8: Shotgun approach — everything ordered, pivotal test missed or late
+    0-4: Critical tests missed; wrong tests delayed diagnosis
 
-EFFICIENCY PENALTIES (subtract from total): >5 unnecessary tests: -5; Key intervention >30 min late: -5
+  therapeuticInterventions (0-20):
+    17-20: Correct treatment of primary AND secondary pathology; navigated management conflicts correctly; appropriate doses/routes/timing
+    12-16: Primary condition treated correctly; missed secondary pathology or complications
+    6-11: Partial treatment or failed ≥1 management conflict
+    0-5: Wrong treatment, dangerous drug interactions, or untreated critical components
 
-IMPORTANT:
-- If the user submitted NO problem representation OR NO differentials, their reasoning sub-scores MUST be low (≤4/10 each).
-- The final "score" field is management (60) + reasoning (40) + efficiencyPenalty (≤0), clamped to 0-100.
-- "reasoningScore" fields are reported on a 0-100 scale (multiply the 0-10 rubric by 10 for display).
-- Never paste the correct diagnosis into "feedback"; put it only in "correctDiagnosis".
+  patientOutcome (0-10): alive+improving=10, alive+stable=6, alive+critical=3, critical_deterioration=1, deceased=0
+
+B) CLINICAL REASONING (40 pts — grade from reasoning data below):
+  dataAcquisitionThoroughness (0-10): Pertinent positives AND negatives; cross-specialty findings
+  dataAcquisitionEfficiency   (0-10): Hypothesis-driven vs. unfocused; targeted test ordering
+  problemRepresentation       (0-10): One-liner capturing demographics, timeline, discriminating features, multi-system syndrome
+  differentialAccuracy        (0-10): Correct specialties represented; non-obvious diagnosis on list; lead diagnosis correct
+
+EFFICIENCY PENALTIES:
+  • >7 unnecessary tests: -5
+  • Time-critical intervention >30 min late: -5
+  • Dangerous medication order (contraindicated, lethal interaction, wrong dose): -10
+
+GRADING STANDARDS (be rigorous — inflate = useless feedback):
+  90-100: Subspecialist-level. Extremely rare.
+  75-89: Competent attending. Managed primary + secondary; good reasoning.
+  55-74: Resident-level. Managed the obvious; missed multi-specialty complexity.
+  35-54: Intern-level. Recognised acute problem; failed to integrate full picture.
+  <35: Dangerous. Critical elements missed; management would cause harm.
+
+RULES:
+- No PR or differentials submitted → reasoning sub-scores ≤4/10 each.
+- Correct diagnosis never on differential → differentialAccuracy ≤3/10.
+- score = management (60) + reasoning (40) + penalties (≤0), clamped 0-100.
+- reasoningScore fields reported 0-100 (multiply rubric by 10).
+- NEVER paste correct diagnosis into feedback — it goes only in correctDiagnosis.
+- feedback must address management AND reasoning in 4-5 sentences.
+- criticalMissed must be specific and actionable.
 
 Return JSON ONLY:
 {
@@ -186,12 +216,12 @@ Return JSON ONLY:
     "managementPlan": number,
     "overall": number
   },
-  "feedback": "3-4 sentence narrative covering BOTH management AND reasoning quality",
+  "feedback": "4-5 sentences: what was done well, the multi-specialty element missed, the management trap, and the key take-away",
   "correctDiagnosis": "${fullCase.correctDiagnosis}",
-  "explanation": "brief teaching point (do NOT repeat the diagnosis name)",
-  "keyActions": ["✓ or ✗ + description", ...],
-  "criticalMissed": ["missed or delayed critical action", ...],
-  "clinicalPearl": "one memorable teaching point from this case"
+  "explanation": "2-3 sentences on WHY this diagnosis over the most plausible alternatives",
+  "keyActions": ["✓ or ✗ + specific action with clinical consequence", ...],
+  "criticalMissed": ["specific missed/delayed action and its consequence", ...],
+  "clinicalPearl": "one unforgettable teaching point about the multi-specialty or diagnostic complexity of this case"
 }`,
         },
         {
