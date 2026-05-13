@@ -95,6 +95,16 @@ export function ClinicalLayout() {
 
 function ClinicalLayoutInner() {
   const [moreMenuOpen, setMoreMenuOpen] = React.useState(false);
+
+  // Pure UI state — only needed in this component, not shared globally
+  const [vitalsExpanded, setVitalsExpanded] = React.useState(false);
+  const [gcsState, setGcsState] = React.useState({ eyes: 4, verbal: 5, motor: 6 });
+  const [gcsExpanded, setGcsExpanded] = React.useState(false);
+  const [customMedInput, setCustomMedInput] = React.useState('');
+  const [transferExpanded, setTransferExpanded] = React.useState(false);
+  const [selectedLab, setSelectedLab] = React.useState<import('../types').LabResult | null>(null);
+  const [revealedStudies, setRevealedStudies] = React.useState<string[]>([]);
+
   const { user, isAuthOpen, setIsAuthOpen, handleLogout } = useAuth();
   const {
     medicalCase,
@@ -103,8 +113,6 @@ function ClinicalLayoutInner() {
     loadingStep,
     patientOutcome,
     vitalsHistory,
-    vitalsExpanded,
-    setVitalsExpanded,
     consultantAdvice,
     isConsulting,
     isConsultOpen,
@@ -124,18 +132,6 @@ function ClinicalLayoutInner() {
     callMessage,
     setCallMessage,
     calling,
-    selectedLab,
-    setSelectedLab,
-    revealedStudies,
-    setRevealedStudies,
-    gcsState,
-    setGcsState,
-    gcsExpanded,
-    setGcsExpanded,
-    customMedInput,
-    setCustomMedInput,
-    transferExpanded,
-    setTransferExpanded,
     logs,
     setLogs,
     reasoning,
