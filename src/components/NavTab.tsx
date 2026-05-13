@@ -7,16 +7,17 @@ interface NavTabProps {
   label: string;
   onClick: () => void;
   badge?: number;
+  shortcut?: string;
 }
 
-export function NavTab({ active, icon, label, onClick, badge }: NavTabProps) {
+export function NavTab({ active, icon, label, onClick, badge, shortcut }: NavTabProps) {
   return (
     <button
       onClick={onClick}
       aria-label={label}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        "w-full flex items-center gap-2 px-2.5 py-1.5 rounded transition-all text-[11px]",
+        "group w-full flex items-center gap-2 px-2.5 py-1.5 rounded transition-all text-[11px]",
         active
           ? "bg-clinical-blue/10 text-clinical-blue font-medium"
           : "text-clinical-slate hover:bg-clinical-bg hover:text-clinical-ink"
@@ -31,6 +32,7 @@ export function NavTab({ active, icon, label, onClick, badge }: NavTabProps) {
           {badge}
         </span>
       )}
+      {shortcut && <span className="ml-auto text-[9px] text-clinical-slate/40 hidden group-hover:inline font-mono">{shortcut}</span>}
     </button>
   );
 }

@@ -31,6 +31,7 @@ export interface TabDef {
   id: string;
   icon: React.ReactNode;
   label: string;
+  shortcut?: string;
 }
 
 export interface NavigationContextValue {
@@ -86,11 +87,11 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
   });
 
   const primaryTabs: TabDef[] = [
-    { id: 'triage',  icon: <AlertCircle className="w-4 h-4" />, label: 'Triage'  },
-    { id: 'hpi',     icon: <Clipboard className="w-4 h-4" />,   label: 'History' },
-    { id: 'exam',    icon: <Stethoscope className="w-4 h-4" />, label: 'Exam'    },
-    { id: 'labs',    icon: <FlaskConical className="w-4 h-4" />, label: 'Labs'    },
-    { id: 'imaging', icon: <FileSearch className="w-4 h-4" />,  label: 'Imaging' },
+    { id: 'triage',  icon: <AlertCircle className="w-4 h-4" />, label: 'Triage',  shortcut: '1' },
+    { id: 'hpi',     icon: <Clipboard className="w-4 h-4" />,   label: 'History', shortcut: '2' },
+    { id: 'exam',    icon: <Stethoscope className="w-4 h-4" />, label: 'Exam',    shortcut: '3' },
+    { id: 'labs',    icon: <FlaskConical className="w-4 h-4" />, label: 'Labs',    shortcut: '4' },
+    { id: 'imaging', icon: <FileSearch className="w-4 h-4" />,  label: 'Imaging', shortcut: '5' },
   ];
   const actionTabs: TabDef[] = [
     { id: 'dxpause',   icon: <Brain className="w-4 h-4" />,     label: 'DxPause'  },

@@ -44,7 +44,7 @@ export function WorkflowProgress({ currentStage, onStageClick, completedStages, 
             >
               {/* Circle indicator */}
               <div className={cn(
-                'w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-semibold border transition-colors',
+                'w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[9px] font-semibold border transition-colors',
                 isActive ? 'bg-teal-600 border-teal-600 text-white' :
                 isCompleted ? 'bg-teal-100 border-teal-300 text-teal-700' :
                 isPast ? 'bg-clinical-bg border-clinical-line text-clinical-slate/50' :
@@ -58,7 +58,7 @@ export function WorkflowProgress({ currentStage, onStageClick, completedStages, 
               </div>
               {/* Label */}
               <span className={cn(
-                'text-[8px] font-medium uppercase tracking-wide whitespace-nowrap',
+                'text-[7px] sm:text-[8px] font-medium uppercase tracking-wide whitespace-nowrap',
                 isActive ? 'text-teal-700' :
                 isCompleted ? 'text-teal-600' :
                 'text-clinical-slate/50'
@@ -80,6 +80,9 @@ export function WorkflowProgress({ currentStage, onStageClick, completedStages, 
           </div>
         );
       })}
+      <span className="text-[9px] text-clinical-slate/50 ml-auto shrink-0 hidden sm:inline">
+        {completedStages.length}/{STAGES.length}
+      </span>
     </div>
   );
 }

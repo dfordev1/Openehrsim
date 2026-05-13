@@ -10,10 +10,8 @@ import {
   Brain,
   Loader2,
   Menu,
-  Moon,
   RefreshCw,
   Sparkles,
-  Sun,
   Undo2,
   X,
   Zap,
@@ -183,8 +181,6 @@ function ClinicalLayoutInner() {
     setIsLibraryOpen,
     isCommandOpen,
     setIsCommandOpen,
-    isDark,
-    toggleDark,
     primaryTabs,
     actionTabs,
     toolTabs,
@@ -265,6 +261,12 @@ function ClinicalLayoutInner() {
 
       {/* ── Header ── */}
       <header className="h-10 bg-clinical-surface border-b border-clinical-line/50 flex items-center px-3 shrink-0 z-30" role="banner">
+        <div className={cn('w-1 self-stretch rounded-full mr-2',
+          medicalCase?.physiologicalTrend === 'critical' ? 'bg-clinical-red' :
+          medicalCase?.physiologicalTrend === 'declining' ? 'bg-clinical-amber' :
+          medicalCase?.physiologicalTrend === 'improving' ? 'bg-clinical-green' :
+          'bg-clinical-slate/20'
+        )} />
         <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-1 hover:bg-clinical-bg rounded mr-2" aria-label="Menu">
           <Menu className="w-4 h-4 text-clinical-slate" />
         </button>
@@ -279,9 +281,6 @@ function ClinicalLayoutInner() {
           )} title="Simulation elapsed time">
             T+{simTime}m
           </span>
-          <button onClick={toggleDark} className="p-1 hover:bg-clinical-bg rounded transition-colors" aria-label={isDark ? 'Light mode' : 'Dark mode'}>
-            {isDark ? <Sun className="w-3.5 h-3.5 text-clinical-slate/60" /> : <Moon className="w-3.5 h-3.5 text-clinical-slate/60" />}
-          </button>
           <button onClick={() => setIsLibraryOpen(true)} className="p-1 text-clinical-slate/60 hover:text-clinical-blue transition-colors" aria-label="New case">
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
@@ -290,7 +289,7 @@ function ClinicalLayoutInner() {
               {user.email?.[0].toUpperCase()}
             </button>
           ) : (
-            <button onClick={() => setIsAuthOpen(true)} className="text-[11px] text-clinical-blue font-medium hover:underline" aria-label="Sign in">Sign in</button>
+            <button onClick={() => setIsAuthOpen(true)} className="text-[11px] text-clinical-blue font-medium hover:underline" aria-label="Sign in to save">Sign in to save</button>
           )}
         </div>
       </header>
@@ -320,7 +319,15 @@ function ClinicalLayoutInner() {
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-red-50/40 border-b border-red-100/60 py-1 px-3 flex items-center gap-2 overflow-hidden shrink-0" role="alert" aria-live="assertive">
             <div className="w-1 h-1 bg-clinical-red/50 rounded-full shrink-0" />
             <div className="flex gap-2 text-[10px] text-clinical-red/70 font-medium overflow-x-auto no-scrollbar">
-              {medicalCase?.activeAlarms.map((a, i) => <span key={i}>{a}</span>)}
+              {medicalCase?.activeAlarms.map((a, i) => (
+                <button key={i} onClick={() => {
+                  if (/O2|SpO2|Oxygen|Hypoxia/i.test(a)) setActiveTab('pharmacy');
+                  else if (/HR|Tachy|Brady|Pressure|BP/i.test(a)) setActiveTab('treatment');
+                  else setActiveTab('treatment');
+                }} className="hover:underline cursor-pointer">
+                  {a}
+                </button>
+              ))}
             </div>
           </motion.div>
         )}
@@ -364,7 +371,7 @@ function ClinicalLayoutInner() {
       )}
 
       {/* ── Vitals Rail ── */}
-      <div className="h-9 bg-clinical-surface border-b border-clinical-line/50 flex items-center px-3 gap-2 shrink-0 overflow-x-auto no-scrollbar" role="region" aria-label="Vital signs">
+      <div className={cn("h-9 bg-clinical-surface border-b border-clinical-line/50 flex items-center px-3 gap-2 shrink-0 overflow-x-auto no-scrollbar", (medicalCase?.activeAlarms || []).length > 0 && "ring-1 ring-clinical-red/40 animate-pulse")} role="region" aria-label="Vital signs">
         <ClinicalVital label="HR"   value={Math.round(vitalsHistory[vitalsHistory.length-1]?.hr || medicalCase?.vitals?.heartRate || 0)} unit="bpm"  status="normal" isAlarming={medicalCase?.activeAlarms.some(a => /HR|Pulse|Brady|Tachy/i.test(a))} onClick={() => setVitalsExpanded(true)} />
         <ClinicalVital label="BP"   value={medicalCase?.vitals?.bloodPressure || '--'}           unit="mmHg" status="normal" isAlarming={medicalCase?.activeAlarms.some(a => /BP|Pressure|Hypotension|Hypertension/i.test(a))} onClick={() => setVitalsExpanded(true)} />
         <ClinicalVital label="SpO2" value={medicalCase?.vitals?.oxygenSaturation || 0}          unit="%"    status="normal" isAlarming={medicalCase?.activeAlarms.some(a => /SpO2|Saturation|Hypoxia/i.test(a))} onClick={() => setVitalsExpanded(true)} />
@@ -411,7 +418,7 @@ function ClinicalLayoutInner() {
                 <p className="text-[9px] font-semibold text-clinical-slate/50 uppercase tracking-wider px-2.5 mb-0.5">{label}</p>
                 <div className="space-y-0.5">
                   {tabs.map(tab => (
-                    <NavTab key={tab.id} active={activeTab === tab.id} icon={tab.icon} label={tab.label} onClick={() => setActiveTab(tab.id as any)} />
+                    <NavTab key={tab.id} active={activeTab === tab.id} icon={tab.icon} label={tab.label} shortcut={tab.shortcut} onClick={() => setActiveTab(tab.id as any)} />
                   ))}
                 </div>
               </div>
