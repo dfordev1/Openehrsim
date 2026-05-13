@@ -127,7 +127,7 @@ export function CaseProvider({ children }: { children: ReactNode }) {
 
   // ── Clinical reasoning ────────────────────────────────────────────────────
   const reasoning = useClinicalReasoning();
-  const [isDxPadOpen, setIsDxPadOpen] = useState(true);
+  const [isDxPadOpen, setIsDxPadOpen] = useState(false);
   const [dxPadInitialTab, setDxPadInitialTab] = useState<PadTab | undefined>(undefined);
   const [pendingStage, setPendingStage] = useState<WorkflowStage | null>(null);
 
