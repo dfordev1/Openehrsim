@@ -4,7 +4,6 @@ import type {
   DifferentialEntry,
   IllnessScript,
   PRSnapshot,
-  ReasoningNudge,
   StageCommitment,
   StageRequirements,
   WorkflowStage,
@@ -261,126 +260,6 @@ export function useClinicalReasoning() {
     [problemRepresentation, differentials, checkStageGate],
   );
 
-  // ── Nudges (real-time formative feedback) ─────────────────────────────────
-  const nudges = useMemo<ReasoningNudge[]>(() => {
-    const out: ReasoningNudge[] = [];
-    const stage = currentStage;
-    const req = STAGE_REQUIREMENTS[stage];
-    const stageIdx = STAGE_ORDER.indexOf(stage);
-
-    // pr-stale: we have history AND the current PR matches the last snapshot
-    // AND we've advanced a stage since then.
-    if (latestPrSnapshot && !prIsDirty && latestPrSnapshot.stage !== stage) {
-      const lastIdx = STAGE_ORDER.indexOf(latestPrSnapshot.stage);
-      if (stageIdx > lastIdx) {
-        out.push({
-          id: 'pr-stale',
-          type: 'pr-stale',
-          severity: 'info',
-          message: `Your problem representation hasn't been updated since ${STAGE_LABELS[latestPrSnapshot.stage]}. Refine it with the new data you've gathered.`,
-          stage,
-        });
-      }
-    }
-
-    // ddx-too-narrow: at early stages we want breadth
-    if (
-      (stage === 'triage' || stage === 'history' || stage === 'exam') &&
-      differentials.length < req.minDifferentials
-    ) {
-      out.push({
-        id: 'ddx-too-narrow',
-        type: 'ddx-too-narrow',
-        severity: 'warning',
-        message: `Your differential is narrow for ${STAGE_LABELS[stage]} — keep it broad (aim for ${req.minDifferentials}+ diagnoses). Premature closure is a common diagnostic error.`,
-        stage,
-      });
-    }
-
-    // ddx-too-broad: at late stages we want convergence
-    if (
-      (stage === 'dxpause' || stage === 'management') &&
-      differentials.length > 5
-    ) {
-      out.push({
-        id: 'ddx-too-broad',
-        type: 'ddx-too-broad',
-        severity: 'info',
-        message: `You have ${differentials.length} differentials at ${STAGE_LABELS[stage]}. Consider pruning unlikely diagnoses and committing to a lead.`,
-        stage,
-      });
-    }
-
-    // lead-not-committed
-    if (req.requiresLead && !differentials.some(d => d.isLead)) {
-      out.push({
-        id: 'lead-not-committed',
-        type: 'lead-not-committed',
-        severity: 'warning',
-        message: `${STAGE_LABELS[stage]} requires a committed lead diagnosis. Star one in the DDx panel.`,
-        stage,
-      });
-    }
-
-    // findings-unassigned: once you have dxs AND findings, they should be linked
-    if (differentials.length >= 2 && findings.length >= 3) {
-      const linkedCount = findings.filter(
-        f => f.relevanceByDx && Object.keys(f.relevanceByDx).length > 0,
-      ).length;
-      if (linkedCount === 0) {
-        out.push({
-          id: 'findings-unassigned',
-          type: 'findings-unassigned',
-          severity: 'info',
-          message: `You have ${findings.length} findings but none are linked to a specific diagnosis. Use the Findings Matrix to mark pertinent positives/negatives.`,
-          stage,
-        });
-      }
-    }
-
-    // tests-without-ddx: any findings from labs/imaging but no DDx yet
-    const hasWorkup = findings.some(
-      f => f.source === 'lab' || f.source === 'imaging',
-    );
-    if (hasWorkup && differentials.length === 0) {
-      out.push({
-        id: 'tests-without-ddx',
-        type: 'tests-without-ddx',
-        severity: 'warning',
-        message:
-          "You've ordered tests before building a differential. Work up should be hypothesis-driven — what are you testing for?",
-        stage,
-      });
-    }
-
-    // illness-script-missing on the lead at dxpause+
-    if (stage === 'dxpause' || stage === 'management') {
-      const lead = differentials.find(d => d.isLead);
-      if (
-        lead &&
-        (!lead.illnessScript ||
-          (lead.illnessScript.keyFeatures.length === 0 &&
-            lead.illnessScript.expectedLabs.length === 0))
-      ) {
-        out.push({
-          id: 'illness-script-missing',
-          type: 'illness-script-missing',
-          severity: 'info',
-          message: `No illness script written for your lead diagnosis (${lead.diagnosis}). Record what findings you'd expect so you can reconcile them against what you see.`,
-          stage,
-        });
-      }
-    }
-
-    return out;
-  }, [
-    currentStage,
-    differentials,
-    findings,
-    latestPrSnapshot,
-    prIsDirty,
-  ]);
-
   // ── Reset (for new case) ──────────────────────────────────────────────────
   const resetReasoning = useCallback(() => {
     setProblemRepresentation('');
@@ -420,8 +299,6 @@ export function useClinicalReasoning() {
     markStageCompleted,
     commitStage,
     checkStageGate,
-    // Nudges
-    nudges,
     // Reset
     resetReasoning,
   };
