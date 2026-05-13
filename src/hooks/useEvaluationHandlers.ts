@@ -57,7 +57,12 @@ export function useEvaluationHandlers({ medicalCase, reasoning, addToast, setLog
 
       setEvaluation(result);
       setLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), text: `SCORE: ${result.score}/100` }]);
-      saveCCSResult(medicalCase, result).catch(console.error);
+      if (!result.savedToDb) {
+        // Server didn't persist (Supabase not configured or insert failed) — try client-side fallback
+        saveCCSResult(medicalCase, result).catch(() => {
+          addToast('Result scored but could not be saved to history', 'info');
+        });
+      }
       addToast(`Case scored — ${result.score}/100`, 'success');
     } catch (err) {
       addToast(err instanceof Error ? err.message : 'Scoring failed', 'error');

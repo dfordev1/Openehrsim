@@ -45,7 +45,7 @@ export async function getRecentSimulations() {
 
   const { data, error } = await (supabase.from('simulation_results') as any)
     .select('case_id, patient_name, age, category, difficulty, score, correct_diagnosis, feedback, reasoning_score, created_at')
-    .eq('user_id', user.id)
+    .or(`user_id.eq.${user.id},user_id.is.null`)
     .order('created_at', { ascending: false })
     .limit(20);
 
