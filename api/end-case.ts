@@ -254,16 +254,26 @@ USER NOTES: ${userNotes || "none"}${reasoningContext}`,
 
     // ── Persist result to simulation_results table ────────────────────────────
     const db = getServerSupabase();
+    let savedToDb = false;
     if (db) {
-      // Extract user_id from the Authorization header (Supabase anon JWT)
+      // Extract user_id — try network verification first, fall back to local JWT decode.
+      // Local decode is reliable enough for this write path (service role controls the insert).
       let userId: string | null = null;
       const authHeader = req.headers.authorization;
       if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
         try {
-          const { data: { user } } = await (db as any).auth.getUser(authHeader.replace('Bearer ', ''));
+          const { data: { user } } = await (db as any).auth.getUser(token);
           userId = user?.id ?? null;
-        } catch { /* ignore auth errors — save without user_id */ }
+        } catch { /* fall through to local decode */ }
+        if (!userId) {
+          try {
+            const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+            userId = payload.sub ?? null;
+          } catch { /* give up */ }
+        }
       }
+      if (!userId) console.warn('end-case: could not resolve user_id — result saved anonymously');
 
       // Build payload; include reasoning_score only if the column exists in the
       // user's schema — if not, we retry without it so an unmigrated DB doesn't
@@ -298,8 +308,10 @@ USER NOTES: ${userNotes || "none"}${reasoningContext}`,
       if (first.error) {
         // Fallback if the reasoning columns haven't been migrated yet.
         const retry = await (db as any).from("simulation_results").insert([basePayload]);
-        if (retry.error) console.warn("Could not save result:", retry.error.message);
-        else console.warn("Saved result without reasoning columns — run SUPABASE_SETUP.md migration.");
+        if (retry.error) console.error("Could not save result:", retry.error.message);
+        else { savedToDb = true; console.warn("Saved result without reasoning columns — run SUPABASE_SETUP.md migration."); }
+      } else {
+        savedToDb = true;
       }
     }
 
@@ -310,6 +322,7 @@ USER NOTES: ${userNotes || "none"}${reasoningContext}`,
       ...evaluation,
       caseId,
       totalSimulationTime: trimmed.simulationTime,
+      savedToDb,
     });
   } catch (err: any) {
     console.error("end-case error:", err);

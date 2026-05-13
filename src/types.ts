@@ -143,6 +143,7 @@ export interface CaseEvaluation {
   clinicalPearl: string;
   caseId: string;
   totalSimulationTime: number;
+  savedToDb?: boolean;
 }
 
 // ── Healer-style Clinical Reasoning Types ─────────────────────────────────────

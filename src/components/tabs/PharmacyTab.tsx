@@ -65,6 +65,11 @@ export function PharmacyTab({ customMedInput, onCustomMedChange, onAdminister, i
   const administeredMeds = (medicalCase?.medications || []).map(m => m.name);
   const interactions = checkInteractions(administeredMeds);
 
+  // Real-time pre-administration warning
+  const pendingWarnings = customMedInput.trim().length > 2
+    ? checkInteractions([...administeredMeds, customMedInput])
+    : [];
+
   return (
     <motion.div
       key="pharmacy"
@@ -91,6 +96,11 @@ export function PharmacyTab({ customMedInput, onCustomMedChange, onAdminister, i
           <span className="text-xs text-gray-400">Press Enter to administer</span>
           {intervening && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
         </div>
+        {pendingWarnings.map((w, i) => (
+          <div key={i} className={`mt-2 px-3 py-2 rounded-lg text-xs leading-relaxed ${w.severity === 'high' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
+            {w.severity === 'high' ? '⚠ HIGH: ' : '△ '}<span className="font-medium">{w.drugs}</span> — {w.message}
+          </div>
+        ))}
       </div>
 
       {/* Quick meds */}

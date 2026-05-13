@@ -329,7 +329,7 @@ function ClinicalLayoutInner() {
 
       {/* ── Abnormal vitals strip (only shows when something is wrong) ── */}
       <AnimatePresence>
-        {abnormalVitals.length > 0 && (
+        {(abnormalVitals.length > 0 || (medicalCase?.physiologicalTrend && medicalCase.physiologicalTrend !== 'stable' && medicalCase.physiologicalTrend !== 'improving')) && (
           <motion.button
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
@@ -337,7 +337,7 @@ function ClinicalLayoutInner() {
             onClick={() => setVitalsExpanded(true)}
             className={cn(
               "flex items-center justify-center gap-4 py-2 px-4 shrink-0 transition-colors cursor-pointer",
-              hasCritical ? "bg-red-100" : "bg-amber-50"
+              hasCritical || medicalCase?.physiologicalTrend === 'critical' ? "bg-red-100" : "bg-amber-50"
             )}
           >
             {abnormalVitals.map((v, i) => (
@@ -348,6 +348,12 @@ function ClinicalLayoutInner() {
                 {v.label} {v.value}
               </span>
             ))}
+            {medicalCase?.physiologicalTrend === 'declining' && (
+              <span className="text-xs font-bold text-amber-600">↓ Declining</span>
+            )}
+            {medicalCase?.physiologicalTrend === 'critical' && (
+              <span className="text-xs font-bold text-red-600 animate-pulse">⚠ Critical deterioration</span>
+            )}
           </motion.button>
         )}
       </AnimatePresence>
@@ -420,7 +426,7 @@ function ClinicalLayoutInner() {
             )}
 
             {activeTab === 'treatment' && medicalCase && (
-              <TreatmentTab key="treatment" medicalCase={medicalCase} vitalsHistory={vitalsHistory} interventionInput={interventionInput} intervening={intervening} transferExpanded={transferExpanded} onInterventionChange={setInterventionInput} onExecuteOrder={() => handlePerformIntervention()} onWait={(mins) => handlePerformIntervention(mins, 'Observe patient')} onTransfer={(dept) => handlePerformIntervention(0, `Transfer to ${dept}`)} onToggleTransfer={() => setTransferExpanded(p => !p)} onOrderTest={handleOrderTest} onAdvanceTime={handleAdvanceTime} />
+              <TreatmentTab key="treatment" medicalCase={medicalCase} vitalsHistory={vitalsHistory} interventionInput={interventionInput} intervening={intervening} transferExpanded={transferExpanded} simTime={simTime} onInterventionChange={setInterventionInput} onExecuteOrder={() => handlePerformIntervention()} onWait={(mins) => handlePerformIntervention(mins, 'Observe patient')} onTransfer={(dept) => handlePerformIntervention(0, `Transfer to ${dept}`)} onToggleTransfer={() => setTransferExpanded(p => !p)} onOrderTest={handleOrderTest} onAdvanceTime={handleAdvanceTime} />
             )}
 
             {activeTab === 'assess' && medicalCase && (

@@ -26,6 +26,7 @@ export function LabsTab({
   onOrderImaging,
 }: LabsTabProps) {
   const [orderInput, setOrderInput] = useState('');
+  const [expandedImaging, setExpandedImaging] = useState<string | null>(null);
 
   const availableLabs = medicalCase.availableTests?.labs ?? [];
   const availableImaging = medicalCase.availableTests?.imaging ?? [];
@@ -156,27 +157,45 @@ export function LabsTab({
           // Imaging result
           const img = item;
           if (img.kind !== 'imaging') return null;
+          const imgKey = `${img.type}-${i}`;
+          const isExpanded = expandedImaging === imgKey;
 
           return (
-            <div
-              key={`img-${img.type}-${i}`}
-              className="py-2.5 border-b border-gray-50"
-            >
-              <div className="flex items-baseline justify-between">
-                <span className={cn(
-                  'text-sm',
-                  img.pending ? 'text-gray-300' : 'text-gray-600'
-                )}>
+            <div key={`img-${img.type}-${i}`} className="border-b border-gray-50">
+              <button
+                onClick={() => !img.pending && setExpandedImaging(isExpanded ? null : imgKey)}
+                disabled={img.pending}
+                className={cn(
+                  'w-full text-left py-2.5 flex items-baseline justify-between',
+                  !img.pending && 'cursor-pointer hover:bg-gray-50'
+                )}
+              >
+                <span className={cn('text-sm', img.pending ? 'text-gray-300' : 'text-gray-600')}>
                   {img.type}
                 </span>
-                {img.pending && (
-                  <span className="text-xs text-gray-300">T+{img.availableAt ?? '?'}m</span>
-                )}
-              </div>
-              {!img.pending && img.impression && (
-                <p className="text-sm text-gray-900 mt-1 leading-relaxed">
-                  {img.impression}
-                </p>
+                {img.pending
+                  ? <span className="text-xs text-gray-300">T+{img.availableAt ?? '?'}m</span>
+                  : <span className="text-xs text-gray-400">{isExpanded ? '▲' : '▼ Report'}</span>
+                }
+              </button>
+
+              {/* Expanded imaging report */}
+              {isExpanded && !img.pending && (
+                <div className="bg-gray-50 rounded-lg p-4 mb-2 space-y-3">
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">{img.type}</p>
+                  {img.findings && (
+                    <div>
+                      <p className="text-[10px] font-medium text-gray-400 uppercase mb-1">Findings</p>
+                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{img.findings}</p>
+                    </div>
+                  )}
+                  {img.impression && (
+                    <div className="border-t border-gray-200 pt-3">
+                      <p className="text-[10px] font-medium text-gray-400 uppercase mb-1">Impression</p>
+                      <p className="text-sm font-medium text-gray-900 leading-relaxed">{img.impression}</p>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           );
