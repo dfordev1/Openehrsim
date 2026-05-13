@@ -59,9 +59,19 @@ export function ExamTab({
 
     setLoadingSystem(system);
     try {
+      let headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      try {
+        const { getSupabase } = await import('../../lib/supabase');
+        const supabase = getSupabase();
+        if (supabase) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+      } catch {}
+
       const res = await fetch('/api/examine-system', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ caseId: medicalCase.id, system }),
       });
       if (res.ok) {
@@ -137,6 +147,13 @@ export function ExamTab({
           );
         })}
       </div>
+
+      {/* #12: Exam complete nudge */}
+      {Object.keys(revealedFindings).length === examEntries.length && examEntries.length > 0 && (
+        <p className="text-sm text-gray-400 text-center pt-4">
+          All systems examined — proceed to Tests
+        </p>
+      )}
 
       {/* GCS */}
       <div className="space-y-3">

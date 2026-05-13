@@ -49,7 +49,7 @@ export function LabsTab({
   // Build unified results list sorted by time
   type ResultItem =
     | { kind: 'lab'; lab: LabResult; time: number }
-    | { kind: 'imaging'; type: string; impression?: string; findings?: string; time: number; pending: boolean };
+    | { kind: 'imaging'; type: string; impression?: string; findings?: string; time: number; pending: boolean; availableAt?: number };
 
   const results: ResultItem[] = [];
 
@@ -69,6 +69,7 @@ export function LabsTab({
       findings: img.findings,
       time: img.orderedAt,
       pending,
+      availableAt: img.availableAt,
     });
   });
 
@@ -137,7 +138,7 @@ export function LabsTab({
                   {lab.name}
                 </span>
                 {pending ? (
-                  <span className="text-xs text-gray-300">pending...</span>
+                  <span className="text-xs text-gray-300">T+{lab.availableAt}m</span>
                 ) : available ? (
                   <span className={cn(
                     'font-mono text-sm',
@@ -169,7 +170,7 @@ export function LabsTab({
                   {img.type}
                 </span>
                 {img.pending && (
-                  <span className="text-xs text-gray-300">pending...</span>
+                  <span className="text-xs text-gray-300">T+{img.availableAt ?? '?'}m</span>
                 )}
               </div>
               {!img.pending && img.impression && (

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { cn } from '../../lib/utils';
 import type { CaseEvaluation, MedicalCase } from '../../types';
@@ -37,6 +37,29 @@ export function AssessmentTab({
   const feedbackText = evaluation?.feedback ?? feedback?.feedback ?? '';
   const correctDx = evaluation?.correctDiagnosis ?? medicalCase.correctDiagnosis;
 
+  // #6: Two-step end case confirmation
+  const [confirmState, setConfirmState] = useState<'idle' | 'confirming'>('idle');
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    };
+  }, []);
+
+  const handleEndCaseClick = () => {
+    if (confirmState === 'idle') {
+      setConfirmState('confirming');
+      confirmTimerRef.current = setTimeout(() => {
+        setConfirmState('idle');
+      }, 3000);
+    } else {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+      setConfirmState('idle');
+      onEndCase();
+    }
+  };
+
   return (
     <motion.div
       key="assess"
@@ -57,11 +80,16 @@ export function AssessmentTab({
 
           <div className="flex justify-center pt-4">
             <button
-              onClick={onEndCase}
+              onClick={handleEndCaseClick}
               disabled={submitting}
-              className="px-8 py-3 bg-gray-900 text-white text-sm font-medium rounded-full disabled:opacity-50 transition-opacity"
+              className={cn(
+                "px-8 py-3 text-sm font-medium rounded-full disabled:opacity-50 transition-all",
+                confirmState === 'confirming'
+                  ? 'bg-red-600 text-white'
+                  : 'bg-gray-900 text-white'
+              )}
             >
-              {submitting ? 'Scoring...' : 'End Case'}
+              {submitting ? 'Scoring...' : confirmState === 'confirming' ? 'Confirm — End Case?' : 'End Case'}
             </button>
           </div>
         </>
@@ -80,11 +108,26 @@ export function AssessmentTab({
             </p>
           </div>
 
+          {/* #13: Simulation time */}
+          <p className="text-xs text-gray-400 text-center">
+            Completed in {simTime} minutes
+          </p>
+
           {/* Feedback */}
           {feedbackText && (
             <p className="text-sm text-gray-600 leading-relaxed text-center max-w-md mx-auto">
               {feedbackText}
             </p>
+          )}
+
+          {/* #8: Reasoning score breakdown */}
+          {evaluation?.reasoningScore && (
+            <div className="flex flex-wrap justify-center gap-4 text-xs text-gray-400">
+              <span>Data: <span className="font-mono text-gray-600">{evaluation.reasoningScore.dataAcquisitionThoroughness}</span></span>
+              <span>PR: <span className="font-mono text-gray-600">{evaluation.reasoningScore.problemRepresentation}</span></span>
+              <span>DDx: <span className="font-mono text-gray-600">{evaluation.reasoningScore.differentialAccuracy}</span></span>
+              <span>Plan: <span className="font-mono text-gray-600">{evaluation.reasoningScore.managementPlan}</span></span>
+            </div>
           )}
 
           {/* Correct diagnosis */}
@@ -104,6 +147,13 @@ export function AssessmentTab({
                 </li>
               ))}
             </ul>
+          )}
+
+          {/* #7: Clinical pearl */}
+          {evaluation?.clinicalPearl && (
+            <p className="text-sm text-gray-500 italic text-center max-w-md mx-auto border-t border-gray-100 pt-6">
+              {evaluation.clinicalPearl}
+            </p>
           )}
 
           {/* New case button */}

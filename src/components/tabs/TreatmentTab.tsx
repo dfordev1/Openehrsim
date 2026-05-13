@@ -41,11 +41,22 @@ export function TreatmentTab({
       animate={{ opacity: 1 }}
       className="flex flex-col gap-8 py-8"
     >
+      {/* Vitals line */}
+      <p className="text-xs text-gray-400 font-mono">
+        HR {medicalCase.vitals.heartRate} · BP {medicalCase.vitals.bloodPressure} · SpO2 {medicalCase.vitals.oxygenSaturation}% · RR {medicalCase.vitals.respiratoryRate} · {medicalCase.vitals.temperature}°C
+      </p>
+
       {/* Hero: intervention input */}
       <div>
         <textarea
           value={interventionInput}
           onChange={(e) => onInterventionChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              if (interventionInput.trim() && !intervening) onExecuteOrder();
+            }
+          }}
           placeholder="Describe your intervention..."
           className="w-full text-base border-b border-gray-200 py-3 px-1 focus:outline-none focus:border-gray-900 transition-colors bg-transparent resize-none leading-relaxed"
           rows={3}
@@ -112,6 +123,18 @@ export function TreatmentTab({
           </div>
         )}
       </div>
+
+      {/* Medications */}
+      {medicalCase.medications && medicalCase.medications.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-gray-400">Medications</p>
+          {medicalCase.medications.map((med, i) => (
+            <p key={i} className="text-xs text-gray-600">
+              {med.name} {med.dose} {med.route}
+            </p>
+          ))}
+        </div>
+      )}
     </motion.div>
   );
 }
