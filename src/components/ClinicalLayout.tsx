@@ -1,13 +1,25 @@
+/**
+ * ClinicalLayout — iOS-native aesthetic.
+ * F2F2F7 grouped bg · inset-grouped white cards · 007AFF accent
+ * Bottom tab bar · translucent nav bar · bottom-sheet modals · pill vitals
+ */
+
 import * as Sentry from '@sentry/react';
-import React, { Component, useState, useRef, useCallback, type ErrorInfo, type ReactNode } from 'react';
-import { X, RefreshCw } from 'lucide-react';
+import React, {
+  Component, useCallback, useEffect, useMemo, useRef, useState,
+  type ErrorInfo, type ReactNode,
+} from 'react';
+import {
+  X, RefreshCw, ChevronRight, ClipboardList, FlaskConical,
+  Pill, MessageCircle, CheckCircle, HeartPulse, ListPlus,
+  Stethoscope, AlertCircle,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useCase } from '../contexts/CaseContext';
 import { useNavigation } from '../contexts/NavigationContext';
 import { searchOrders } from '../services/geminiService';
-
 import { AuthModal } from './Auth';
 import { CaseLibrary } from './CaseLibrary';
 import { CommandPalette } from './CommandPalette';
@@ -18,23 +30,60 @@ import { TimeAdvanceModal } from './TimeAdvanceModal';
 import { AssessmentTab } from './tabs/AssessmentTab';
 import { ArchiveView } from './ArchiveView';
 import { ClinicalTimeline } from './ClinicalTimeline';
+import type { OrderSearchResult, LabResult } from '../types';
 
-import type { OrderSearchResult } from '../types';
+// ─── design tokens ─────────────────────────────────────────────────────────────
+// iOS semantic colours (used in inline styles where Tailwind JIT can't see them)
+const IOS = {
+  bg:          '#F2F2F7',  // grouped background
+  card:        '#FFFFFF',
+  separator:   'rgba(60,60,67,0.18)',
+  blue:        '#007AFF',
+  green:       '#34C759',
+  red:         '#FF3B30',
+  orange:      '#FF9500',
+  yellow:      '#FFCC00',
+  gray:        '#8E8E93',
+  label:       '#000000',
+  secondLabel: '#3C3C43',
+  navBar:      'rgba(249,249,249,0.94)',
+  tabBar:      'rgba(249,249,249,0.94)',
+};
 
-// ── Error boundary ─────────────────────────────────────────────────────────────
+// ─── helpers ──────────────────────────────────────────────────────────────────
+function labFlag(lab: LabResult) {
+  if (lab.status === 'critical') {
+    const v = parseFloat(String(lab.value));
+    const parts = lab.normalRange.split('-');
+    const lo = parseFloat(parts[0]);
+    return !isNaN(v) && !isNaN(lo) && v < lo
+      ? { code: 'LL', color: IOS.blue }
+      : { code: 'HH', color: IOS.red };
+  }
+  if (lab.status === 'abnormal') {
+    const v = parseFloat(String(lab.value));
+    const parts = lab.normalRange.split('-');
+    const lo = parseFloat(parts[0]), hi = parseFloat(parts[parts.length - 1]);
+    if (!isNaN(v) && !isNaN(lo) && !isNaN(hi))
+      return v < lo ? { code: 'L', color: IOS.blue } : { code: 'H', color: IOS.orange };
+    return { code: 'H', color: IOS.orange };
+  }
+  return { code: '', color: IOS.green };
+}
+
+type Tab = 'chart' | 'results' | 'meds' | 'consult' | 'assess';
+
+// ─── Error Boundary ────────────────────────────────────────────────────────────
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   constructor(props: { children: ReactNode }) { super(props); this.state = { hasError: false }; }
   static getDerivedStateFromError() { return { hasError: true }; }
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    Sentry.captureException(error, { extra: { componentStack: info.componentStack } });
-  }
+  componentDidCatch(e: Error, i: ErrorInfo) { Sentry.captureException(e, { extra: { componentStack: i.componentStack } }); }
   render() {
     if (this.state.hasError) return (
-      <div className="min-h-screen bg-white flex items-center justify-center p-8">
-        <div className="text-center max-w-sm">
-          <p className="text-lg font-medium text-gray-900 mb-2">Something went wrong</p>
-          <p className="text-sm text-gray-500 mb-6">The simulator encountered an error.</p>
-          <button onClick={() => window.location.reload()} className="px-6 py-2.5 bg-black text-white rounded-full text-sm font-medium">Restart</button>
+      <div className="min-h-screen flex items-center justify-center p-8" style={{ background: IOS.bg }}>
+        <div className="text-center">
+          <p className="text-base font-semibold mb-2">Something went wrong</p>
+          <button onClick={() => window.location.reload()} className="text-sm rounded-full px-5 py-2 text-white" style={{ background: IOS.blue }}>Reload</button>
         </div>
       </div>
     );
@@ -43,52 +92,49 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 }
 
 export { ErrorBoundary };
-export function ClinicalLayout() { return <ErrorBoundary><ClinicalLayoutInner /></ErrorBoundary>; }
+export function ClinicalLayout() { return <ErrorBoundary><IOSShell /></ErrorBoundary>; }
 
-// ── Order bar ──────────────────────────────────────────────────────────────────
-const CATEGORY_COLOR: Record<string, string> = {
-  lab: 'bg-blue-50 text-blue-600', imaging: 'bg-purple-50 text-purple-600',
-  medication: 'bg-green-50 text-green-600', consult: 'bg-amber-50 text-amber-700',
-  procedure: 'bg-gray-100 text-gray-600',
+// ─── Order search bar (iMessage-style CPOE) ────────────────────────────────────
+const CATEGORY_COLOR: Record<string, { text: string; bg: string }> = {
+  lab:       { text: IOS.blue,   bg: '#E8F0FE' },
+  imaging:   { text: '#7C3AED',  bg: '#F5F3FF' },
+  medication:{ text: IOS.green,  bg: '#E8FFF0' },
+  consult:   { text: IOS.orange, bg: '#FFF4E5' },
+  procedure: { text: IOS.gray,   bg: '#F2F2F7' },
 };
 
-function OrderBar({
-  caseId, simTime, busy, variant = 'fixed',
-  onExecute, onOpenTimeAdvance, onTransfer,
-  onOrderTest, onOrderMedication, onOpenAssessment, onConsult,
+function CPOEBar({
+  caseId, simTime, busy,
+  onExecute, onOpenTimeAdvance,
+  onOrderTest, onOrderMedication, onConsult,
 }: {
   caseId: string | undefined;
   simTime: number;
   busy: boolean;
-  variant?: 'fixed' | 'panel';
   onExecute: (text: string) => Promise<void>;
   onOpenTimeAdvance: () => void;
-  onTransfer: (dept: string) => void;
   onOrderTest: (type: 'lab' | 'imaging', name: string) => Promise<void>;
   onOrderMedication: (name: string, route?: string, freq?: string) => Promise<void>;
-  onOpenAssessment: () => void;
   onConsult: () => void;
 }) {
   const [value, setValue] = useState('');
-  const [suggestions, setSuggestions] = useState<OrderSearchResult[]>([]);
+  const [results, setResults] = useState<OrderSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [placing, setPlacing] = useState(false);
-  const [transferOpen, setTransferOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const search = useCallback((q: string) => {
     clearTimeout(debounceRef.current);
-    if (!q.trim() || !caseId) { setSuggestions([]); return; }
+    if (!q.trim() || !caseId) { setResults([]); return; }
     debounceRef.current = setTimeout(async () => {
       setSearching(true);
-      try { setSuggestions((await searchOrders(caseId, q)).results.slice(0, 6)); }
-      catch { setSuggestions([]); }
+      try { setResults((await searchOrders(caseId, q)).results.slice(0, 6)); }
+      catch { setResults([]); }
       finally { setSearching(false); }
-    }, 280);
+    }, 260);
   }, [caseId]);
 
-  const clear = () => { setValue(''); setSuggestions([]); };
+  const clear = () => { setValue(''); setResults([]); };
 
   const execute = async () => {
     const text = value.trim();
@@ -110,60 +156,38 @@ function OrderBar({
   };
 
   const isBusy = busy || placing;
-  const penaltyLevel = simTime >= 90 ? 'high' : simTime >= 60 ? 'moderate' : simTime >= 45 ? 'low' : null;
-  const isFixed = variant === 'fixed';
 
   return (
-    <div className={cn('bg-white', isFixed && 'fixed bottom-0 left-0 right-0 z-40')}>
-      {/* Suggestions */}
+    <div className="border-t" style={{ borderColor: IOS.separator, background: IOS.navBar, backdropFilter: 'blur(20px)' }}>
+      {/* Suggestions list */}
       <AnimatePresence>
-        {suggestions.length > 0 && (
-          <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
-            className="border-t border-gray-100 max-h-52 overflow-y-auto bg-white">
-            {suggestions.map(r => (
-              <button key={r.name} onClick={() => place(r)} disabled={isBusy}
-                className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 border-b border-gray-50 last:border-0 transition-colors">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-800">{r.name}</p>
-                  {(r.route || r.frequency) && <p className="text-[10px] text-gray-400">{[r.route, r.frequency].filter(Boolean).join(' · ')}</p>}
-                </div>
-                <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0', CATEGORY_COLOR[r.category] ?? 'bg-gray-100 text-gray-500')}>
-                  {r.category}
-                </span>
-              </button>
-            ))}
+        {results.length > 0 && (
+          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}
+            className="max-h-56 overflow-y-auto" style={{ borderBottom: `1px solid ${IOS.separator}` }}>
+            {results.map(r => {
+              const col = CATEGORY_COLOR[r.category] ?? CATEGORY_COLOR.procedure;
+              return (
+                <button key={r.name} onMouseDown={() => place(r)} disabled={isBusy}
+                  className="w-full text-left px-4 py-3 flex items-center gap-3 active:bg-gray-100 transition-colors"
+                  style={{ borderBottom: `1px solid ${IOS.separator}` }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-black">{r.name}</p>
+                    {(r.route || r.frequency) && <p className="text-[11px] mt-0.5" style={{ color: IOS.gray }}>{[r.route, r.frequency].filter(Boolean).join(' · ')}</p>}
+                  </div>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ color: col.text, background: col.bg }}>
+                    {r.category}
+                  </span>
+                </button>
+              );
+            })}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Transfer picker */}
-      <AnimatePresence>
-        {transferOpen && (
-          <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
-            className="flex gap-5 px-4 py-2.5 border-t border-gray-100">
-            {['ICU', 'OR', 'Cath Lab', 'Ward', 'Radiology'].map(d => (
-              <button key={d} onClick={() => { onTransfer(d); setTransferOpen(false); }} disabled={isBusy}
-                className="text-xs text-gray-500 hover:text-gray-900 transition-colors disabled:opacity-30">{d}</button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Time pressure */}
-      {penaltyLevel && (
-        <p className={cn('px-4 py-1 text-[10px] border-t border-gray-50',
-          penaltyLevel === 'low' ? 'text-amber-500' : penaltyLevel === 'moderate' ? 'text-orange-500' : 'text-red-500 font-medium')}>
-          {penaltyLevel === 'low' && `⏱ T+${simTime}m — efficiency score beginning to drop.`}
-          {penaltyLevel === 'moderate' && `⏱ T+${simTime}m — significant time penalty accumulating.`}
-          {penaltyLevel === 'high' && `⏱ T+${simTime}m — major efficiency penalty.`}
-        </p>
-      )}
-
-      {/* Input */}
-      <div className="border-t border-gray-100 px-4 pt-2.5 pb-3">
-        <div className="flex items-center gap-2">
+      {/* Input row */}
+      <div className="px-4 pt-2 pb-1 flex items-center gap-2">
+        <div className="flex-1 flex items-center gap-2 rounded-full px-3 py-2 text-sm" style={{ background: 'rgba(120,120,128,0.12)' }}>
           <input
-            ref={inputRef}
             type="text"
             value={value}
             onChange={e => { setValue(e.target.value); search(e.target.value); }}
@@ -173,33 +197,44 @@ function OrderBar({
             }}
             placeholder={isBusy ? 'Processing…' : searching ? 'Searching…' : 'Order, medication, or intervention…'}
             disabled={isBusy || !caseId}
-            className="flex-1 text-sm py-1 focus:outline-none bg-transparent placeholder-gray-300 disabled:opacity-40"
+            className="flex-1 bg-transparent focus:outline-none text-sm disabled:opacity-40"
+            style={{ color: IOS.label }}
             autoComplete="off"
           />
           {value.trim() && !isBusy && (
-            <button onClick={execute} className="shrink-0 px-3 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-full">
-              Execute
+            <button onClick={clear} className="shrink-0 -mr-1">
+              <X className="w-3.5 h-3.5" style={{ color: IOS.gray }} />
             </button>
           )}
         </div>
-        <div className="flex items-center gap-4 pt-1">
-          <button onClick={onOpenTimeAdvance} disabled={isBusy || !caseId} className="text-xs text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-30">Advance time</button>
-          <button onClick={() => setTransferOpen(p => !p)} disabled={isBusy || !caseId} className={cn('text-xs transition-colors disabled:opacity-30', transferOpen ? 'text-gray-900' : 'text-gray-400 hover:text-gray-700')}>Transfer</button>
-          <button onClick={onConsult} disabled={isBusy || !caseId} className="text-xs text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-30">Consult AI</button>
-          <button onClick={onOpenAssessment} disabled={!caseId} className="ml-auto text-xs text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-30">End case →</button>
-        </div>
+        {value.trim() && !isBusy ? (
+          <button onClick={execute} className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: IOS.blue }}>
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white"><path d="M2 21L23 12 2 3v7l15 2-15 2z" /></svg>
+          </button>
+        ) : (
+          <button onClick={onConsult} disabled={isBusy || !caseId} className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-30" style={{ background: IOS.blue }}>
+            <MessageCircle className="w-4 h-4 text-white" />
+          </button>
+        )}
+      </div>
+
+      {/* Quick actions */}
+      <div className="flex items-center gap-5 px-4 pb-2.5 pt-1">
+        <button onClick={onOpenTimeAdvance} disabled={isBusy || !caseId} className="text-xs font-medium disabled:opacity-30" style={{ color: IOS.blue }}>Advance time</button>
+        <span className="text-xs font-medium" style={{ color: isBusy ? IOS.orange : IOS.gray }}>
+          {isBusy ? '● Processing…' : `T+${simTime}m`}
+        </span>
       </div>
     </div>
   );
 }
 
-// ── Main inner component ───────────────────────────────────────────────────────
-function ClinicalLayoutInner() {
-  const [vitalsExpanded, setVitalsExpanded]   = useState(false);
-  const [gcsState, setGcsState]               = useState({ eyes: 4, verbal: 5, motor: 6 });
-  const [timeAdvanceOpen, setTimeAdvanceOpen] = useState(false);
-  const [assessmentOpen, setAssessmentOpen]   = useState(false);
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+// ─── iOS Shell ──────────────────────────────────────────────────────────────────
+function IOSShell() {
+  const {
+    user, isAuthOpen, setIsAuthOpen, handleLogout,
+    isSupabaseConfigured, isAuthLoading, isRecovery, clearRecovery,
+  } = useAuth();
 
   const {
     medicalCase, loading, error, loadingStep, patientOutcome, vitalsHistory,
@@ -212,282 +247,465 @@ function ClinicalLayoutInner() {
     handleOrderTest, handleOrderMedication, handleDiscontinueMedication,
     handleAdvanceTime, handleEndCase, setMedicalCase, simTime,
   } = useCase();
+
   const { isLibraryOpen, setIsLibraryOpen, isCommandOpen, setIsCommandOpen } = useNavigation();
 
-  // Abnormal vitals alert strip
-  const abnormalVitals: { label: string; value: string; critical: boolean }[] = [];
-  if (medicalCase?.vitals) {
-    const v = medicalCase.vitals;
-    if (v.heartRate > 120 || v.heartRate < 50) abnormalVitals.push({ label: 'HR', value: `${v.heartRate}`, critical: v.heartRate > 150 || v.heartRate < 40 });
-    if (v.oxygenSaturation < 94) abnormalVitals.push({ label: 'SpO2', value: `${v.oxygenSaturation}%`, critical: v.oxygenSaturation < 88 });
-    const sbp = parseInt(medicalCase.vitals.bloodPressure.split('/')[0]) || 120;
-    if (sbp < 90 || sbp > 160) abnormalVitals.push({ label: 'BP', value: medicalCase.vitals.bloodPressure, critical: sbp < 80 || sbp > 180 });
-    if (v.respiratoryRate > 24 || v.respiratoryRate < 10) abnormalVitals.push({ label: 'RR', value: `${v.respiratoryRate}`, critical: v.respiratoryRate > 30 || v.respiratoryRate < 8 });
-    if (v.temperature > 38.5 || v.temperature < 36) abnormalVitals.push({ label: 'T', value: `${v.temperature}°`, critical: v.temperature > 40 || v.temperature < 34 });
+  const [tab, setTab] = useState<Tab>('chart');
+  const [vitalsExpanded, setVitalsExpanded] = useState(false);
+  const [timeAdvanceOpen, setTimeAdvanceOpen] = useState(false);
+  const [imgOpen, setImgOpen] = useState<Record<string, boolean>>({});
+  const [gcsState, setGcsState] = useState({ eyes: 4, verbal: 5, motor: 6 });
+  const [critDismissed, setCritDismissed] = useState<Set<string>>(new Set());
+
+  const mc = medicalCase;
+  const isBusy = intervening || calling;
+
+  const availLabs = useMemo(() =>
+    (mc?.labs || []).filter(l => l.availableAt !== undefined && l.availableAt <= simTime),
+    [mc, simTime]);
+  const pendLabs = useMemo(() =>
+    (mc?.labs || []).filter(l => l.availableAt !== undefined && l.availableAt > simTime),
+    [mc, simTime]);
+  const availImgs = useMemo(() =>
+    (mc?.imaging || []).filter(i => i.availableAt !== undefined && i.availableAt <= simTime),
+    [mc, simTime]);
+  const pendImgs = useMemo(() =>
+    (mc?.imaging || []).filter(i => i.availableAt !== undefined && i.availableAt > simTime),
+    [mc, simTime]);
+  const activeMeds = useMemo(() => (mc?.medications || []).filter(m => m.discontinuedAt === undefined), [mc]);
+  const critLabs = useMemo(() => availLabs.filter(l => l.status === 'critical' && !critDismissed.has(l.name)), [availLabs, critDismissed]);
+
+  const resultsBadge = availLabs.length + availImgs.length;
+  const critCount = availLabs.filter(l => l.status === 'critical').length;
+
+  // Vitals abnormalities for alert strip
+  const abnVitals: { label: string; value: string; crit: boolean }[] = [];
+  if (mc?.vitals) {
+    const v = mc.vitals;
+    if (v.heartRate > 120 || v.heartRate < 50) abnVitals.push({ label: 'HR', value: `${v.heartRate}`, crit: v.heartRate > 150 || v.heartRate < 40 });
+    if (v.oxygenSaturation < 94) abnVitals.push({ label: 'SpO₂', value: `${v.oxygenSaturation}%`, crit: v.oxygenSaturation < 88 });
+    const sbp = parseInt(mc.vitals.bloodPressure.split('/')[0]) || 120;
+    if (sbp < 90 || sbp > 160) abnVitals.push({ label: 'BP', value: mc.vitals.bloodPressure, crit: sbp < 80 || sbp > 180 });
+    if (v.respiratoryRate > 24 || v.respiratoryRate < 10) abnVitals.push({ label: 'RR', value: `${v.respiratoryRate}`, crit: v.respiratoryRate > 30 || v.respiratoryRate < 8 });
+    if (v.temperature > 38.5 || v.temperature < 36) abnVitals.push({ label: 'T', value: `${v.temperature}°`, crit: v.temperature > 40 || v.temperature < 34 });
   }
-  const hasCritical = abnormalVitals.some(v => v.critical);
+  const hasCritical = abnVitals.some(v => v.crit) || mc?.physiologicalTrend === 'critical';
 
-  const orderBarProps = {
-    caseId: medicalCase?.id,
-    simTime,
-    busy: intervening || calling,
-    onExecute: (text: string) => handlePerformIntervention(5, text),
-    onOpenTimeAdvance: () => setTimeAdvanceOpen(true),
-    onTransfer: (dept: string) => handlePerformIntervention(0, `Transfer to ${dept}`),
-    onOrderTest: handleOrderTest,
-    onOrderMedication: handleOrderMedication,
-    onOpenAssessment: () => setAssessmentOpen(true),
-    onConsult: handleConsult,
-  } as const;
-
-  // ── Auth gate ────────────────────────────────────────────────────────────────
+  // ── Auth gate ──────────────────────────────────────────────────────────────
   if (isSupabaseConfigured && !isAuthLoading && !user) return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8">
+    <div className="min-h-screen flex flex-col items-center justify-center p-8" style={{ background: IOS.bg }}>
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} isRecovery={isRecovery} onRecoveryHandled={clearRecovery} />
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center max-w-sm">
-        <div className="w-14 h-14 bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-6">
-          <span className="text-white text-xl font-black">Rx</span>
+        <div className="w-16 h-16 rounded-[22px] flex items-center justify-center mx-auto mb-6 shadow-lg" style={{ background: IOS.blue }}>
+          <HeartPulse className="w-8 h-8 text-white" />
         </div>
-        <h1 className="text-2xl font-black text-gray-900 mb-2 uppercase tracking-tight">OpenEHR Sim</h1>
-        <p className="text-sm text-gray-500 mb-8 leading-relaxed">USMLE Step 3 CCS simulator.</p>
-        <button onClick={() => setIsAuthOpen(true)} className="px-8 py-3 bg-gray-900 text-white text-sm font-medium rounded-full hover:bg-gray-800 transition-colors">Sign in</button>
+        <h1 className="text-3xl font-bold tracking-tight mb-2" style={{ color: IOS.label }}>OpenEHR Sim</h1>
+        <p className="text-[15px] mb-10" style={{ color: IOS.gray }}>USMLE Step 3 CCS simulator</p>
+        <button onClick={() => setIsAuthOpen(true)} className="w-full py-3 rounded-xl text-[17px] font-semibold text-white" style={{ background: IOS.blue }}>
+          Sign In
+        </button>
       </motion.div>
     </div>
   );
 
-  // ── Loading / error ──────────────────────────────────────────────────────────
   if (isAuthLoading || loading || error) return (
-    <div className="min-h-screen bg-white flex items-center justify-center">
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center max-w-xs">
+    <div className="min-h-screen flex items-center justify-center" style={{ background: IOS.bg }}>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center">
         {error ? (<>
-          <p className="text-base font-medium text-gray-900 mb-2">Connection Failed</p>
-          <p className="text-sm text-gray-500 mb-6">{error}</p>
-          <button onClick={() => loadNewCase()} className="px-6 py-2.5 bg-black text-white rounded-full text-sm font-medium">Try Again</button>
+          <AlertCircle className="w-10 h-10 mx-auto mb-4" style={{ color: IOS.red }} />
+          <p className="text-base font-semibold mb-1">Unable to Connect</p>
+          <p className="text-sm mb-6" style={{ color: IOS.gray }}>{error}</p>
+          <button onClick={() => loadNewCase()} className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold" style={{ background: IOS.blue }}>Try Again</button>
         </>) : (<>
-          <div className="w-8 h-8 mx-auto mb-4 border-2 border-gray-200 border-t-gray-900 rounded-full animate-spin" />
-          <p className="text-sm text-gray-500">{loadingStep}</p>
+          <div className="w-8 h-8 mx-auto mb-4 border-2 border-gray-200 rounded-full animate-spin" style={{ borderTopColor: IOS.blue }} />
+          <p className="text-sm" style={{ color: IOS.gray }}>{loadingStep || 'Loading…'}</p>
         </>)}
       </motion.div>
     </div>
   );
 
-  const mc = medicalCase;
-  const stream = mc ? buildStream(mc, simTime) : [];
-
-  const vitalsLine = mc ? [
-    `HR ${mc.vitals.heartRate}`,
-    `BP ${mc.vitals.bloodPressure}`,
-    `RR ${mc.vitals.respiratoryRate}`,
-    `SpO2 ${mc.vitals.oxygenSaturation}%`,
-    `T ${mc.vitals.temperature}°C`,
-  ].join('  ·  ') : '';
-
-  const isBusy = intervening || calling;
-
-  function submitInput() {
-    const val = input.trim();
-    if (!val || isBusy || !mc) return;
-    setInput('');
-    handlePerformIntervention(5, val);
-  }
-
-  // Quick-suggest: first few labs and imaging not yet ordered
-  const orderedLabNames = new Set((mc?.labs || []).map(l => l.name.toLowerCase()));
-  const orderedImgTypes = new Set((mc?.imaging || []).map(i => i.type.toLowerCase()));
-  const suggestLabs = (mc?.availableTests?.labs || []).filter(t => !orderedLabNames.has(t.name.toLowerCase())).slice(0, 3);
-  const suggestImgs = (mc?.availableTests?.imaging || []).filter(t => !orderedImgTypes.has(t.name.toLowerCase())).slice(0, 2);
-  const activeMeds = (mc?.medications || []).filter(m => m.discontinuedAt === undefined);
-
-  // Vitals status
-  const sbp = mc ? parseInt(mc.vitals.bloodPressure.split('/')[0]) || 120 : 120;
-  const isCritical = mc && (
-    mc.vitals.heartRate > 150 || mc.vitals.heartRate < 40 ||
-    mc.vitals.oxygenSaturation < 88 ||
-    sbp < 80 || sbp > 180 ||
-    mc.physiologicalTrend === 'critical'
-  );
-
-  const examSystems = mc?.physicalExam
-    ? (Object.entries(mc.physicalExam) as [string, string][])
-    : [];
+  const cpoeProps = {
+    caseId: mc?.id,
+    simTime,
+    busy: isBusy,
+    onExecute: (text: string) => handlePerformIntervention(5, text),
+    onOpenTimeAdvance: () => setTimeAdvanceOpen(true),
+    onOrderTest: handleOrderTest,
+    onOrderMedication: handleOrderMedication,
+    onConsult: handleConsult,
+  } as const;
 
   return (
-    <div className={cn('h-screen flex flex-col overflow-hidden transition-colors duration-500', hasCritical ? 'bg-red-50' : 'bg-white')}>
+    <div className="h-screen flex flex-col" style={{ background: IOS.bg }}>
 
-      {/* Global modals */}
+      {/* ── Global overlays ── */}
       <CaseLibrary isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} onSelectCase={(d, c, e) => { setIsLibraryOpen(false); loadNewCase(d, c, e); }} />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} isRecovery={isRecovery} onRecoveryHandled={clearRecovery} />
-      <CommandPalette isOpen={isCommandOpen} onClose={() => setIsCommandOpen(false)} onNavigate={() => {}} onNewCase={() => setIsLibraryOpen(true)} onConsult={handleConsult} hasArchive={!!user} onOrderTest={medicalCase ? handleOrderTest : undefined} onAdminister={medicalCase ? med => handlePerformIntervention(2, `Administer ${med}`) : undefined} onAdvanceTime={medicalCase ? handleAdvanceTime : undefined} />
-      {timeAdvanceOpen && medicalCase && <TimeAdvanceModal medicalCase={medicalCase} simTime={simTime} intervening={intervening} onAdvance={handleAdvanceTime} onClose={() => setTimeAdvanceOpen(false)} />}
+      <CommandPalette isOpen={isCommandOpen} onClose={() => setIsCommandOpen(false)} onNavigate={() => {}} onNewCase={() => setIsLibraryOpen(true)} onConsult={handleConsult} hasArchive={!!user} onOrderTest={mc ? handleOrderTest : undefined} onAdminister={mc ? med => handlePerformIntervention(2, `Administer ${med}`) : undefined} onAdvanceTime={mc ? handleAdvanceTime : undefined} />
+      {timeAdvanceOpen && mc && <TimeAdvanceModal medicalCase={mc} simTime={simTime} intervening={intervening} onAdvance={handleAdvanceTime} onClose={() => setTimeAdvanceOpen(false)} />}
+      {vitalsExpanded && <VitalsExpanded isOpen={vitalsExpanded} vitalsHistory={vitalsHistory} onClose={() => setVitalsExpanded(false)} />}
 
-      {/* Header */}
-      <header className="h-12 flex items-center px-4 shrink-0 z-30">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <button onClick={() => setVitalsExpanded(true)} className="text-sm font-semibold text-gray-900 truncate hover:underline">
-            {medicalCase?.patientName}
+      {/* ── Navigation bar ── */}
+      <header className="shrink-0 z-30" style={{ background: IOS.navBar, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderBottom: `1px solid ${IOS.separator}` }}>
+        {/* Title row */}
+        <div className="h-11 flex items-center px-4">
+          <button onClick={() => setIsLibraryOpen(true)} className="flex items-center gap-1 text-sm font-medium" style={{ color: IOS.blue }}>
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Cases</span>
           </button>
-          <span className="text-xs text-gray-400">{medicalCase?.age}{medicalCase?.gender?.[0]?.toUpperCase()}</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className={cn('text-xs font-mono font-medium',
-            simTime === 0 ? 'text-gray-300' : simTime < 30 ? 'text-gray-500' : simTime < 60 ? 'text-amber-500' : 'text-red-500')}>
-            T+{simTime}m
-          </span>
-          <button onClick={() => setIsLibraryOpen(true)} className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors" aria-label="New case">
-            <RefreshCw className="w-4 h-4" />
-          </button>
-          {user && (
-            <div className="relative">
-              <button onClick={() => setAccountMenuOpen(p => !p)} className="w-6 h-6 bg-gray-900 rounded-full flex items-center justify-center text-[10px] font-medium text-white">
+          <div className="flex-1 text-center">
+            <span className="text-[17px] font-semibold truncate" style={{ color: IOS.label }}>
+              {mc?.patientName ?? 'OpenEHR Sim'}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-mono font-medium" style={{ color: simTime === 0 ? IOS.gray : simTime < 30 ? IOS.gray : simTime < 60 ? IOS.orange : IOS.red }}>
+              {simTime > 0 ? `T+${simTime}m` : ''}
+            </span>
+            {user && (
+              <button onClick={handleLogout} className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold text-white" style={{ background: IOS.blue }}>
                 {user.email?.[0].toUpperCase()}
               </button>
-              {accountMenuOpen && (<>
-                <div className="fixed inset-0 z-40" onClick={() => setAccountMenuOpen(false)} />
-                <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-xl shadow-lg py-2 px-1 min-w-[160px] z-50">
-                  <p className="px-3 py-1 text-[10px] text-gray-400 truncate">{user.email}</p>
-                  <div className="border-t border-gray-100 mt-1 pt-1">
-                    <button onClick={() => { setAccountMenuOpen(false); setAssessmentOpen(true); }} className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 rounded-lg">History &amp; score</button>
-                    <button onClick={() => { setAccountMenuOpen(false); handleLogout(); }} className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded-lg">Sign out</button>
-                  </div>
-                </div>
-              </>)}
-            </div>
-          )}
+            )}
+          </div>
         </div>
+
+        {/* Patient subtitle row */}
+        {mc && (
+          <button onClick={() => setVitalsExpanded(true)} className="w-full flex items-center gap-2 px-4 pb-2.5 text-left">
+            <span className="text-[13px]" style={{ color: IOS.gray }}>
+              {mc.age} y/o {mc.gender}
+            </span>
+            {mc.difficulty && (
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: IOS.blue + '18', color: IOS.blue }}>
+                {mc.difficulty}
+              </span>
+            )}
+            {/* Vitals pills */}
+            <div className="flex items-center gap-1.5 flex-wrap ml-auto">
+              {[
+                { label: 'HR', value: mc.vitals.heartRate, crit: mc.vitals.heartRate > 150 || mc.vitals.heartRate < 40, abn: mc.vitals.heartRate > 100 || mc.vitals.heartRate < 60 },
+                { label: 'BP', value: mc.vitals.bloodPressure, crit: false, abn: false },
+                { label: 'SpO₂', value: `${mc.vitals.oxygenSaturation}%`, crit: mc.vitals.oxygenSaturation < 88, abn: mc.vitals.oxygenSaturation < 95 },
+                { label: 'T', value: `${mc.vitals.temperature}°`, crit: mc.vitals.temperature > 40 || mc.vitals.temperature < 34, abn: mc.vitals.temperature > 38.3 || mc.vitals.temperature < 36 },
+              ].map(({ label, value, crit, abn }) => (
+                <span key={label} className="text-[11px] font-medium px-1.5 py-0.5 rounded" style={{
+                  background: crit ? IOS.red + '18' : abn ? IOS.orange + '18' : 'rgba(120,120,128,0.12)',
+                  color: crit ? IOS.red : abn ? IOS.orange : IOS.gray,
+                }}>
+                  {label} {value}
+                </span>
+              ))}
+            </div>
+            <ChevronRight className="w-3.5 h-3.5 shrink-0" style={{ color: IOS.gray }} />
+          </button>
+        )}
       </header>
 
-      {/* Vitals alert strip */}
+      {/* ── Critical result banner ── */}
       <AnimatePresence>
-        {(abnormalVitals.length > 0 || (medicalCase?.physiologicalTrend && !['stable','improving'].includes(medicalCase.physiologicalTrend))) && (
-          <motion.button initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            onClick={() => setVitalsExpanded(true)}
-            className={cn('flex items-center justify-center gap-4 py-2 px-4 shrink-0', hasCritical || medicalCase?.physiologicalTrend === 'critical' ? 'bg-red-100' : 'bg-amber-50')}>
-            {abnormalVitals.map((v, i) => <span key={i} className={cn('text-xs font-bold font-mono', v.critical ? 'text-red-600' : 'text-amber-600')}>{v.label} {v.value}</span>)}
-            {medicalCase?.physiologicalTrend === 'declining' && <span className="text-xs font-bold text-amber-600">↓ Declining</span>}
-            {medicalCase?.physiologicalTrend === 'critical'  && <span className="text-xs font-bold text-red-600 animate-pulse">⚠ Critical deterioration</span>}
-          </motion.button>
-        )}
-      </AnimatePresence>
-
-      {/* Patient outcome banner */}
-      <AnimatePresence>
-        {patientOutcome && patientOutcome !== 'alive' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className={cn('py-3 px-4 flex items-center justify-center gap-3 shrink-0', patientOutcome === 'deceased' ? 'bg-gray-900 text-white' : 'bg-red-600 text-white')}>
-            <span className="text-sm font-medium">{patientOutcome === 'deceased' ? 'Patient expired' : 'Critical deterioration'}</span>
-            <button onClick={() => loadNewCase()} className="text-xs underline opacity-70 hover:opacity-100">New case</button>
+        {critLabs.length > 0 && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            className="shrink-0 px-4 py-2 flex items-center gap-3 flex-wrap" style={{ background: IOS.red + '18' }}>
+            <span className="text-[11px] font-bold" style={{ color: IOS.red }}>CRITICAL</span>
+            {critLabs.slice(0, 3).map(l => (
+              <span key={l.name} className="text-[11px] font-medium" style={{ color: IOS.red }}>
+                {l.name} {l.value}{l.unit}
+              </span>
+            ))}
+            <div className="ml-auto flex gap-3">
+              <button onClick={() => { setTab('results'); setCritDismissed(p => new Set([...p, ...critLabs.map(l => l.name)])); }} className="text-[12px] font-semibold" style={{ color: IOS.blue }}>View →</button>
+              <button onClick={() => setCritDismissed(p => new Set([...p, ...critLabs.map(l => l.name)]))} className="text-[12px]" style={{ color: IOS.gray }}>Dismiss</button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── Split body ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* ── Patient outcome ── */}
+      <AnimatePresence>
+        {patientOutcome && patientOutcome !== 'alive' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="shrink-0 py-2.5 px-4 flex items-center justify-center gap-3"
+            style={{ background: patientOutcome === 'deceased' ? '#1C1C1E' : IOS.red }}>
+            <span className="text-sm font-semibold text-white">{patientOutcome === 'deceased' ? 'Patient Expired' : 'Critical Deterioration'}</span>
+            <button onClick={() => loadNewCase()} className="text-sm text-white/70 underline">New Case</button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        {/* LEFT: Scrollable timeline */}
-        <main className="flex-1 overflow-y-auto px-4 sm:px-6 pb-36 lg:pb-6">
-          <div className="max-w-xl mx-auto lg:max-w-2xl pt-6">
-            {medicalCase && (
-              <ClinicalTimeline
-                medicalCase={medicalCase}
-                simTime={simTime}
-                intervening={intervening}
-                gcsState={gcsState}
-                onGcsChange={(cat, score) => setGcsState(prev => ({ ...prev, [cat]: score }))}
-                onExamineSystem={(system, finding) => {
-                  reasoning.addFinding({ source: 'exam', text: `${system}: ${finding.slice(0, 60)}`, relevance: 'none', addedAt: medicalCase.simulationTime });
-                  setMedicalCase(prev => prev ? ({
-                    ...prev,
-                    clinicalActions: [...(prev.clinicalActions || []), {
-                      id: `exam-${Date.now()}`, timestamp: prev.simulationTime,
-                      type: 'exam' as const, description: `Examined ${system}: ${finding.slice(0, 80)}`,
-                    }],
-                  }) : prev);
-                }}
-                onDiscontinueMedication={handleDiscontinueMedication}
-              />
-            )}
-          </div>
-        </main>
+      {/* ── Content ── */}
+      <div className="flex-1 overflow-y-auto">
 
-        {/* RIGHT: Orders + Consultant — desktop only */}
-        <aside className="hidden lg:flex flex-col w-80 xl:w-96 border-l border-gray-100 shrink-0 bg-white">
-
-          {/* Consultant chat */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">AI Consultant</p>
-              {medicalCase && !isConsulting && (
-                <button onClick={handleConsult} disabled={intervening || calling}
-                  className="text-xs text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-30">
-                  Ask →
-                </button>
-              )}
-            </div>
-
-            {isConsulting ? (
-              <div className="flex flex-col items-center justify-center py-12 gap-3">
-                <div className="w-6 h-6 border-2 border-gray-200 border-t-gray-900 rounded-full animate-spin" />
-                <p className="text-xs text-gray-400">Thinking…</p>
-              </div>
-            ) : consultantAdvice ? (
-              <div className="space-y-4">
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-sm text-gray-900 leading-relaxed italic">"{consultantAdvice.advice}"</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-medium text-gray-400 uppercase mb-1">Reasoning</p>
-                  <p className="text-sm text-gray-700 leading-relaxed">{consultantAdvice.reasoning}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-medium text-gray-400 uppercase mb-2">Next steps</p>
-                  <div className="space-y-2">
-                    {consultantAdvice.recommendedActions.map((action, i) => (
-                      <div key={i} className="flex items-start gap-2">
-                        <span className="w-4 h-4 rounded-full bg-gray-900 text-white flex items-center justify-center text-[9px] font-medium shrink-0 mt-0.5">{i + 1}</span>
-                        <p className="text-sm text-gray-700">{action}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+        {/* CHART */}
+        {tab === 'chart' && (
+          <div className="pb-4 pt-2">
+            {mc ? (
+              <div className="max-w-2xl mx-auto px-4">
+                <ClinicalTimeline
+                  medicalCase={mc}
+                  simTime={simTime}
+                  intervening={intervening}
+                  gcsState={gcsState}
+                  onGcsChange={(cat, score) => setGcsState(prev => ({ ...prev, [cat]: score }))}
+                  onExamineSystem={(system, finding) => {
+                    reasoning.addFinding({ source: 'exam', text: `${system}: ${finding.slice(0, 60)}`, relevance: 'none', addedAt: mc.simulationTime });
+                    setMedicalCase(prev => prev ? ({
+                      ...prev,
+                      clinicalActions: [...(prev.clinicalActions || []), {
+                        id: `exam-${Date.now()}`, timestamp: prev.simulationTime,
+                        type: 'exam' as const, description: `Examined ${system}: ${finding.slice(0, 80)}`,
+                      }],
+                    }) : prev);
+                  }}
+                  onDiscontinueMedication={handleDiscontinueMedication}
+                />
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-12 gap-2">
-                <p className="text-xs text-gray-300">No consultation yet</p>
-                {medicalCase && (
-                  <button onClick={handleConsult} disabled={intervening || calling}
-                    className="text-xs text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-30 mt-1">
-                    Ask the consultant →
-                  </button>
+              <IOSEmptyState icon={<ClipboardList className="w-10 h-10" style={{ color: IOS.gray }} />} title="No Patient Loaded" sub="Select a case from the library.">
+                <button onClick={() => setIsLibraryOpen(true)} className="mt-4 px-6 py-2.5 rounded-xl text-white text-sm font-semibold" style={{ background: IOS.blue }}>Browse Cases</button>
+              </IOSEmptyState>
+            )}
+          </div>
+        )}
+
+        {/* RESULTS */}
+        {tab === 'results' && (
+          <div className="pt-4 pb-4">
+            {availLabs.length === 0 && pendLabs.length === 0 && availImgs.length === 0 && pendImgs.length === 0 ? (
+              <IOSEmptyState icon={<FlaskConical className="w-10 h-10" style={{ color: IOS.gray }} />} title="No Results" sub="Order labs or imaging to see results here." />
+            ) : (
+              <div className="space-y-0">
+                {/* Labs */}
+                {(availLabs.length > 0 || pendLabs.length > 0) && (
+                  <IOSSection label={`Laboratory Results${critCount > 0 ? ` — ${critCount} critical` : ''}`} labelColor={critCount > 0 ? IOS.red : undefined}>
+                    {availLabs.map((l, i) => {
+                      const f = labFlag(l);
+                      const isCrit = l.status === 'critical';
+                      const isAbn  = l.status === 'abnormal';
+                      return (
+                        <IOSRow key={i} style={{ background: isCrit ? IOS.red + '0A' : isAbn ? IOS.orange + '0A' : IOS.card }}>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[15px]" style={{ color: IOS.label }}>{l.name}</p>
+                            <p className="text-[12px] mt-0.5" style={{ color: IOS.gray }}>{l.normalRange} {l.unit}</p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[17px] font-semibold font-mono" style={{ color: isCrit ? IOS.red : isAbn ? IOS.orange : IOS.label }}>
+                              {l.value}
+                            </span>
+                            <span className="text-[11px] font-mono" style={{ color: IOS.gray }}>{l.unit}</span>
+                            {f.code && (
+                              <span className="text-[11px] font-bold w-7 text-center" style={{ color: f.color }}>{f.code}</span>
+                            )}
+                          </div>
+                        </IOSRow>
+                      );
+                    })}
+                    {pendLabs.map((l, i) => (
+                      <IOSRow key={`p${i}`} style={{ background: IOS.card }}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[15px]" style={{ color: IOS.gray }}>{l.name}</p>
+                          <p className="text-[12px] mt-0.5" style={{ color: IOS.gray }}>Pending · ETA T+{l.availableAt}m</p>
+                        </div>
+                        <span className="text-[13px] font-medium px-2.5 py-1 rounded-full" style={{ background: IOS.orange + '18', color: IOS.orange }}>
+                          {Math.max(0, (l.availableAt ?? 0) - simTime)}m
+                        </span>
+                      </IOSRow>
+                    ))}
+                  </IOSSection>
+                )}
+
+                {/* Imaging */}
+                {(availImgs.length > 0 || pendImgs.length > 0) && (
+                  <IOSSection label="Imaging & Diagnostics">
+                    {availImgs.map((img, i) => (
+                      <div key={i}>
+                        <button onClick={() => setImgOpen(p => ({ ...p, [img.type]: !p[img.type] }))} className="w-full" style={{ borderBottom: !imgOpen[img.type] ? `1px solid ${IOS.separator}` : undefined }}>
+                          <IOSRow>
+                            <div className="flex-1 text-left">
+                              <p className="text-[15px]" style={{ color: IOS.label }}>{img.type}</p>
+                              {img.impression && !imgOpen[img.type] && (
+                                <p className="text-[12px] mt-0.5 truncate" style={{ color: IOS.gray }}>{img.impression}</p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[12px]" style={{ color: IOS.blue }}>{imgOpen[img.type] ? 'Less' : 'More'}</span>
+                              <ChevronRight className="w-4 h-4 transition-transform" style={{ color: IOS.gray, transform: imgOpen[img.type] ? 'rotate(90deg)' : undefined }} />
+                            </div>
+                          </IOSRow>
+                        </button>
+                        <AnimatePresence>
+                          {imgOpen[img.type] && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden px-4 py-3 space-y-2 text-sm border-b" style={{ background: '#FAFAFA', borderColor: IOS.separator }}>
+                              {img.findings && <p className="text-[13px] leading-relaxed" style={{ color: IOS.secondLabel }}><span className="font-semibold text-[11px] uppercase tracking-wide" style={{ color: IOS.gray }}>Findings</span><br />{img.findings}</p>}
+                              {img.impression && <p className="text-[13px] leading-relaxed font-medium" style={{ color: IOS.label }}><span className="font-semibold text-[11px] uppercase tracking-wide" style={{ color: IOS.red }}>Impression</span><br />{img.impression}</p>}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    ))}
+                    {pendImgs.map((img, i) => (
+                      <IOSRow key={`pi${i}`} style={{ background: IOS.card }}>
+                        <div className="flex-1">
+                          <p className="text-[15px]" style={{ color: IOS.gray }}>{img.type}</p>
+                          <p className="text-[12px] mt-0.5" style={{ color: IOS.gray }}>Pending · ETA T+{img.availableAt}m</p>
+                        </div>
+                        <span className="text-[13px] font-medium px-2.5 py-1 rounded-full" style={{ background: IOS.orange + '18', color: IOS.orange }}>
+                          {Math.max(0, (img.availableAt ?? 0) - simTime)}m
+                        </span>
+                      </IOSRow>
+                    ))}
+                  </IOSSection>
                 )}
               </div>
             )}
           </div>
-
-          {/* Order bar (panel mode — not fixed) */}
-          <OrderBar {...orderBarProps} variant="panel" />
-        </aside>
-      </div>
-
-      {/* Mobile: fixed order bar */}
-      <div className="lg:hidden">
-        <OrderBar {...orderBarProps} variant="fixed" />
-      </div>
-
-      {/* Assessment / history overlay */}
-      <AnimatePresence>
-        {assessmentOpen && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="fixed inset-0 bg-white z-50 overflow-y-auto">
-            <div className="max-w-xl mx-auto px-4 py-6 pb-24">
-              <button onClick={() => setAssessmentOpen(false)} className="text-sm text-gray-400 hover:text-gray-700 transition-colors mb-8 block">← Back to case</button>
-              <AssessmentTab medicalCase={medicalCase} simTime={simTime} userNotes={userNotes} evaluation={evaluation} submitting={submitting} logs={logs} differential={differential} onDifferentialChange={setDifferential} onNotesChange={setUserNotes} onEndCase={handleEndCase} onNewCase={() => { setAssessmentOpen(false); loadNewCase(); }} />
-              {user && <div className="mt-12 border-t border-gray-100 pt-8"><ArchiveView user={user} /></div>}
-            </div>
-          </motion.div>
         )}
-      </AnimatePresence>
 
-      {/* Floating DiagnosisPad */}
-      {medicalCase && (
+        {/* MEDS */}
+        {tab === 'meds' && (
+          <div className="pt-4 pb-4">
+            {activeMeds.length === 0 ? (
+              <IOSEmptyState icon={<Pill className="w-10 h-10" style={{ color: IOS.gray }} />} title="No Active Medications" sub="Order medications to see them here." />
+            ) : (
+              <IOSSection label={`Active Medications (${activeMeds.length})`}>
+                {activeMeds.map((m, i) => (
+                  <IOSRow key={m.id}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[15px] font-medium" style={{ color: IOS.label }}>{m.name}</p>
+                      <p className="text-[12px] mt-0.5" style={{ color: IOS.gray }}>{m.dose} · {m.route}</p>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-[12px] font-mono" style={{ color: IOS.gray }}>T+{m.timestamp}m</span>
+                      <button onClick={() => handleDiscontinueMedication(m.id, m.name)} className="text-[13px] font-semibold" style={{ color: IOS.red }}>D/C</button>
+                    </div>
+                  </IOSRow>
+                ))}
+              </IOSSection>
+            )}
+            {(mc?.medications || []).filter(m => m.discontinuedAt !== undefined).length > 0 && (
+              <IOSSection label="Discontinued">
+                {(mc?.medications || []).filter(m => m.discontinuedAt !== undefined).map((m, i) => (
+                  <IOSRow key={m.id}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[15px] line-through" style={{ color: IOS.gray }}>{m.name}</p>
+                      <p className="text-[12px] mt-0.5" style={{ color: IOS.gray }}>{m.dose} · T+{m.timestamp}m → T+{m.discontinuedAt}m</p>
+                    </div>
+                  </IOSRow>
+                ))}
+              </IOSSection>
+            )}
+          </div>
+        )}
+
+        {/* CONSULT */}
+        {tab === 'consult' && (
+          <div className="pt-4 pb-4">
+            {isConsulting ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <div className="w-8 h-8 border-2 border-gray-200 rounded-full animate-spin" style={{ borderTopColor: IOS.blue }} />
+                <p className="text-sm" style={{ color: IOS.gray }}>Consulting…</p>
+              </div>
+            ) : consultantAdvice ? (
+              <div className="space-y-0">
+                <IOSSection label="Consultant Advice">
+                  <div className="px-4 py-4">
+                    <p className="text-[15px] leading-relaxed italic" style={{ color: IOS.label }}>"{consultantAdvice.advice}"</p>
+                  </div>
+                </IOSSection>
+                {consultantAdvice.reasoning && (
+                  <IOSSection label="Reasoning">
+                    <div className="px-4 py-4">
+                      <p className="text-[15px] leading-relaxed" style={{ color: IOS.secondLabel }}>{consultantAdvice.reasoning}</p>
+                    </div>
+                  </IOSSection>
+                )}
+                <IOSSection label="Recommended Actions">
+                  {consultantAdvice.recommendedActions.map((action, i) => (
+                    <IOSRow key={i}>
+                      <span className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0" style={{ background: IOS.blue }}>{i + 1}</span>
+                      <p className="flex-1 text-[15px] leading-relaxed" style={{ color: IOS.label }}>{action}</p>
+                    </IOSRow>
+                  ))}
+                </IOSSection>
+                <div className="px-4 pt-3">
+                  <button onClick={() => handleConsult()} disabled={isBusy} className="w-full py-3.5 rounded-2xl text-[17px] font-semibold text-white disabled:opacity-40" style={{ background: IOS.blue }}>
+                    Request New Consult
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <IOSEmptyState icon={<MessageCircle className="w-10 h-10" style={{ color: IOS.gray }} />} title="No Consultation Yet" sub="Request an AI consult to get specialist input.">
+                <button onClick={() => handleConsult()} disabled={isBusy} className="mt-5 px-8 py-3 rounded-xl text-white text-[15px] font-semibold disabled:opacity-40" style={{ background: IOS.blue }}>
+                  Request Consult
+                </button>
+              </IOSEmptyState>
+            )}
+          </div>
+        )}
+
+        {/* ASSESS */}
+        {tab === 'assess' && (
+          <div className="pt-4 pb-8 px-4">
+            <div className="max-w-xl mx-auto">
+              <AssessmentTab
+                medicalCase={mc}
+                simTime={simTime}
+                userNotes={userNotes}
+                evaluation={evaluation}
+                submitting={submitting}
+                logs={logs}
+                differential={differential}
+                onDifferentialChange={setDifferential}
+                onNotesChange={setUserNotes}
+                onEndCase={handleEndCase}
+                onNewCase={() => { setTab('chart'); loadNewCase(); }}
+              />
+              {user && (
+                <div className="mt-10 border-t pt-8" style={{ borderColor: IOS.separator }}>
+                  <ArchiveView user={user} />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── CPOE input ── */}
+      {mc && <CPOEBar {...cpoeProps} />}
+
+      {/* ── Tab bar ── */}
+      <nav className="shrink-0 safe-area-inset-bottom" style={{ background: IOS.tabBar, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderTop: `1px solid ${IOS.separator}` }}>
+        <div className="flex h-[49px]">
+          {([
+            { id: 'chart',   icon: ClipboardList, label: 'Chart',   badge: 0,             badgeCrit: false, dot: false },
+            { id: 'results', icon: FlaskConical,  label: 'Results', badge: resultsBadge, badgeCrit: critCount > 0, dot: false },
+            { id: 'meds',    icon: Pill,          label: 'Meds',    badge: activeMeds.length, badgeCrit: false, dot: false },
+            { id: 'consult', icon: MessageCircle, label: 'Consult', badge: 0,             badgeCrit: false, dot: isConsulting },
+            { id: 'assess',  icon: CheckCircle,   label: 'Assess',  badge: 0,             badgeCrit: false, dot: false },
+          ] as const).map(({ id, icon: Icon, label, badge, badgeCrit, dot }) => {
+            const active = tab === id;
+            const col = active ? IOS.blue : IOS.gray;
+            return (
+              <button key={id} onClick={() => setTab(id as Tab)} className="flex-1 flex flex-col items-center justify-center gap-0.5 relative">
+                <div className="relative">
+                  <Icon className="w-[25px] h-[25px]" style={{ color: col }} strokeWidth={active ? 2 : 1.5} />
+                  {badge > 0 && (
+                    <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-0.5 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ background: badgeCrit ? IOS.red : IOS.blue }}>
+                      {badge > 9 ? '9+' : badge}
+                    </span>
+                  )}
+                  {dot && !badge && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full" style={{ background: IOS.orange }} />}
+                </div>
+                <span className="text-[10px]" style={{ color: col, fontWeight: active ? 600 : 400 }}>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* ── Floating pads ── */}
+      {mc && (
         <AnimatePresence>
           <DiagnosisPad
             isOpen={isDxPadOpen} onToggle={() => setIsDxPadOpen(p => !p)} initialTab={dxPadInitialTab}
@@ -502,8 +720,7 @@ function ClinicalLayoutInner() {
         </AnimatePresence>
       )}
 
-      {/* Stage Commit Gate */}
-      {medicalCase && pendingStage && (
+      {mc && pendingStage && (
         <StageCommitGate
           isOpen={!!pendingStage} fromStage={reasoning.currentStage} toStage={pendingStage}
           problemRepresentation={reasoning.problemRepresentation} onProblemRepresentationChange={reasoning.setProblemRepresentation}
@@ -518,43 +735,43 @@ function ClinicalLayoutInner() {
           onCancel={() => setPendingStage(null)}
         />
       )}
+    </div>
+  );
+}
 
-      {/* AI Consultant slide-over (mobile only — desktop uses right panel) */}
-      <div className="lg:hidden">
-        <AnimatePresence>
-          {isConsultOpen && (<>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsConsultOpen(false)} className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[100]" />
-            <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 28, stiffness: 260 }} className="fixed bottom-0 left-0 right-0 max-h-[80vh] bg-white rounded-t-2xl shadow-2xl z-[101] flex flex-col overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                <div><h3 className="text-sm font-semibold text-gray-900">AI Consultant</h3><p className="text-[10px] text-gray-400">Specialist reasoning</p></div>
-                <button onClick={() => setIsConsultOpen(false)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-4 h-4 text-gray-400" /></button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-5 space-y-5">
-                {isConsulting ? (
-                  <div className="flex flex-col items-center justify-center py-12 gap-3">
-                    <div className="w-6 h-6 border-2 border-gray-200 border-t-gray-900 rounded-full animate-spin" />
-                    <p className="text-xs text-gray-400">Thinking...</p>
-                  </div>
-                ) : consultantAdvice ? (<>
-                  <div className="bg-gray-50 rounded-xl p-4"><p className="text-sm text-gray-900 leading-relaxed italic">"{consultantAdvice.advice}"</p></div>
-                  <div><p className="text-[10px] font-medium text-gray-400 uppercase mb-1">Reasoning</p><p className="text-sm text-gray-700 leading-relaxed">{consultantAdvice.reasoning}</p></div>
-                  <div>
-                    <p className="text-[10px] font-medium text-gray-400 uppercase mb-2">Next steps</p>
-                    <div className="space-y-2">
-                      {consultantAdvice.recommendedActions.map((action, i) => (
-                        <div key={i} className="flex items-start gap-3">
-                          <span className="w-5 h-5 rounded-full bg-gray-900 text-white flex items-center justify-center text-[10px] font-medium shrink-0">{i + 1}</span>
-                          <p className="text-sm text-gray-700 pt-0.5">{action}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>) : <div className="text-center py-12"><p className="text-sm text-gray-400">No consultation yet</p></div>}
-              </div>
-            </motion.div>
-          </>)}
-        </AnimatePresence>
+// ─── iOS layout primitives ─────────────────────────────────────────────────────
+function IOSSection({ label, children, labelColor }: { label: string; children: ReactNode; labelColor?: string }) {
+  return (
+    <div className="px-4 mb-6">
+      <p className="text-[13px] font-medium px-1 mb-2 uppercase tracking-wide" style={{ color: labelColor ?? IOS.gray }}>
+        {label}
+      </p>
+      <div className="rounded-2xl overflow-hidden" style={{ background: IOS.card }}>
+        {children}
       </div>
+    </div>
+  );
+}
+
+function IOSRow({ children, style, onClick }: { children: ReactNode; style?: React.CSSProperties; onClick?: () => void }) {
+  return (
+    <div
+      onClick={onClick}
+      className={cn('flex items-center gap-3 px-4 py-3', onClick && 'cursor-pointer active:bg-gray-50')}
+      style={{ borderBottom: `1px solid ${IOS.separator}`, ...style }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function IOSEmptyState({ icon, title, sub, children }: { icon: ReactNode; title: string; sub: string; children?: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-24 px-8 text-center">
+      <div className="mb-4 opacity-40">{icon}</div>
+      <p className="text-[17px] font-semibold mb-1" style={{ color: IOS.label }}>{title}</p>
+      <p className="text-[15px] leading-relaxed" style={{ color: IOS.gray }}>{sub}</p>
+      {children}
     </div>
   );
 }
