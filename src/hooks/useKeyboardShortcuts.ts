@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-type TabId = 'triage' | 'hpi' | 'exam' | 'labs' | 'imaging' | 'pharmacy' | 'treatment' | 'comms' | 'archive' | 'notes' | 'tools' | 'assess' | 'dxpause';
+type TabId = 'chart' | 'orders' | 'labs' | 'assess' | 'comms' | 'dxpause' | 'archive';
 
 interface KeyboardShortcutsOptions {
   onTabChange: (tab: TabId) => void;
@@ -14,15 +14,10 @@ interface KeyboardShortcutsOptions {
 }
 
 const TAB_MAP: Record<string, TabId> = {
-  '1': 'hpi',
-  '2': 'exam',
+  '1': 'chart',
+  '2': 'orders',
   '3': 'labs',
-  '4': 'imaging',
-  '5': 'pharmacy',
-  '6': 'treatment',
-  '7': 'comms',
-  '8': 'notes',
-  '9': 'assess',
+  '4': 'assess',
 };
 
 export function useKeyboardShortcuts({
