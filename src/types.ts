@@ -88,6 +88,7 @@ export interface MedicationRecord {
   timestamp: number;
   isIVFluid?: boolean;
   volumeML?: number;
+  discontinuedAt?: number; // sim-minutes when discontinued; present = inactive
 }
 
 export interface MedicalCase {

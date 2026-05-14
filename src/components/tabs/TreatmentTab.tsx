@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { cn } from '../../lib/utils';
 import type { MedicalCase } from '../../types';
+import { ActiveOrdersPanel } from '../ActiveOrdersPanel';
 
 interface VitalsPoint { time: string; hr: number; sbp: number; rr: number; spo2: number; }
 
@@ -19,6 +20,7 @@ interface TreatmentTabProps {
   onToggleTransfer: () => void;
   onOrderTest: (type: 'lab' | 'imaging', name: string) => Promise<void>;
   onAdvanceTime: (minutes: number) => Promise<void>;
+  onDiscontinueMedication: (id: string, name: string) => Promise<void>;
 }
 
 export function TreatmentTab({
@@ -35,6 +37,7 @@ export function TreatmentTab({
   onToggleTransfer,
   onOrderTest,
   onAdvanceTime,
+  onDiscontinueMedication,
 }: TreatmentTabProps) {
   const trend = medicalCase.physiologicalTrend;
   const penaltyLevel = simTime >= 90 ? 'high' : simTime >= 60 ? 'moderate' : simTime >= 45 ? 'low' : null;
@@ -140,31 +143,28 @@ export function TreatmentTab({
         </motion.div>
       )}
 
+      {/* Active orders panel */}
+      <ActiveOrdersPanel
+        medicalCase={medicalCase}
+        simTime={simTime}
+        intervening={intervening}
+        onDiscontinue={onDiscontinueMedication}
+      />
+
       {/* Action log */}
       <div className="flex-1 min-h-0">
         {(medicalCase.clinicalActions || []).length > 0 && (
-          <div className="max-h-64 overflow-y-auto space-y-2">
+          <div className="max-h-48 overflow-y-auto space-y-1">
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Activity log</p>
             {[...medicalCase.clinicalActions].reverse().map((action, i) => (
               <div key={i} className="flex gap-3 text-xs text-gray-400">
-                <span className="font-mono shrink-0">T+{action.timestamp}m</span>
-                <span className="text-gray-600">{action.description}</span>
+                <span className="font-mono shrink-0 text-gray-300">T+{action.timestamp}m</span>
+                <span className="text-gray-500">{action.description}</span>
               </div>
             ))}
           </div>
         )}
       </div>
-
-      {/* Medications */}
-      {medicalCase.medications && medicalCase.medications.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-xs font-medium text-gray-400">Medications</p>
-          {medicalCase.medications.map((med, i) => (
-            <p key={i} className="text-xs text-gray-600">
-              {med.name} {med.dose} {med.route}
-            </p>
-          ))}
-        </div>
-      )}
     </motion.div>
   );
 }

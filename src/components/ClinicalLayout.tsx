@@ -157,6 +157,7 @@ function ClinicalLayoutInner() {
     handleConsult,
     handleOrderTest,
     handleOrderMedication,
+    handleDiscontinueMedication,
     handleAdvanceTime,
     handleEndCase,
     handleStageNavigate,
@@ -467,7 +468,7 @@ function ClinicalLayoutInner() {
             )}
 
             {activeTab === 'treatment' && medicalCase && (
-              <TreatmentTab key="treatment" medicalCase={medicalCase} vitalsHistory={vitalsHistory} interventionInput={interventionInput} intervening={intervening} transferExpanded={transferExpanded} simTime={simTime} onInterventionChange={setInterventionInput} onExecuteOrder={() => handlePerformIntervention()} onWait={(mins) => handlePerformIntervention(mins, 'Observe patient')} onTransfer={(dept) => handlePerformIntervention(0, `Transfer to ${dept}`)} onToggleTransfer={() => setTransferExpanded(p => !p)} onOrderTest={handleOrderTest} onAdvanceTime={handleAdvanceTime} />
+              <TreatmentTab key="treatment" medicalCase={medicalCase} vitalsHistory={vitalsHistory} interventionInput={interventionInput} intervening={intervening} transferExpanded={transferExpanded} simTime={simTime} onInterventionChange={setInterventionInput} onExecuteOrder={() => handlePerformIntervention()} onWait={(mins) => handlePerformIntervention(mins, 'Observe patient')} onTransfer={(dept) => handlePerformIntervention(0, `Transfer to ${dept}`)} onToggleTransfer={() => setTransferExpanded(p => !p)} onOrderTest={handleOrderTest} onAdvanceTime={handleAdvanceTime} onDiscontinueMedication={handleDiscontinueMedication} />
             )}
 
             {activeTab === 'assess' && medicalCase && (
