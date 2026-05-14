@@ -110,6 +110,16 @@ export function useInterventionHandlers({
     }
   }, [medicalCase, intervening, reasoning, addToast, setMedicalCase, setLogs]);
 
+  const handleOrderMedication = useCallback(async (
+    name: string,
+    route?: string,
+    frequency?: string,
+  ) => {
+    if (!medicalCase || intervening) return;
+    const description = [name, route && `via ${route}`, frequency].filter(Boolean).join(' ');
+    return handlePerformIntervention(2, `Administer ${description}`);
+  }, [medicalCase, intervening, handlePerformIntervention]);
+
   const handleAdvanceTime = useCallback(async (minutes: number) => {
     if (!medicalCase || intervening) return;
     pushUndo(`Advance +${minutes}m`, medicalCase);
@@ -133,6 +143,7 @@ export function useInterventionHandlers({
     setInterventionInput,
     handlePerformIntervention,
     handleOrderTest,
+    handleOrderMedication,
     handleAdvanceTime,
   };
 }

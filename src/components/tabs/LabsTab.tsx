@@ -28,16 +28,20 @@ export function LabsTab({
   const [orderInput, setOrderInput] = useState('');
   const [expandedImaging, setExpandedImaging] = useState<string | null>(null);
 
-  const availableLabs = medicalCase.availableTests?.labs ?? [];
-  const availableImaging = medicalCase.availableTests?.imaging ?? [];
+  // AvailableTest objects → name strings for display/matching
+  const availableLabs = (medicalCase.availableTests?.labs ?? []).map(
+    (t: any) => (typeof t === 'string' ? t : t.name) as string
+  );
+  const availableImaging = (medicalCase.availableTests?.imaging ?? []).map(
+    (t: any) => (typeof t === 'string' ? t : t.name) as string
+  );
 
   const handleOrder = () => {
     const name = orderInput.trim();
     if (!name) return;
 
-    // Check if it matches an imaging type
     const matchesImaging = availableImaging.find(
-      i => i.toLowerCase() === name.toLowerCase()
+      (i: string) => i.toLowerCase() === name.toLowerCase()
     );
     if (matchesImaging && onOrderImaging) {
       onOrderImaging(matchesImaging);

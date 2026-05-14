@@ -86,6 +86,7 @@ export interface CaseContextValue {
   handleStaffCall: () => Promise<void>;
   handleConsult: () => Promise<void>;
   handleOrderTest: (type: 'lab' | 'imaging', name: string) => Promise<void>;
+  handleOrderMedication: (name: string, route?: string, frequency?: string) => Promise<void>;
   handleAdvanceTime: (minutes: number) => Promise<void>;
   handleEndCase: () => Promise<void>;
   handleStageNavigate: (target: WorkflowStage) => void;

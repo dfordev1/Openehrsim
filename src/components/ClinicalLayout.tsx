@@ -31,6 +31,7 @@ import { ArchiveView } from './ArchiveView';
 import { HpiTab } from './tabs/HpiTab';
 import { ExamTab } from './tabs/ExamTab';
 import { LabsTab } from './tabs/LabsTab';
+import { OrderSearchModal } from './OrderSearchModal';
 import { PharmacyTab } from './tabs/PharmacyTab';
 import { TreatmentTab } from './tabs/TreatmentTab';
 import { CommsTab } from './tabs/CommsTab';
@@ -106,6 +107,7 @@ function ClinicalLayoutInner() {
   const [transferExpanded, setTransferExpanded] = React.useState(false);
   const [selectedLab, setSelectedLab] = React.useState<import('../types').LabResult | null>(null);
   const [revealedStudies, setRevealedStudies] = React.useState<string[]>([]);
+  const [orderModalOpen, setOrderModalOpen] = React.useState(false);
 
   const { user, isAuthOpen, setIsAuthOpen, handleLogout, isSupabaseConfigured, isAuthLoading, isRecovery, clearRecovery } = useAuth();
   const {
@@ -154,6 +156,7 @@ function ClinicalLayoutInner() {
     handleStaffCall,
     handleConsult,
     handleOrderTest,
+    handleOrderMedication,
     handleAdvanceTime,
     handleEndCase,
     handleStageNavigate,
@@ -255,6 +258,25 @@ function ClinicalLayoutInner() {
       <VitalsExpanded isOpen={vitalsExpanded} onClose={() => setVitalsExpanded(false)} vitalsHistory={vitalsHistory} />
       <CaseLibrary isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} onSelectCase={(d, c, e) => { setIsLibraryOpen(false); loadNewCase(d, c, e); }} />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} isRecovery={isRecovery} onRecoveryHandled={clearRecovery} />
+
+      {/* CCS-style unified order search modal */}
+      {orderModalOpen && medicalCase && (
+        <OrderSearchModal
+          caseId={medicalCase.id}
+          onClose={() => setOrderModalOpen(false)}
+          onConfirm={async (items) => {
+            for (const item of items) {
+              if (item.category === 'lab') {
+                await handleOrderTest('lab', item.name);
+              } else if (item.category === 'imaging') {
+                await handleOrderTest('imaging', item.name);
+              } else if (item.category === 'medication') {
+                await handleOrderMedication(item.name, item.route, item.frequency);
+              }
+            }
+          }}
+        />
+      )}
       <CommandPalette
         isOpen={isCommandOpen}
         onClose={() => setIsCommandOpen(false)}
@@ -410,11 +432,30 @@ function ClinicalLayoutInner() {
             )}
 
             {activeTab === 'labs' && medicalCase && (
-              <LabsTab key="labs" medicalCase={medicalCase} simTime={simTime} selectedLab={selectedLab} onSelectLab={setSelectedLab} onOrderLab={(name) => handleOrderTest('lab', name)} revealedStudies={revealedStudies} onRevealStudy={(type) => setRevealedStudies(prev => [...prev, type])} onOrderImaging={(name) => handleOrderTest('imaging', name)} />
+              <>
+                {/* CCS-style Order button */}
+                <button
+                  onClick={() => setOrderModalOpen(true)}
+                  disabled={intervening}
+                  className="w-full mb-4 py-2.5 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-40 transition-all"
+                >
+                  + Write Orders
+                </button>
+                <LabsTab key="labs" medicalCase={medicalCase} simTime={simTime} selectedLab={selectedLab} onSelectLab={setSelectedLab} onOrderLab={(name) => handleOrderTest('lab', name)} revealedStudies={revealedStudies} onRevealStudy={(type) => setRevealedStudies(prev => [...prev, type])} onOrderImaging={(name) => handleOrderTest('imaging', name)} />
+              </>
             )}
 
             {activeTab === 'pharmacy' && (
-              <PharmacyTab key="pharmacy" customMedInput={customMedInput} onCustomMedChange={setCustomMedInput} onAdminister={(med) => handlePerformIntervention(2, `Administer ${med}`)} intervening={intervening} medicalCase={medicalCase ?? undefined} />
+              <>
+                <button
+                  onClick={() => setOrderModalOpen(true)}
+                  disabled={intervening}
+                  className="w-full mb-4 py-2.5 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-40 transition-all"
+                >
+                  + Write Orders
+                </button>
+                <PharmacyTab key="pharmacy" customMedInput={customMedInput} onCustomMedChange={setCustomMedInput} onAdminister={(med) => handlePerformIntervention(2, `Administer ${med}`)} intervening={intervening} medicalCase={medicalCase ?? undefined} />
+              </>
             )}
 
             {activeTab === 'comms' && medicalCase && (

@@ -47,9 +47,16 @@ export const MEDICAL_CASE_SCHEMA = `
       orderedAt?: number;
       availableAt?: number;
     }[];
-    availableTests: {                  // Catalog the user can order from
-      labs: string[];
-      imaging: string[];
+    availableMedications: {
+      name: string;
+      route: string;
+      frequency: string;
+      category: string;
+    }[];
+    availableTests: {
+      // Each entry carries its OWN turnaround times in sim-minutes.
+      labs: { name: string; stat: number; routine: number }[];
+      imaging: { name: string; stat: number; routine: number }[];
     };
     medications: {
       id: string;

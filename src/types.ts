@@ -35,9 +35,31 @@ export interface ImagingResult {
   availableAt?: number;
 }
 
+export interface AvailableTest {
+  name: string;
+  stat: number;
+  routine: number;
+}
+
 export interface AvailableTests {
-  labs: string[];
-  imaging: string[];
+  labs: AvailableTest[];
+  imaging: AvailableTest[];
+}
+
+export interface AvailableMedication {
+  name: string;      // includes dose, e.g. "Metoprolol tartrate 25mg"
+  route: string;     // "Oral" | "Intravenous" | "Subcutaneous" etc.
+  frequency: string; // "Once" | "Daily" | "BID" | "Continuous" | "PRN" etc.
+  category: string;  // "Antihypertensive" | "Antibiotic" etc.
+}
+
+export interface OrderSearchResult {
+  name: string;
+  category: 'lab' | 'imaging' | 'medication';
+  route?: string;
+  frequency?: string;
+  stat?: number;
+  routine?: number;
 }
 
 export interface ClinicalAction {
@@ -81,7 +103,8 @@ export interface MedicalCase {
   physicalExam: PhysicalExam;
   labs: LabResult[];
   imaging: ImagingResult[];
-  availableTests?: AvailableTests;  // CCS: catalog of orderable tests
+  availableTests?: AvailableTests;
+  availableMedications?: AvailableMedication[];
   medications: MedicationRecord[];
   activeAlarms: string[];
   currentCondition: string;
