@@ -120,6 +120,43 @@ export function useInterventionHandlers({
     return handlePerformIntervention(2, `Administer ${description}`);
   }, [medicalCase, intervening, handlePerformIntervention]);
 
+  const handleDiscontinueMedication = useCallback(async (medicationId: string, medicationName: string) => {
+    if (!medicalCase || intervening) return;
+    pushUndo(`D/C: ${medicationName}`, medicalCase);
+    setIntervening(true);
+    setLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), text: `D/C: ${medicationName}` }]);
+    try {
+      // Optimistically mark discontinued in local state
+      setMedicalCase((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          medications: prev.medications.map(m =>
+            m.id === medicationId ? { ...m, discontinuedAt: prev.simulationTime } : m
+          ),
+          clinicalActions: [
+            ...(prev.clinicalActions ?? []),
+            {
+              id: `dc-${Date.now()}`,
+              timestamp: prev.simulationTime,
+              type: 'medication' as const,
+              description: `Discontinued: ${medicationName}`,
+            },
+          ],
+        };
+      });
+      addToast(`Discontinued: ${medicationName}`, 'info');
+      // Inform AI of the discontinuation (no wait time)
+      const updated = await performIntervention(`Discontinue ${medicationName}`, medicalCase, 0);
+      setMedicalCase((prev) => prev ? mergeUpdatedCase(prev, updated) : updated);
+      notifyOutcome(updated.patientOutcome, setPatientOutcome, addToast);
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Failed to discontinue', 'error');
+    } finally {
+      setIntervening(false);
+    }
+  }, [medicalCase, intervening, pushUndo, addToast, setPatientOutcome, setMedicalCase, setLogs]);
+
   const handleAdvanceTime = useCallback(async (minutes: number) => {
     if (!medicalCase || intervening) return;
     pushUndo(`Advance +${minutes}m`, medicalCase);
@@ -144,6 +181,7 @@ export function useInterventionHandlers({
     handlePerformIntervention,
     handleOrderTest,
     handleOrderMedication,
+    handleDiscontinueMedication,
     handleAdvanceTime,
   };
 }
