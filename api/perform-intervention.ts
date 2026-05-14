@@ -9,6 +9,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import OpenAI from "openai";
 import { MEDICAL_CASE_SCHEMA } from "../src/lib/schema.js";
 import { getCaseServerSide, updateCaseServerSide } from "./_supabase.js";
+import { repairJson } from "./_repairJson.js";
 
 function validateRequest(body: any) {
   if (!body || typeof body !== "object") throw new Error("Request body must be a JSON object.");
@@ -55,6 +56,7 @@ Explanation: ${fullCase.explanation || ""}`
     const openai = new OpenAI({ apiKey: process.env.DEEPSEEK_API_KEY, baseURL: "https://api.deepseek.com" });
 
     const aiRes = await openai.chat.completions.create({
+      max_tokens: 8192,
       model: "deepseek-chat",
       messages: [
         {
@@ -95,7 +97,7 @@ Time advances by ${waitTime} min (${medicalCase.simulationTime} → ${newSimTime
     const content = aiRes.choices[0].message.content;
     if (!content) throw new Error("Empty response from AI");
 
-    const updated = JSON.parse(content);
+    const updated = JSON.parse(repairJson(content));
     if (!updated.vitals) throw new Error("AI returned incomplete case.");
 
     // Deterministic overrides — never trust the AI to do arithmetic correctly

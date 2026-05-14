@@ -8,6 +8,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import OpenAI from "openai";
 import { getCaseServerSide, deleteCaseServerSide, getServerSupabase } from "./_supabase.js";
+import { repairJson } from "./_repairJson.js";
 
 interface DifferentialInput {
   diagnosis: string;
@@ -136,6 +137,7 @@ Score reasoning dimensions LOW (≤40) — absence of reasoning is itself a defi
 
     const aiRes = await openai.chat.completions.create({
       model: "deepseek-chat",
+      max_tokens: 2048,
       messages: [
         {
           role: "system",
@@ -250,7 +252,7 @@ USER NOTES: ${userNotes || "none"}${reasoningContext}`,
     const content = aiRes.choices[0].message.content;
     if (!content) throw new Error("Empty response from AI evaluator");
 
-    const evaluation = JSON.parse(content);
+    const evaluation = JSON.parse(repairJson(content));
 
     // ── Persist result to simulation_results table ────────────────────────────
     const db = getServerSupabase();

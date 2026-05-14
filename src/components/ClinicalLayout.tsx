@@ -1,183 +1,275 @@
-/**
- * ClinicalLayout — static HTML aesthetic. No Tailwind. No animations.
- * Plain text, inline styles for layout only, browser-native controls.
- */
-
 import * as Sentry from '@sentry/react';
-import React, {
-  Component,
-  useEffect,
-  useRef,
-  useState,
-  type ErrorInfo,
-  type ReactNode,
-} from 'react';
+import React, { Component, useState, useRef, useCallback, type ErrorInfo, type ReactNode } from 'react';
+import { X, RefreshCw } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useCase } from '../contexts/CaseContext';
 import { useNavigation } from '../contexts/NavigationContext';
+import { searchOrders } from '../services/geminiService';
+
 import { AuthModal } from './Auth';
 import { CaseLibrary } from './CaseLibrary';
 import { CommandPalette } from './CommandPalette';
-import { AssessmentTab } from './tabs/AssessmentTab';
-import { ArchiveView } from './ArchiveView';
+import VitalsExpanded from './VitalsExpanded';
 import { DiagnosisPad } from './DiagnosisPad';
 import { StageCommitGate } from './StageCommitGate';
-import type { LabResult, ImagingResult, ClinicalAction, MedicationRecord, MedicalCase } from '../types';
+import { TimeAdvanceModal } from './TimeAdvanceModal';
+import { AssessmentTab } from './tabs/AssessmentTab';
+import { ArchiveView } from './ArchiveView';
+import { ClinicalTimeline } from './ClinicalTimeline';
+
+import type { OrderSearchResult } from '../types';
 
 // ── Error boundary ─────────────────────────────────────────────────────────────
-interface EBProps { children: ReactNode }
-interface EBState { hasError: boolean }
-
-class ErrorBoundary extends Component<EBProps, EBState> {
-  constructor(props: EBProps) { super(props); this.state = { hasError: false }; }
-  static getDerivedStateFromError(): EBState { return { hasError: true }; }
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('UI Crash:', error, info);
     Sentry.captureException(error, { extra: { componentStack: info.componentStack } });
   }
   render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ padding: 40, maxWidth: 500, margin: '0 auto' }}>
-          <p><strong>Something went wrong</strong></p>
-          <p>The simulator encountered an error.</p>
-          <button onClick={() => window.location.reload()}>Restart</button>
+    if (this.state.hasError) return (
+      <div className="min-h-screen bg-white flex items-center justify-center p-8">
+        <div className="text-center max-w-sm">
+          <p className="text-lg font-medium text-gray-900 mb-2">Something went wrong</p>
+          <p className="text-sm text-gray-500 mb-6">The simulator encountered an error.</p>
+          <button onClick={() => window.location.reload()} className="px-6 py-2.5 bg-black text-white rounded-full text-sm font-medium">Restart</button>
         </div>
-      );
-    }
+      </div>
+    );
     return this.props.children;
   }
 }
 
 export { ErrorBoundary };
+export function ClinicalLayout() { return <ErrorBoundary><ClinicalLayoutInner /></ErrorBoundary>; }
 
-// ── Main export ────────────────────────────────────────────────────────────────
-export function ClinicalLayout() {
+// ── Order bar ──────────────────────────────────────────────────────────────────
+const CATEGORY_COLOR: Record<string, string> = {
+  lab: 'bg-blue-50 text-blue-600', imaging: 'bg-purple-50 text-purple-600',
+  medication: 'bg-green-50 text-green-600', consult: 'bg-amber-50 text-amber-700',
+  procedure: 'bg-gray-100 text-gray-600',
+};
+
+function OrderBar({
+  caseId, simTime, busy, variant = 'fixed',
+  onExecute, onOpenTimeAdvance, onTransfer,
+  onOrderTest, onOrderMedication, onOpenAssessment, onConsult,
+}: {
+  caseId: string | undefined;
+  simTime: number;
+  busy: boolean;
+  variant?: 'fixed' | 'panel';
+  onExecute: (text: string) => Promise<void>;
+  onOpenTimeAdvance: () => void;
+  onTransfer: (dept: string) => void;
+  onOrderTest: (type: 'lab' | 'imaging', name: string) => Promise<void>;
+  onOrderMedication: (name: string, route?: string, freq?: string) => Promise<void>;
+  onOpenAssessment: () => void;
+  onConsult: () => void;
+}) {
+  const [value, setValue] = useState('');
+  const [suggestions, setSuggestions] = useState<OrderSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [placing, setPlacing] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const search = useCallback((q: string) => {
+    clearTimeout(debounceRef.current);
+    if (!q.trim() || !caseId) { setSuggestions([]); return; }
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try { setSuggestions((await searchOrders(caseId, q)).results.slice(0, 6)); }
+      catch { setSuggestions([]); }
+      finally { setSearching(false); }
+    }, 280);
+  }, [caseId]);
+
+  const clear = () => { setValue(''); setSuggestions([]); };
+
+  const execute = async () => {
+    const text = value.trim();
+    if (!text || busy || placing) return;
+    clear();
+    await onExecute(text);
+  };
+
+  const place = async (r: OrderSearchResult) => {
+    if (busy || placing) return;
+    clear();
+    setPlacing(true);
+    try {
+      if (r.category === 'lab') await onOrderTest('lab', r.name);
+      else if (r.category === 'imaging') await onOrderTest('imaging', r.name);
+      else if (r.category === 'medication') await onOrderMedication(r.name, r.route, r.frequency);
+      else await onExecute(`${r.category === 'consult' ? 'Consult' : 'Perform'}: ${r.name}`);
+    } finally { setPlacing(false); }
+  };
+
+  const isBusy = busy || placing;
+  const penaltyLevel = simTime >= 90 ? 'high' : simTime >= 60 ? 'moderate' : simTime >= 45 ? 'low' : null;
+  const isFixed = variant === 'fixed';
+
   return (
-    <ErrorBoundary>
-      <ClinicalShell />
-    </ErrorBoundary>
+    <div className={cn('bg-white', isFixed && 'fixed bottom-0 left-0 right-0 z-40')}>
+      {/* Suggestions */}
+      <AnimatePresence>
+        {suggestions.length > 0 && (
+          <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
+            className="border-t border-gray-100 max-h-52 overflow-y-auto bg-white">
+            {suggestions.map(r => (
+              <button key={r.name} onClick={() => place(r)} disabled={isBusy}
+                className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 border-b border-gray-50 last:border-0 transition-colors">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-800">{r.name}</p>
+                  {(r.route || r.frequency) && <p className="text-[10px] text-gray-400">{[r.route, r.frequency].filter(Boolean).join(' · ')}</p>}
+                </div>
+                <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0', CATEGORY_COLOR[r.category] ?? 'bg-gray-100 text-gray-500')}>
+                  {r.category}
+                </span>
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Transfer picker */}
+      <AnimatePresence>
+        {transferOpen && (
+          <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
+            className="flex gap-5 px-4 py-2.5 border-t border-gray-100">
+            {['ICU', 'OR', 'Cath Lab', 'Ward', 'Radiology'].map(d => (
+              <button key={d} onClick={() => { onTransfer(d); setTransferOpen(false); }} disabled={isBusy}
+                className="text-xs text-gray-500 hover:text-gray-900 transition-colors disabled:opacity-30">{d}</button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Time pressure */}
+      {penaltyLevel && (
+        <p className={cn('px-4 py-1 text-[10px] border-t border-gray-50',
+          penaltyLevel === 'low' ? 'text-amber-500' : penaltyLevel === 'moderate' ? 'text-orange-500' : 'text-red-500 font-medium')}>
+          {penaltyLevel === 'low' && `⏱ T+${simTime}m — efficiency score beginning to drop.`}
+          {penaltyLevel === 'moderate' && `⏱ T+${simTime}m — significant time penalty accumulating.`}
+          {penaltyLevel === 'high' && `⏱ T+${simTime}m — major efficiency penalty.`}
+        </p>
+      )}
+
+      {/* Input */}
+      <div className="border-t border-gray-100 px-4 pt-2.5 pb-3">
+        <div className="flex items-center gap-2">
+          <input
+            ref={inputRef}
+            type="text"
+            value={value}
+            onChange={e => { setValue(e.target.value); search(e.target.value); }}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); execute(); }
+              if (e.key === 'Escape') clear();
+            }}
+            placeholder={isBusy ? 'Processing…' : searching ? 'Searching…' : 'Order, medication, or intervention…'}
+            disabled={isBusy || !caseId}
+            className="flex-1 text-sm py-1 focus:outline-none bg-transparent placeholder-gray-300 disabled:opacity-40"
+            autoComplete="off"
+          />
+          {value.trim() && !isBusy && (
+            <button onClick={execute} className="shrink-0 px-3 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-full">
+              Execute
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-4 pt-1">
+          <button onClick={onOpenTimeAdvance} disabled={isBusy || !caseId} className="text-xs text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-30">Advance time</button>
+          <button onClick={() => setTransferOpen(p => !p)} disabled={isBusy || !caseId} className={cn('text-xs transition-colors disabled:opacity-30', transferOpen ? 'text-gray-900' : 'text-gray-400 hover:text-gray-700')}>Transfer</button>
+          <button onClick={onConsult} disabled={isBusy || !caseId} className="text-xs text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-30">Consult AI</button>
+          <button onClick={onOpenAssessment} disabled={!caseId} className="ml-auto text-xs text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-30">End case →</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
-// ── Stream types ───────────────────────────────────────────────────────────────
-type StreamItem =
-  | { kind: 'divider'; time: number; id: string }
-  | { kind: 'action'; id: string; time: number; text: string; impact?: string }
-  | { kind: 'lab'; id: string; lab: LabResult }
-  | { kind: 'imaging'; id: string; img: ImagingResult }
-  | { kind: 'pending'; id: string; name: string; availableAt: number };
-
-function buildStream(mc: MedicalCase, simTime: number): StreamItem[] {
-  const items: StreamItem[] = [];
-  const timestamps = new Set<number>();
-
-  const actions = (mc.clinicalActions || []).filter(
-    a => a.type !== 'time-advance'
-  );
-  for (const a of actions) timestamps.add(a.timestamp);
-  for (const l of mc.labs || []) if (l.availableAt !== undefined && l.availableAt <= simTime) timestamps.add(l.availableAt);
-  for (const i of mc.imaging || []) if (i.availableAt !== undefined && i.availableAt <= simTime) timestamps.add(i.availableAt);
-
-  const sorted = Array.from(timestamps).sort((a, b) => a - b);
-
-  for (const t of sorted) {
-    items.push({ kind: 'divider', time: t, id: `div-${t}` });
-
-    for (const a of actions.filter(x => x.timestamp === t)) {
-      items.push({
-        kind: 'action',
-        id: a.id,
-        time: t,
-        text: a.description,
-        impact: a.impact,
-      });
-    }
-    for (const l of (mc.labs || []).filter(x => x.availableAt === t && x.availableAt <= simTime)) {
-      items.push({ kind: 'lab', id: `lab-${l.name}-${t}`, lab: l });
-    }
-    for (const img of (mc.imaging || []).filter(x => x.availableAt === t && x.availableAt <= simTime)) {
-      items.push({ kind: 'imaging', id: `img-${img.type}-${t}`, img });
-    }
-  }
-
-  // Pending tests
-  for (const l of (mc.labs || []).filter(x => x.availableAt !== undefined && x.availableAt > simTime)) {
-    items.push({ kind: 'pending', id: `pend-lab-${l.name}`, name: l.name, availableAt: l.availableAt! });
-  }
-  for (const img of (mc.imaging || []).filter(x => x.availableAt !== undefined && x.availableAt > simTime)) {
-    items.push({ kind: 'pending', id: `pend-img-${img.type}`, name: img.type, availableAt: img.availableAt! });
-  }
-
-  return items;
-}
-
-// ── Shell ──────────────────────────────────────────────────────────────────────
-function ClinicalShell() {
-  const {
-    user, isAuthOpen, setIsAuthOpen, handleLogout,
-    isSupabaseConfigured, isAuthLoading, isRecovery, clearRecovery,
-  } = useAuth();
+// ── Main inner component ───────────────────────────────────────────────────────
+function ClinicalLayoutInner() {
+  const [vitalsExpanded, setVitalsExpanded]   = useState(false);
+  const [gcsState, setGcsState]               = useState({ eyes: 4, verbal: 5, motor: 6 });
+  const [timeAdvanceOpen, setTimeAdvanceOpen] = useState(false);
+  const [assessmentOpen, setAssessmentOpen]   = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
   const {
-    medicalCase, loading, error, loadingStep, patientOutcome,
+    medicalCase, loading, error, loadingStep, patientOutcome, vitalsHistory,
     consultantAdvice, isConsulting, isConsultOpen, setIsConsultOpen,
-    intervening, userNotes, setUserNotes, evaluation, submitting,
-    differential, setDifferential, calling, logs, reasoning,
+    intervening, calling, userNotes, setUserNotes, evaluation, submitting,
+    differential, setDifferential, logs, reasoning,
     isDxPadOpen, setIsDxPadOpen, dxPadInitialTab,
     pendingStage, setPendingStage,
     loadNewCase, handlePerformIntervention, handleConsult,
     handleOrderTest, handleOrderMedication, handleDiscontinueMedication,
-    handleAdvanceTime, handleEndCase, handleStageNavigate, setMedicalCase, simTime,
+    handleAdvanceTime, handleEndCase, setMedicalCase, simTime,
   } = useCase();
-
   const { isLibraryOpen, setIsLibraryOpen, isCommandOpen, setIsCommandOpen } = useNavigation();
 
-  const [input, setInput] = useState('');
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [examOpen, setExamOpen] = useState<Record<string, boolean>>({});
-  const [imagingOpen, setImagingOpen] = useState<Record<string, boolean>>({});
-  const [assessmentOpen, setAssessmentOpen] = useState(false);
-  const [advanceAmount, setAdvanceAmount] = useState(5);
-  const [advanceOpen, setAdvanceOpen] = useState(false);
-  const feedEnd = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    feedEnd.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [medicalCase?.clinicalActions?.length, medicalCase?.labs?.length]);
-
-  // ── Auth gate ──────────────────────────────────────────────────────────────
-  if (isSupabaseConfigured && !isAuthLoading && !user) {
-    return (
-      <div style={{ maxWidth: 480, margin: '80px auto', padding: '0 20px', fontFamily: 'Georgia, serif' }}>
-        <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} isRecovery={isRecovery} onRecoveryHandled={clearRecovery} />
-        <h1 style={{ fontSize: 22, marginBottom: 8 }}>OpenEHR Sim</h1>
-        <p style={{ color: '#555', marginBottom: 24, lineHeight: 1.6 }}>
-          USMLE Step 3 CCS simulator. Sign in to access cases and track your progress.
-        </p>
-        <button onClick={() => setIsAuthOpen(true)} style={{ padding: '8px 20px' }}>
-          Sign in
-        </button>
-      </div>
-    );
+  // Abnormal vitals alert strip
+  const abnormalVitals: { label: string; value: string; critical: boolean }[] = [];
+  if (medicalCase?.vitals) {
+    const v = medicalCase.vitals;
+    if (v.heartRate > 120 || v.heartRate < 50) abnormalVitals.push({ label: 'HR', value: `${v.heartRate}`, critical: v.heartRate > 150 || v.heartRate < 40 });
+    if (v.oxygenSaturation < 94) abnormalVitals.push({ label: 'SpO2', value: `${v.oxygenSaturation}%`, critical: v.oxygenSaturation < 88 });
+    const sbp = parseInt(medicalCase.vitals.bloodPressure.split('/')[0]) || 120;
+    if (sbp < 90 || sbp > 160) abnormalVitals.push({ label: 'BP', value: medicalCase.vitals.bloodPressure, critical: sbp < 80 || sbp > 180 });
+    if (v.respiratoryRate > 24 || v.respiratoryRate < 10) abnormalVitals.push({ label: 'RR', value: `${v.respiratoryRate}`, critical: v.respiratoryRate > 30 || v.respiratoryRate < 8 });
+    if (v.temperature > 38.5 || v.temperature < 36) abnormalVitals.push({ label: 'T', value: `${v.temperature}°`, critical: v.temperature > 40 || v.temperature < 34 });
   }
+  const hasCritical = abnormalVitals.some(v => v.critical);
 
-  // ── Loading / error ────────────────────────────────────────────────────────
-  if (isAuthLoading || loading || error) {
-    return (
-      <div style={{ maxWidth: 480, margin: '80px auto', padding: '0 20px', fontFamily: 'Georgia, serif' }}>
-        {error ? (
-          <>
-            <p><strong>Connection Failed</strong></p>
-            <p style={{ color: '#555' }}>{error}</p>
-            <button onClick={() => loadNewCase()} style={{ marginTop: 12 }}>Try again</button>
-          </>
-        ) : (
-          <p style={{ color: '#555' }}>{loadingStep || 'Loading…'}</p>
-        )}
-      </div>
-    );
-  }
+  const orderBarProps = {
+    caseId: medicalCase?.id,
+    simTime,
+    busy: intervening || calling,
+    onExecute: (text: string) => handlePerformIntervention(5, text),
+    onOpenTimeAdvance: () => setTimeAdvanceOpen(true),
+    onTransfer: (dept: string) => handlePerformIntervention(0, `Transfer to ${dept}`),
+    onOrderTest: handleOrderTest,
+    onOrderMedication: handleOrderMedication,
+    onOpenAssessment: () => setAssessmentOpen(true),
+    onConsult: handleConsult,
+  } as const;
+
+  // ── Auth gate ────────────────────────────────────────────────────────────────
+  if (isSupabaseConfigured && !isAuthLoading && !user) return (
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8">
+      <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} isRecovery={isRecovery} onRecoveryHandled={clearRecovery} />
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center max-w-sm">
+        <div className="w-14 h-14 bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-6">
+          <span className="text-white text-xl font-black">Rx</span>
+        </div>
+        <h1 className="text-2xl font-black text-gray-900 mb-2 uppercase tracking-tight">OpenEHR Sim</h1>
+        <p className="text-sm text-gray-500 mb-8 leading-relaxed">USMLE Step 3 CCS simulator.</p>
+        <button onClick={() => setIsAuthOpen(true)} className="px-8 py-3 bg-gray-900 text-white text-sm font-medium rounded-full hover:bg-gray-800 transition-colors">Sign in</button>
+      </motion.div>
+    </div>
+  );
+
+  // ── Loading / error ──────────────────────────────────────────────────────────
+  if (isAuthLoading || loading || error) return (
+    <div className="min-h-screen bg-white flex items-center justify-center">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center max-w-xs">
+        {error ? (<>
+          <p className="text-base font-medium text-gray-900 mb-2">Connection Failed</p>
+          <p className="text-sm text-gray-500 mb-6">{error}</p>
+          <button onClick={() => loadNewCase()} className="px-6 py-2.5 bg-black text-white rounded-full text-sm font-medium">Try Again</button>
+        </>) : (<>
+          <div className="w-8 h-8 mx-auto mb-4 border-2 border-gray-200 border-t-gray-900 rounded-full animate-spin" />
+          <p className="text-sm text-gray-500">{loadingStep}</p>
+        </>)}
+      </motion.div>
+    </div>
+  );
 
   const mc = medicalCase;
   const stream = mc ? buildStream(mc, simTime) : [];
@@ -220,392 +312,249 @@ function ClinicalShell() {
     : [];
 
   return (
-    <div style={{ maxWidth: 700, margin: '0 auto', padding: '24px 20px 160px', fontFamily: 'Georgia, serif', fontSize: 15, lineHeight: 1.7, color: '#111' }}>
+    <div className={cn('h-screen flex flex-col overflow-hidden transition-colors duration-500', hasCritical ? 'bg-red-50' : 'bg-white')}>
 
       {/* Global modals */}
       <CaseLibrary isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} onSelectCase={(d, c, e) => { setIsLibraryOpen(false); loadNewCase(d, c, e); }} />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} isRecovery={isRecovery} onRecoveryHandled={clearRecovery} />
-      <CommandPalette
-        isOpen={isCommandOpen}
-        onClose={() => setIsCommandOpen(false)}
-        onNavigate={() => {}}
-        onNewCase={() => setIsLibraryOpen(true)}
-        onConsult={handleConsult}
-        hasArchive={!!user}
-        onOrderTest={mc ? handleOrderTest : undefined}
-        onAdminister={mc ? (med) => handlePerformIntervention(2, `Administer ${med}`) : undefined}
-        onAdvanceTime={mc ? handleAdvanceTime : undefined}
-      />
+      <CommandPalette isOpen={isCommandOpen} onClose={() => setIsCommandOpen(false)} onNavigate={() => {}} onNewCase={() => setIsLibraryOpen(true)} onConsult={handleConsult} hasArchive={!!user} onOrderTest={medicalCase ? handleOrderTest : undefined} onAdminister={medicalCase ? med => handlePerformIntervention(2, `Administer ${med}`) : undefined} onAdvanceTime={medicalCase ? handleAdvanceTime : undefined} />
+      {timeAdvanceOpen && medicalCase && <TimeAdvanceModal medicalCase={medicalCase} simTime={simTime} intervening={intervening} onAdvance={handleAdvanceTime} onClose={() => setTimeAdvanceOpen(false)} />}
 
-      {/* ── Site header ── */}
-      <div style={{ marginBottom: 24 }}>
-        <span style={{ fontWeight: 'bold', fontSize: 17, letterSpacing: 1 }}>OpenEHR Sim</span>
-        {' · '}
-        <a href="#" onClick={e => { e.preventDefault(); setIsLibraryOpen(true); }} style={{ color: '#111' }}>new case</a>
-        {' · '}
-        <a href="#" onClick={e => { e.preventDefault(); setIsCommandOpen(true); }} style={{ color: '#111' }}>commands</a>
-        {user && (
-          <>
-            {' · '}
-            <a href="#" onClick={e => { e.preventDefault(); handleLogout(); }} style={{ color: '#111' }}>sign out ({user.email})</a>
-          </>
+      {/* Header */}
+      <header className="h-12 flex items-center px-4 shrink-0 z-30">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <button onClick={() => setVitalsExpanded(true)} className="text-sm font-semibold text-gray-900 truncate hover:underline">
+            {medicalCase?.patientName}
+          </button>
+          <span className="text-xs text-gray-400">{medicalCase?.age}{medicalCase?.gender?.[0]?.toUpperCase()}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className={cn('text-xs font-mono font-medium',
+            simTime === 0 ? 'text-gray-300' : simTime < 30 ? 'text-gray-500' : simTime < 60 ? 'text-amber-500' : 'text-red-500')}>
+            T+{simTime}m
+          </span>
+          <button onClick={() => setIsLibraryOpen(true)} className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors" aria-label="New case">
+            <RefreshCw className="w-4 h-4" />
+          </button>
+          {user && (
+            <div className="relative">
+              <button onClick={() => setAccountMenuOpen(p => !p)} className="w-6 h-6 bg-gray-900 rounded-full flex items-center justify-center text-[10px] font-medium text-white">
+                {user.email?.[0].toUpperCase()}
+              </button>
+              {accountMenuOpen && (<>
+                <div className="fixed inset-0 z-40" onClick={() => setAccountMenuOpen(false)} />
+                <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-xl shadow-lg py-2 px-1 min-w-[160px] z-50">
+                  <p className="px-3 py-1 text-[10px] text-gray-400 truncate">{user.email}</p>
+                  <div className="border-t border-gray-100 mt-1 pt-1">
+                    <button onClick={() => { setAccountMenuOpen(false); setAssessmentOpen(true); }} className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 rounded-lg">History &amp; score</button>
+                    <button onClick={() => { setAccountMenuOpen(false); handleLogout(); }} className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded-lg">Sign out</button>
+                  </div>
+                </div>
+              </>)}
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* Vitals alert strip */}
+      <AnimatePresence>
+        {(abnormalVitals.length > 0 || (medicalCase?.physiologicalTrend && !['stable','improving'].includes(medicalCase.physiologicalTrend))) && (
+          <motion.button initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            onClick={() => setVitalsExpanded(true)}
+            className={cn('flex items-center justify-center gap-4 py-2 px-4 shrink-0', hasCritical || medicalCase?.physiologicalTrend === 'critical' ? 'bg-red-100' : 'bg-amber-50')}>
+            {abnormalVitals.map((v, i) => <span key={i} className={cn('text-xs font-bold font-mono', v.critical ? 'text-red-600' : 'text-amber-600')}>{v.label} {v.value}</span>)}
+            {medicalCase?.physiologicalTrend === 'declining' && <span className="text-xs font-bold text-amber-600">↓ Declining</span>}
+            {medicalCase?.physiologicalTrend === 'critical'  && <span className="text-xs font-bold text-red-600 animate-pulse">⚠ Critical deterioration</span>}
+          </motion.button>
         )}
+      </AnimatePresence>
+
+      {/* Patient outcome banner */}
+      <AnimatePresence>
+        {patientOutcome && patientOutcome !== 'alive' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className={cn('py-3 px-4 flex items-center justify-center gap-3 shrink-0', patientOutcome === 'deceased' ? 'bg-gray-900 text-white' : 'bg-red-600 text-white')}>
+            <span className="text-sm font-medium">{patientOutcome === 'deceased' ? 'Patient expired' : 'Critical deterioration'}</span>
+            <button onClick={() => loadNewCase()} className="text-xs underline opacity-70 hover:opacity-100">New case</button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Split body ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* LEFT: Scrollable timeline */}
+        <main className="flex-1 overflow-y-auto px-4 sm:px-6 pb-36 lg:pb-6">
+          <div className="max-w-xl mx-auto lg:max-w-2xl pt-6">
+            {medicalCase && (
+              <ClinicalTimeline
+                medicalCase={medicalCase}
+                simTime={simTime}
+                intervening={intervening}
+                gcsState={gcsState}
+                onGcsChange={(cat, score) => setGcsState(prev => ({ ...prev, [cat]: score }))}
+                onExamineSystem={(system, finding) => {
+                  reasoning.addFinding({ source: 'exam', text: `${system}: ${finding.slice(0, 60)}`, relevance: 'none', addedAt: medicalCase.simulationTime });
+                  setMedicalCase(prev => prev ? ({
+                    ...prev,
+                    clinicalActions: [...(prev.clinicalActions || []), {
+                      id: `exam-${Date.now()}`, timestamp: prev.simulationTime,
+                      type: 'exam' as const, description: `Examined ${system}: ${finding.slice(0, 80)}`,
+                    }],
+                  }) : prev);
+                }}
+                onDiscontinueMedication={handleDiscontinueMedication}
+              />
+            )}
+          </div>
+        </main>
+
+        {/* RIGHT: Orders + Consultant — desktop only */}
+        <aside className="hidden lg:flex flex-col w-80 xl:w-96 border-l border-gray-100 shrink-0 bg-white">
+
+          {/* Consultant chat */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">AI Consultant</p>
+              {medicalCase && !isConsulting && (
+                <button onClick={handleConsult} disabled={intervening || calling}
+                  className="text-xs text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-30">
+                  Ask →
+                </button>
+              )}
+            </div>
+
+            {isConsulting ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <div className="w-6 h-6 border-2 border-gray-200 border-t-gray-900 rounded-full animate-spin" />
+                <p className="text-xs text-gray-400">Thinking…</p>
+              </div>
+            ) : consultantAdvice ? (
+              <div className="space-y-4">
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-sm text-gray-900 leading-relaxed italic">"{consultantAdvice.advice}"</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-medium text-gray-400 uppercase mb-1">Reasoning</p>
+                  <p className="text-sm text-gray-700 leading-relaxed">{consultantAdvice.reasoning}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-medium text-gray-400 uppercase mb-2">Next steps</p>
+                  <div className="space-y-2">
+                    {consultantAdvice.recommendedActions.map((action, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <span className="w-4 h-4 rounded-full bg-gray-900 text-white flex items-center justify-center text-[9px] font-medium shrink-0 mt-0.5">{i + 1}</span>
+                        <p className="text-sm text-gray-700">{action}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 gap-2">
+                <p className="text-xs text-gray-300">No consultation yet</p>
+                {medicalCase && (
+                  <button onClick={handleConsult} disabled={intervening || calling}
+                    className="text-xs text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-30 mt-1">
+                    Ask the consultant →
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Order bar (panel mode — not fixed) */}
+          <OrderBar {...orderBarProps} variant="panel" />
+        </aside>
       </div>
 
-      {!mc ? (
-        <p style={{ color: '#555' }}>No case loaded. <a href="#" onClick={e => { e.preventDefault(); loadNewCase(); }} style={{ color: '#111' }}>Generate a case</a></p>
-      ) : (
-        <>
-          {/* ── Patient header ── */}
-          <div style={{ borderBottom: '1px solid #ccc', paddingBottom: 12, marginBottom: 16 }}>
-            <p style={{ margin: 0, fontSize: 16 }}>
-              <strong>{mc.patientName}</strong>
-              {' — '}
-              {mc.age}y {mc.gender}
-              {mc.difficulty && <span style={{ color: '#666' }}> [{mc.difficulty}]</span>}
-            </p>
-            <p style={{ margin: '4px 0 0', color: '#333' }}>{mc.chiefComplaint}</p>
-            <p style={{ margin: '6px 0 0', fontFamily: 'monospace', fontSize: 13, color: isCritical ? '#c00' : '#333' }}>
-              {vitalsLine}
-              {mc.physiologicalTrend && mc.physiologicalTrend !== 'stable' && (
-                <span style={{ color: mc.physiologicalTrend === 'improving' ? '#080' : '#c00' }}>
-                  {' '}[{mc.physiologicalTrend}]
-                </span>
-              )}
-            </p>
-            <p style={{ margin: '4px 0 0', fontFamily: 'monospace', fontSize: 12, color: '#555' }}>
-              T+{simTime}min · {mc.currentLocation}
-            </p>
-            {patientOutcome && patientOutcome !== 'alive' && (
-              <p style={{ margin: '8px 0 0', color: '#c00', fontWeight: 'bold' }}>
-                ⚠ {patientOutcome === 'deceased' ? 'Patient expired' : 'Critical deterioration'}
-                {' — '}
-                <a href="#" onClick={e => { e.preventDefault(); loadNewCase(); }} style={{ color: '#c00' }}>new case</a>
-              </p>
-            )}
-          </div>
+      {/* Mobile: fixed order bar */}
+      <div className="lg:hidden">
+        <OrderBar {...orderBarProps} variant="fixed" />
+      </div>
 
-          {/* ── Collapsible history ── */}
-          <div style={{ marginBottom: 16 }}>
-            <a href="#" onClick={e => { e.preventDefault(); setHistoryOpen(p => !p); }} style={{ color: '#111', fontSize: 13 }}>
-              {historyOpen ? '▼' : '▶'} History of Present Illness
-            </a>
-            {historyOpen && (
-              <div style={{ marginTop: 8, paddingLeft: 16, borderLeft: '3px solid #ccc', color: '#333' }}>
-                <p style={{ margin: '0 0 8px' }}>{mc.historyOfPresentIllness}</p>
-                {mc.pastMedicalHistory?.length > 0 && (
-                  <>
-                    <p style={{ margin: '0 0 4px', fontWeight: 'bold', fontSize: 13 }}>Past Medical History:</p>
-                    <ul style={{ margin: 0, paddingLeft: 20 }}>
-                      {mc.pastMedicalHistory.map((h, i) => <li key={i} style={{ fontSize: 13 }}>{h}</li>)}
-                    </ul>
-                  </>
-                )}
-                {mc.initialAppearance && (
-                  <>
-                    <p style={{ margin: '8px 0 4px', fontWeight: 'bold', fontSize: 13 }}>Initial Appearance:</p>
-                    <p style={{ margin: 0, fontSize: 13, fontStyle: 'italic' }}>{mc.initialAppearance}</p>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* ── Physical exam systems ── */}
-          <div style={{ marginBottom: 16 }}>
-            <p style={{ margin: '0 0 6px', fontSize: 13, color: '#555', fontFamily: 'monospace' }}>PHYSICAL EXAM</p>
-            {examSystems.map(([sys, val]) => {
-              const isLocked = val === '[[LOCKED]]';
-              const isRevealed = examOpen[sys];
-              return (
-                <div key={sys} style={{ marginBottom: 6, fontSize: 13 }}>
-                  <a href="#" onClick={e => {
-                    e.preventDefault();
-                    if (isLocked) {
-                      setMedicalCase(prev => {
-                        if (!prev) return prev;
-                        return {
-                          ...prev,
-                          clinicalActions: [...(prev.clinicalActions || []), {
-                            id: `exam-${Date.now()}`,
-                            timestamp: prev.simulationTime,
-                            type: 'exam' as const,
-                            description: `Examined ${sys}`,
-                          }]
-                        };
-                      });
-                    }
-                    setExamOpen(p => ({ ...p, [sys]: !p[sys] }));
-                  }} style={{ color: '#111', textTransform: 'capitalize' }}>
-                    {isRevealed ? '▼' : '▶'} {sys}
-                  </a>
-                  {isRevealed && !isLocked && (
-                    <span style={{ color: '#333', paddingLeft: 12 }}>{val}</span>
-                  )}
-                  {isRevealed && isLocked && (
-                    <span style={{ color: '#999', paddingLeft: 12, fontStyle: 'italic' }}>Examining...</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* ── Active medications ── */}
-          {activeMeds.length > 0 && (
-            <div style={{ marginBottom: 16 }}>
-              <p style={{ margin: '0 0 6px', fontSize: 13, color: '#555', fontFamily: 'monospace' }}>ACTIVE MEDICATIONS</p>
-              {activeMeds.map(m => (
-                <div key={m.id} style={{ fontSize: 13, marginBottom: 4 }}>
-                  {m.name} {m.dose} {m.route}
-                  {' · '}
-                  <a href="#" onClick={e => { e.preventDefault(); handleDiscontinueMedication(m.id, m.name); }} style={{ color: '#c00', fontSize: 12 }}>
-                    d/c
-                  </a>
-                </div>
-              ))}
+      {/* Assessment / history overlay */}
+      <AnimatePresence>
+        {assessmentOpen && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="fixed inset-0 bg-white z-50 overflow-y-auto">
+            <div className="max-w-xl mx-auto px-4 py-6 pb-24">
+              <button onClick={() => setAssessmentOpen(false)} className="text-sm text-gray-400 hover:text-gray-700 transition-colors mb-8 block">← Back to case</button>
+              <AssessmentTab medicalCase={medicalCase} simTime={simTime} userNotes={userNotes} evaluation={evaluation} submitting={submitting} logs={logs} differential={differential} onDifferentialChange={setDifferential} onNotesChange={setUserNotes} onEndCase={handleEndCase} onNewCase={() => { setAssessmentOpen(false); loadNewCase(); }} />
+              {user && <div className="mt-12 border-t border-gray-100 pt-8"><ArchiveView user={user} /></div>}
             </div>
-          )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-          <hr style={{ borderColor: '#ccc', marginBottom: 16 }} />
-
-          {/* ── Event stream ── */}
-          <div style={{ marginBottom: 16 }}>
-            {stream.length === 0 && (
-              <p style={{ color: '#999', fontSize: 13, fontStyle: 'italic' }}>No events yet.</p>
-            )}
-            {stream.map(item => {
-              if (item.kind === 'divider') {
-                return (
-                  <p key={item.id} style={{ margin: '12px 0 4px', fontSize: 12, color: '#888', fontFamily: 'monospace' }}>
-                    ── T+{item.time}min ─────────────────────────────
-                  </p>
-                );
-              }
-              if (item.kind === 'action') {
-                return (
-                  <p key={item.id} style={{ margin: '0 0 3px', paddingLeft: 12, fontSize: 13 }}>
-                    {item.text}
-                    {item.impact && <span style={{ color: '#555', fontStyle: 'italic' }}> — {item.impact}</span>}
-                  </p>
-                );
-              }
-              if (item.kind === 'lab') {
-                const l = item.lab;
-                const flag = l.status === 'critical' ? ' [CRITICAL]' : l.status === 'abnormal' ? ' [abnormal]' : '';
-                return (
-                  <p key={item.id} style={{ margin: '0 0 3px', paddingLeft: 12, fontSize: 13, fontFamily: 'monospace', color: l.status === 'critical' ? '#c00' : l.status === 'abnormal' ? '#b60' : '#111' }}>
-                    {l.name}: {l.value} {l.unit} (ref {l.normalRange}){flag}
-                  </p>
-                );
-              }
-              if (item.kind === 'imaging') {
-                const img = item.img;
-                const key = img.type;
-                const open = imagingOpen[key];
-                return (
-                  <div key={item.id} style={{ paddingLeft: 12, marginBottom: 4 }}>
-                    <a href="#" onClick={e => { e.preventDefault(); setImagingOpen(p => ({ ...p, [key]: !p[key] })); }} style={{ color: '#111', fontSize: 13, fontFamily: 'monospace' }}>
-                      {open ? '▼' : '▶'} {img.type}
-                    </a>
-                    {open && (
-                      <div style={{ paddingLeft: 16, borderLeft: '2px solid #ccc', marginTop: 4, fontSize: 13, color: '#333' }}>
-                        {img.findings && <p style={{ margin: '0 0 4px' }}><em>Findings:</em> {img.findings}</p>}
-                        {img.impression && <p style={{ margin: 0 }}><strong>Impression:</strong> {img.impression}</p>}
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-              if (item.kind === 'pending') {
-                return (
-                  <p key={item.id} style={{ margin: '0 0 3px', paddingLeft: 12, fontSize: 13, color: '#888', fontFamily: 'monospace' }}>
-                    {item.name}: pending (available T+{item.availableAt}min)
-                  </p>
-                );
-              }
-              return null;
-            })}
-            <div ref={feedEnd} />
-          </div>
-
-          {/* ── Quick-suggest links ── */}
-          {(suggestLabs.length > 0 || suggestImgs.length > 0) && (
-            <div style={{ marginBottom: 12, fontSize: 13, color: '#555' }}>
-              <span>Order: </span>
-              {suggestLabs.map((t, i) => (
-                <React.Fragment key={t.name}>
-                  {i > 0 && ' · '}
-                  <a href="#" onClick={e => { e.preventDefault(); handleOrderTest('lab', t.name); }} style={{ color: '#111' }}>{t.name}</a>
-                </React.Fragment>
-              ))}
-              {suggestLabs.length > 0 && suggestImgs.length > 0 && ' · '}
-              {suggestImgs.map((t, i) => (
-                <React.Fragment key={t.name}>
-                  {i > 0 && ' · '}
-                  <a href="#" onClick={e => { e.preventDefault(); handleOrderTest('imaging', t.name); }} style={{ color: '#111' }}>{t.name}</a>
-                </React.Fragment>
-              ))}
-            </div>
-          )}
-
-          {/* ── Command input ── */}
-          <form onSubmit={e => { e.preventDefault(); submitInput(); }} style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-            <input
-              type="text"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              placeholder={isBusy ? 'Working…' : 'Type an order or action (e.g. "order CBC", "give aspirin 325mg")'}
-              disabled={isBusy || !mc}
-              style={{ flex: 1, padding: '6px 10px', fontSize: 14, fontFamily: 'Georgia, serif', border: '1px solid #999', background: '#fff' }}
-            />
-            <button type="submit" disabled={isBusy || !input.trim()} style={{ padding: '6px 16px', fontSize: 14 }}>
-              Go
-            </button>
-          </form>
-
-          {/* ── Bottom action links ── */}
-          <div style={{ fontSize: 13, color: '#555' }}>
-            <a href="#" onClick={e => { e.preventDefault(); setAdvanceOpen(p => !p); }} style={{ color: '#111' }}>advance time</a>
-            {' · '}
-            <a href="#" onClick={e => { e.preventDefault(); handleConsult(); }} style={{ color: '#111' }}>consult AI</a>
-            {' · '}
-            <a href="#" onClick={e => { e.preventDefault(); setIsDxPadOpen(true); }} style={{ color: '#111' }}>reasoning pad</a>
-            {' · '}
-            <a href="#" onClick={e => { e.preventDefault(); setAssessmentOpen(true); }} style={{ color: '#111' }}>end case</a>
-          </div>
-
-          {/* ── Time advance inline ── */}
-          {advanceOpen && (
-            <div style={{ marginTop: 12, padding: 12, border: '1px solid #ccc', fontSize: 13 }}>
-              <label>
-                Advance by{' '}
-                <select value={advanceAmount} onChange={e => setAdvanceAmount(Number(e.target.value))}>
-                  {[5, 10, 15, 20, 30, 45, 60].map(n => <option key={n} value={n}>{n} min</option>)}
-                </select>
-              </label>
-              {' '}
-              <button onClick={() => { setAdvanceOpen(false); handleAdvanceTime(advanceAmount); }} disabled={isBusy} style={{ marginLeft: 8 }}>
-                Advance
-              </button>
-              {' '}
-              <a href="#" onClick={e => { e.preventDefault(); setAdvanceOpen(false); }} style={{ color: '#111' }}>cancel</a>
-            </div>
-          )}
-
-          {/* ── AI Consultant panel ── */}
-          {isConsultOpen && (
-            <div style={{ marginTop: 16, padding: 16, border: '1px solid #999', background: '#fafafa', fontSize: 13 }}>
-              <p style={{ margin: '0 0 8px', fontWeight: 'bold', fontFamily: 'monospace' }}>
-                AI CONSULTANT
-                {' '}
-                <a href="#" onClick={e => { e.preventDefault(); setIsConsultOpen(false); }} style={{ color: '#555', fontWeight: 'normal' }}>[close]</a>
-              </p>
-              {isConsulting ? (
-                <p style={{ color: '#555' }}>Consulting…</p>
-              ) : consultantAdvice ? (
-                <>
-                  <p style={{ margin: '0 0 8px', fontStyle: 'italic' }}>{consultantAdvice.advice}</p>
-                  <p style={{ margin: '0 0 8px' }}>{consultantAdvice.reasoning}</p>
-                  <p style={{ margin: '0 0 4px', fontWeight: 'bold' }}>Recommended actions:</p>
-                  <ol style={{ margin: 0, paddingLeft: 24 }}>
-                    {consultantAdvice.recommendedActions.map((a, i) => <li key={i}>{a}</li>)}
-                  </ol>
-                </>
-              ) : (
-                <p style={{ color: '#888' }}>No consultation yet.</p>
-              )}
-            </div>
-          )}
-
-          {/* ── Management conflicts ── */}
-          {mc.managementConflicts && mc.managementConflicts.length > 0 && (
-            <div style={{ marginTop: 16, fontSize: 12, color: '#b60' }}>
-              <span style={{ fontFamily: 'monospace' }}>CONFLICTS: </span>
-              {mc.managementConflicts.join(' | ')}
-            </div>
-          )}
-        </>
+      {/* Floating DiagnosisPad */}
+      {medicalCase && (
+        <AnimatePresence>
+          <DiagnosisPad
+            isOpen={isDxPadOpen} onToggle={() => setIsDxPadOpen(p => !p)} initialTab={dxPadInitialTab}
+            problemRepresentation={reasoning.problemRepresentation} onProblemRepresentationChange={reasoning.setProblemRepresentation}
+            prHistory={reasoning.prHistory} prIsDirty={reasoning.prIsDirty} currentStage={reasoning.currentStage}
+            differentials={reasoning.differentials} onAddDifferential={reasoning.addDifferential}
+            onRemoveDifferential={reasoning.removeDifferential} onSetLeadDiagnosis={reasoning.setLeadDiagnosis}
+            onUpdateConfidence={reasoning.updateConfidence} onSetIllnessScript={reasoning.setIllnessScript}
+            findings={reasoning.findings} onRemoveFinding={reasoning.removeFinding}
+            onUpdateRelevance={reasoning.updateRelevance} onUpdateFindingRelevanceForDx={reasoning.updateFindingRelevanceForDx}
+          />
+        </AnimatePresence>
       )}
 
-      {/* ── Assessment overlay ── */}
-      {assessmentOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: '#fff', zIndex: 50, overflowY: 'auto', padding: '24px 20px' }}>
-          <div style={{ maxWidth: 700, margin: '0 auto', fontFamily: 'Georgia, serif' }}>
-            <p style={{ marginBottom: 16 }}>
-              <a href="#" onClick={e => { e.preventDefault(); setAssessmentOpen(false); }} style={{ color: '#111' }}>
-                ← Back to case
-              </a>
-            </p>
-            <AssessmentTab
-              medicalCase={mc}
-              simTime={simTime}
-              userNotes={userNotes}
-              evaluation={evaluation}
-              submitting={submitting}
-              logs={logs}
-              differential={differential}
-              onDifferentialChange={setDifferential}
-              onNotesChange={setUserNotes}
-              onEndCase={handleEndCase}
-              onNewCase={() => { setAssessmentOpen(false); loadNewCase(); }}
-            />
-            {user && (
-              <div style={{ marginTop: 40, borderTop: '1px solid #ccc', paddingTop: 24 }}>
-                <ArchiveView user={user} />
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── DiagnosisPad ── */}
-      {mc && (
-        <DiagnosisPad
-          isOpen={isDxPadOpen}
-          onToggle={() => setIsDxPadOpen(p => !p)}
-          initialTab={dxPadInitialTab}
-          problemRepresentation={reasoning.problemRepresentation}
-          onProblemRepresentationChange={reasoning.setProblemRepresentation}
-          prHistory={reasoning.prHistory}
-          prIsDirty={reasoning.prIsDirty}
-          currentStage={reasoning.currentStage}
-          differentials={reasoning.differentials}
-          onAddDifferential={reasoning.addDifferential}
-          onRemoveDifferential={reasoning.removeDifferential}
-          onSetLeadDiagnosis={reasoning.setLeadDiagnosis}
-          onUpdateConfidence={reasoning.updateConfidence}
-          onSetIllnessScript={reasoning.setIllnessScript}
-          findings={reasoning.findings}
-          onRemoveFinding={reasoning.removeFinding}
-          onUpdateRelevance={reasoning.updateRelevance}
-          onUpdateFindingRelevanceForDx={reasoning.updateFindingRelevanceForDx}
-        />
-      )}
-
-      {/* ── Stage Commit Gate ── */}
-      {mc && pendingStage && (
+      {/* Stage Commit Gate */}
+      {medicalCase && pendingStage && (
         <StageCommitGate
-          isOpen={!!pendingStage}
-          fromStage={reasoning.currentStage}
-          toStage={pendingStage}
-          problemRepresentation={reasoning.problemRepresentation}
-          onProblemRepresentationChange={reasoning.setProblemRepresentation}
-          differentials={reasoning.differentials}
-          onSetLead={reasoning.setLeadDiagnosis}
-          findings={reasoning.findings}
-          previousPrSnapshot={reasoning.latestPrSnapshot}
+          isOpen={!!pendingStage} fromStage={reasoning.currentStage} toStage={pendingStage}
+          problemRepresentation={reasoning.problemRepresentation} onProblemRepresentationChange={reasoning.setProblemRepresentation}
+          differentials={reasoning.differentials} onSetLead={reasoning.setLeadDiagnosis}
+          findings={reasoning.findings} previousPrSnapshot={reasoning.latestPrSnapshot}
           unmetRequirements={reasoning.checkStageGate(reasoning.currentStage)}
-          onCommit={(fromStage) => {
+          onCommit={fromStage => {
             const snapId = reasoning.commitStage(fromStage, simTime);
-            if (snapId && pendingStage) {
-              reasoning.goToStage(pendingStage);
-              setPendingStage(null);
-            }
+            if (snapId && pendingStage) { reasoning.goToStage(pendingStage); setPendingStage(null); }
             return snapId;
           }}
           onCancel={() => setPendingStage(null)}
         />
       )}
+
+      {/* AI Consultant slide-over (mobile only — desktop uses right panel) */}
+      <div className="lg:hidden">
+        <AnimatePresence>
+          {isConsultOpen && (<>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsConsultOpen(false)} className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[100]" />
+            <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 28, stiffness: 260 }} className="fixed bottom-0 left-0 right-0 max-h-[80vh] bg-white rounded-t-2xl shadow-2xl z-[101] flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                <div><h3 className="text-sm font-semibold text-gray-900">AI Consultant</h3><p className="text-[10px] text-gray-400">Specialist reasoning</p></div>
+                <button onClick={() => setIsConsultOpen(false)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-4 h-4 text-gray-400" /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                {isConsulting ? (
+                  <div className="flex flex-col items-center justify-center py-12 gap-3">
+                    <div className="w-6 h-6 border-2 border-gray-200 border-t-gray-900 rounded-full animate-spin" />
+                    <p className="text-xs text-gray-400">Thinking...</p>
+                  </div>
+                ) : consultantAdvice ? (<>
+                  <div className="bg-gray-50 rounded-xl p-4"><p className="text-sm text-gray-900 leading-relaxed italic">"{consultantAdvice.advice}"</p></div>
+                  <div><p className="text-[10px] font-medium text-gray-400 uppercase mb-1">Reasoning</p><p className="text-sm text-gray-700 leading-relaxed">{consultantAdvice.reasoning}</p></div>
+                  <div>
+                    <p className="text-[10px] font-medium text-gray-400 uppercase mb-2">Next steps</p>
+                    <div className="space-y-2">
+                      {consultantAdvice.recommendedActions.map((action, i) => (
+                        <div key={i} className="flex items-start gap-3">
+                          <span className="w-5 h-5 rounded-full bg-gray-900 text-white flex items-center justify-center text-[10px] font-medium shrink-0">{i + 1}</span>
+                          <p className="text-sm text-gray-700 pt-0.5">{action}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>) : <div className="text-center py-12"><p className="text-sm text-gray-400">No consultation yet</p></div>}
+              </div>
+            </motion.div>
+          </>)}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

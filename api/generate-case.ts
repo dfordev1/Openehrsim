@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import { MEDICAL_CASE_SCHEMA } from "../src/lib/schema.js";
 import { LOCKED_SENTINEL } from "../src/lib/constants.js";
 import { storeCaseServerSide } from "./_supabase.js";
+import { repairJson } from "./_repairJson.js";
 
 function validateRequest(body: any) {
   if (!body || typeof body !== "object") throw new Error("Request body must be a JSON object.");
@@ -41,6 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const aiRes = await openai.chat.completions.create({
       model: "deepseek-chat",
+      max_tokens: 8192,
       messages: [
         {
           role: "system",
@@ -191,7 +193,7 @@ Make it genuinely harrowing. This is the case that gets discussed at morning rep
     const content = aiRes.choices[0].message.content;
     if (!content) throw new Error("Empty response from AI");
 
-    const fullCase = JSON.parse(content);
+    const fullCase = JSON.parse(repairJson(content));
     if (!fullCase.id) fullCase.id = `case-${Math.random().toString(36).slice(2, 9)}`;
 
     // Guarantee required new fields are present even if AI skips them
