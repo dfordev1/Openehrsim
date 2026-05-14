@@ -23,7 +23,7 @@ import { useCase } from './CaseContext';
 import { useAuth } from './AuthContext';
 
 // ── Types ───────────────────────────────────────────────────────────────────
-type TabId = 'triage' | 'hpi' | 'exam' | 'labs' | 'orders' | 'pharmacy' | 'treatment' | 'comms' | 'archive' | 'notes' | 'tools' | 'assess' | 'dxpause';
+type TabId = 'chart' | 'orders' | 'labs' | 'assess' | 'comms' | 'dxpause' | 'archive';
 
 export interface TabDef {
   id: string;

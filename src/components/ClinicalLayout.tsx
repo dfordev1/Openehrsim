@@ -18,8 +18,6 @@ import { useNavigation } from '../contexts/NavigationContext';
 
 // Components
 import { AuthModal } from './Auth';
-import { ClinicalNotes } from './ClinicalNotes';
-import { ClinicalGuidelines } from './ClinicalGuidelines';
 import { CaseLibrary } from './CaseLibrary';
 import { CommandPalette } from './CommandPalette';
 import VitalsExpanded from './VitalsExpanded';
@@ -29,16 +27,11 @@ import { ArchiveView } from './ArchiveView';
 import { TimeAdvanceModal } from './TimeAdvanceModal';
 
 // Tab components
-import { HpiTab } from './tabs/HpiTab';
-import { ExamTab } from './tabs/ExamTab';
+import { ChartTab } from './tabs/ChartTab';
 import { LabsTab } from './tabs/LabsTab';
-import { OrderSearchModal } from './OrderSearchModal';
 import { OrdersTab } from './tabs/OrdersTab';
-import { PharmacyTab } from './tabs/PharmacyTab';
-import { TreatmentTab } from './tabs/TreatmentTab';
 import { CommsTab } from './tabs/CommsTab';
 import { AssessmentTab } from './tabs/AssessmentTab';
-import { TriageTab } from './tabs/TriageTab';
 import { DxPauseTab } from './tabs/DxPauseTab';
 
 import type { WorkflowStage } from '../types';
@@ -79,12 +72,9 @@ export { ErrorBoundary };
 
 // ── Navigation dots config ────────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { id: 'triage', label: 'Patient' },
-  { id: 'hpi', label: 'History' },
-  { id: 'exam', label: 'Exam' },
+  { id: 'chart', label: 'Chart' },
   { id: 'orders', label: 'Orders' },
   { id: 'labs', label: 'Results' },
-  { id: 'treatment', label: 'Treat' },
   { id: 'assess', label: 'Score' },
 ] as const;
 
@@ -105,11 +95,8 @@ function ClinicalLayoutInner() {
   const [vitalsExpanded, setVitalsExpanded] = React.useState(false);
   const [gcsState, setGcsState] = React.useState({ eyes: 4, verbal: 5, motor: 6 });
   const [gcsExpanded, setGcsExpanded] = React.useState(false);
-  const [customMedInput, setCustomMedInput] = React.useState('');
   const [transferExpanded, setTransferExpanded] = React.useState(false);
   const [selectedLab, setSelectedLab] = React.useState<import('../types').LabResult | null>(null);
-  const [revealedStudies, setRevealedStudies] = React.useState<string[]>([]);
-  const [orderModalOpen, setOrderModalOpen] = React.useState(false);
   const [timeAdvanceOpen, setTimeAdvanceOpen] = React.useState(false);
   const realStartTimeRef = React.useRef<number>(Date.now());
   const [realElapsedMins, setRealElapsedMins] = React.useState(0);
@@ -179,12 +166,12 @@ function ClinicalLayoutInner() {
   } = useNavigation();
 
   const stageToTab: Record<WorkflowStage, string> = {
-    triage: 'triage',
-    history: 'hpi',
-    exam: 'exam',
-    diagnostics: 'labs',
+    triage: 'chart',
+    history: 'chart',
+    exam: 'chart',
+    diagnostics: 'orders',
     dxpause: 'dxpause',
-    management: 'treatment',
+    management: 'orders',
   };
 
   // ── Real-time elapsed clock ───────────────────────────────────────────────
@@ -279,24 +266,6 @@ function ClinicalLayoutInner() {
       <CaseLibrary isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} onSelectCase={(d, c, e) => { setIsLibraryOpen(false); loadNewCase(d, c, e); }} />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} isRecovery={isRecovery} onRecoveryHandled={clearRecovery} />
 
-      {/* CCS-style unified order search modal */}
-      {orderModalOpen && medicalCase && (
-        <OrderSearchModal
-          caseId={medicalCase.id}
-          onClose={() => setOrderModalOpen(false)}
-          onConfirm={async (items) => {
-            for (const item of items) {
-              if (item.category === 'lab') {
-                await handleOrderTest('lab', item.name);
-              } else if (item.category === 'imaging') {
-                await handleOrderTest('imaging', item.name);
-              } else if (item.category === 'medication') {
-                await handleOrderMedication(item.name, item.route, item.frequency);
-              }
-            }
-          }}
-        />
-      )}
       <CommandPalette
         isOpen={isCommandOpen}
         onClose={() => setIsCommandOpen(false)}
@@ -424,17 +393,9 @@ function ClinicalLayoutInner() {
       <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-4 pb-28" role="main">
         <div className="max-w-3xl mx-auto">
           <AnimatePresence mode="wait">
-            {activeTab === 'triage' && medicalCase && (
-              <TriageTab key="triage" medicalCase={medicalCase} />
-            )}
-
-            {activeTab === 'hpi' && medicalCase && (
-              <HpiTab key="hpi" medicalCase={medicalCase} />
-            )}
-
-            {activeTab === 'exam' && medicalCase && (
-              <ExamTab
-                key="exam"
+            {activeTab === 'chart' && medicalCase && (
+              <ChartTab
+                key="chart"
                 medicalCase={medicalCase}
                 gcsState={gcsState}
                 onGcsChange={(cat, score) => setGcsState(prev => ({ ...prev, [cat]: score }))}
@@ -457,6 +418,13 @@ function ClinicalLayoutInner() {
                 medicalCase={medicalCase}
                 simTime={simTime}
                 intervening={intervening}
+                interventionInput={interventionInput}
+                transferExpanded={transferExpanded}
+                onInterventionChange={setInterventionInput}
+                onExecuteOrder={() => handlePerformIntervention()}
+                onOpenTimeAdvance={() => setTimeAdvanceOpen(true)}
+                onTransfer={(dept) => handlePerformIntervention(0, `Transfer to ${dept}`)}
+                onToggleTransfer={() => setTransferExpanded(p => !p)}
                 onOrderTest={handleOrderTest}
                 onOrderMedication={handleOrderMedication}
                 onDiscontinueMedication={handleDiscontinueMedication}
@@ -468,19 +436,6 @@ function ClinicalLayoutInner() {
               <LabsTab key="labs" medicalCase={medicalCase} simTime={simTime} selectedLab={selectedLab} onSelectLab={setSelectedLab} />
             )}
 
-            {activeTab === 'pharmacy' && (
-              <>
-                <button
-                  onClick={() => setOrderModalOpen(true)}
-                  disabled={intervening}
-                  className="w-full mb-4 py-2.5 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-40 transition-all"
-                >
-                  + Write Orders
-                </button>
-                <PharmacyTab key="pharmacy" customMedInput={customMedInput} onCustomMedChange={setCustomMedInput} onAdminister={(med) => handlePerformIntervention(2, `Administer ${med}`)} intervening={intervening} medicalCase={medicalCase ?? undefined} />
-              </>
-            )}
-
             {activeTab === 'comms' && medicalCase && (
               <CommsTab key="comms" medicalCase={medicalCase} callTarget={callTarget} callMessage={callMessage} calling={calling} onSelectTarget={setCallTarget} onMessageChange={setCallMessage} onSend={handleStaffCall} />
             )}
@@ -489,24 +444,8 @@ function ClinicalLayoutInner() {
               <DxPauseTab key="dxpause" medicalCase={medicalCase} problemRepresentation={reasoning.problemRepresentation} onProblemRepresentationChange={reasoning.setProblemRepresentation} differentials={reasoning.differentials} findings={reasoning.findings} prHistory={reasoning.prHistory} prIsDirty={reasoning.prIsDirty} onUpdateFindingRelevanceForDx={reasoning.updateFindingRelevanceForDx} onSetIllnessScript={reasoning.setIllnessScript} onSetLead={reasoning.setLeadDiagnosis} simTime={simTime} onProceedToManagement={() => handleStageNavigate('management')} />
             )}
 
-            {activeTab === 'treatment' && medicalCase && (
-              <TreatmentTab key="treatment" medicalCase={medicalCase} vitalsHistory={vitalsHistory} interventionInput={interventionInput} intervening={intervening} transferExpanded={transferExpanded} simTime={simTime} onInterventionChange={setInterventionInput} onExecuteOrder={() => handlePerformIntervention()} onWait={(mins) => handlePerformIntervention(mins, 'Observe patient')} onOpenTimeAdvance={() => setTimeAdvanceOpen(true)} onTransfer={(dept) => handlePerformIntervention(0, `Transfer to ${dept}`)} onToggleTransfer={() => setTransferExpanded(p => !p)} onOrderTest={handleOrderTest} onAdvanceTime={handleAdvanceTime} onDiscontinueMedication={handleDiscontinueMedication} />
-            )}
-
             {activeTab === 'assess' && medicalCase && (
               <AssessmentTab key="assess" medicalCase={medicalCase} simTime={simTime} userNotes={userNotes} evaluation={evaluation} submitting={submitting} logs={logs} differential={differential} onDifferentialChange={setDifferential} onNotesChange={setUserNotes} onEndCase={handleEndCase} onNewCase={() => loadNewCase()} />
-            )}
-
-            {activeTab === 'notes' && (
-              <motion.div key="notes" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <ClinicalNotes />
-              </motion.div>
-            )}
-
-            {activeTab === 'tools' && (
-              <motion.div key="tools" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <ClinicalGuidelines />
-              </motion.div>
             )}
 
             {activeTab === 'archive' && (
@@ -586,11 +525,8 @@ function ClinicalLayoutInner() {
               <div className="absolute bottom-12 right-0 bg-white border border-gray-200 rounded-xl shadow-lg py-2 px-1 min-w-[130px] z-50">
                 {[
                   { id: 'archive', label: 'Stats' },
-                  { id: 'pharmacy', label: 'Meds (MAR)' },
                   { id: 'comms', label: 'Comms' },
                   { id: 'dxpause', label: 'DxPause' },
-                  { id: 'notes', label: 'Notes' },
-                  { id: 'tools', label: 'Guidelines' },
                 ].map(item => (
                   <button
                     key={item.id}
