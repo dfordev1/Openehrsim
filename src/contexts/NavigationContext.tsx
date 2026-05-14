@@ -1,53 +1,19 @@
 /**
- * NavigationContext — tabs, sidebars, dark mode, keyboard shortcuts.
+ * NavigationContext — library/command modals and keyboard shortcuts.
+ * Tab navigation removed: the app is now a single scrollable feed.
  */
 
-import React, { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import {
-  Activity,
-  AlertCircle,
-  BookOpen,
-  Brain,
-  CheckCircle2,
-  Clipboard,
-  FlaskConical,
-  History,
-  PenTool,
-  Phone,
-  Pill,
-  Stethoscope,
-} from 'lucide-react';
-import { useUrlTab } from '../hooks/useUrlTab';
-import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import React, { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { useCase } from './CaseContext';
 import { useAuth } from './AuthContext';
 
-// ── Types ───────────────────────────────────────────────────────────────────
-type TabId = 'chart' | 'orders' | 'labs' | 'assess' | 'comms' | 'dxpause' | 'archive';
-
-export interface TabDef {
-  id: string;
-  icon: React.ReactNode;
-  label: string;
-  shortcut?: string;
-}
-
 export interface NavigationContextValue {
-  activeTab: TabId;
-  setActiveTab: (tab: TabId) => void;
-  isSidebarOpen: boolean;
-  setIsSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isLibraryOpen: boolean;
   setIsLibraryOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isCommandOpen: boolean;
   setIsCommandOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  primaryTabs: TabDef[];
-  actionTabs: TabDef[];
-  toolTabs: TabDef[];
-  mobileNavTabs: TabDef[];
 }
 
-// ── Context ─────────────────────────────────────────────────────────────────
 const NavigationContext = createContext<NavigationContextValue | null>(null);
 
 export function useNavigation(): NavigationContextValue {
@@ -56,74 +22,33 @@ export function useNavigation(): NavigationContextValue {
   return ctx;
 }
 
-// ── Provider ────────────────────────────────────────────────────────────────
 export function NavigationProvider({ children }: { children: ReactNode }) {
+  const { handleUndo, handleRedo, isConsultOpen } = useCase();
   const { user } = useAuth();
-  const { handleUndo, handleRedo, isConsultOpen, loadNewCase } = useCase();
 
-  const [activeTab, setActiveTab] = useUrlTab();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [isCommandOpen, setIsCommandOpen] = useState(false);
 
-  // Wrap loadNewCase call with closing the library
-  const handleNewCaseFromLibrary = useCallback(() => {
-    setIsLibraryOpen(true);
-  }, []);
+  const handleNewCase = useCallback(() => setIsLibraryOpen(true), []);
+  const handleCommandPalette = useCallback(() => setIsCommandOpen(p => !p), []);
 
-  useKeyboardShortcuts({
-    onTabChange: setActiveTab,
-    onNewCase: handleNewCaseFromLibrary,
-    onDiagnosis: () => setActiveTab('assess'),
-    onCommandPalette: () => setIsCommandOpen((p) => !p),
-    onUndo: handleUndo,
-    onRedo: handleRedo,
-    enabled: !isCommandOpen && !isLibraryOpen && !isConsultOpen,
-  });
+  useEffect(() => {
+    if (isCommandOpen || isLibraryOpen || isConsultOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
 
-  const primaryTabs: TabDef[] = [
-    { id: 'triage',  icon: <AlertCircle className="w-4 h-4" />, label: 'Triage',  shortcut: '1' },
-    { id: 'hpi',     icon: <Clipboard className="w-4 h-4" />,   label: 'History', shortcut: '2' },
-    { id: 'exam',    icon: <Stethoscope className="w-4 h-4" />, label: 'Exam',    shortcut: '3' },
-    { id: 'labs',    icon: <FlaskConical className="w-4 h-4" />, label: 'Tests',   shortcut: '4' },
-  ];
-  const actionTabs: TabDef[] = [
-    { id: 'dxpause',   icon: <Brain className="w-4 h-4" />,     label: 'DxPause'  },
-    { id: 'pharmacy',  icon: <Pill className="w-4 h-4" />,      label: 'Pharmacy' },
-    { id: 'treatment', icon: <Activity className="w-4 h-4" />,  label: 'Orders'   },
-    { id: 'comms',     icon: <Phone className="w-4 h-4" />,     label: 'Comms'    },
-  ];
-  const toolTabs: TabDef[] = [
-    { id: 'assess', icon: <CheckCircle2 className="w-4 h-4" />, label: 'Assessment' },
-    { id: 'notes',  icon: <PenTool className="w-4 h-4" />,      label: 'Notes'      },
-    { id: 'tools',  icon: <BookOpen className="w-4 h-4" />,     label: 'Guidelines' },
-    ...(user ? [{ id: 'archive', icon: <History className="w-4 h-4" />, label: 'Archive' }] : []),
-  ];
-  const mobileNavTabs: TabDef[] = [
-    { id: 'hpi',       icon: <Clipboard className="w-3.5 h-3.5" />,    label: 'Hx'   },
-    { id: 'exam',      icon: <Stethoscope className="w-3.5 h-3.5" />,  label: 'PE'   },
-    { id: 'labs',      icon: <FlaskConical className="w-3.5 h-3.5" />, label: 'Labs' },
-    { id: 'treatment', icon: <Activity className="w-3.5 h-3.5" />,     label: 'Rx'   },
-    { id: 'assess',    icon: <CheckCircle2 className="w-3.5 h-3.5" />, label: 'Dx'   },
-  ];
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); handleCommandPalette(); return; }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); handleUndo(); return; }
+      if ((e.metaKey || e.ctrlKey) && ((e.key.toLowerCase() === 'z' && e.shiftKey) || e.key.toLowerCase() === 'y')) { e.preventDefault(); handleRedo(); return; }
+      if (e.key === 'n' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); handleNewCase(); return; }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isCommandOpen, isLibraryOpen, isConsultOpen, handleCommandPalette, handleNewCase, handleUndo, handleRedo]);
 
   return (
-    <NavigationContext.Provider
-      value={{
-        activeTab,
-        setActiveTab,
-        isSidebarOpen,
-        setIsSidebarOpen,
-        isLibraryOpen,
-        setIsLibraryOpen,
-        isCommandOpen,
-        setIsCommandOpen,
-        primaryTabs,
-        actionTabs,
-        toolTabs,
-        mobileNavTabs,
-      }}
-    >
+    <NavigationContext.Provider value={{ isLibraryOpen, setIsLibraryOpen, isCommandOpen, setIsCommandOpen }}>
       {children}
     </NavigationContext.Provider>
   );
