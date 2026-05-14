@@ -1,51 +1,36 @@
 /**
- * ClinicalLayout — Steve Jobs-style radical minimal design.
- * One header line. Full content area. Context-aware vitals.
- * Bottom dot navigation. Nothing else.
+ * ClinicalLayout — single scrollable feed, no tabs.
+ * Header · Feed · Sticky order bar. That's it.
  */
 
 import * as Sentry from '@sentry/react';
 import React, { Component, type ErrorInfo, type ReactNode } from 'react';
-import {
-  RefreshCw,
-  X,
-} from 'lucide-react';
+import { X, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useCase } from '../contexts/CaseContext';
 import { useNavigation } from '../contexts/NavigationContext';
 
-// Components
 import { AuthModal } from './Auth';
 import { CaseLibrary } from './CaseLibrary';
 import { CommandPalette } from './CommandPalette';
 import VitalsExpanded from './VitalsExpanded';
 import { DiagnosisPad } from './DiagnosisPad';
 import { StageCommitGate } from './StageCommitGate';
-import { ArchiveView } from './ArchiveView';
 import { TimeAdvanceModal } from './TimeAdvanceModal';
-
-// Tab components
-import { ChartTab } from './tabs/ChartTab';
-import { LabsTab } from './tabs/LabsTab';
-import { OrdersTab } from './tabs/OrdersTab';
-import { CommsTab } from './tabs/CommsTab';
+import { ClinicalFeed } from './ClinicalFeed';
+import { OrderBar } from './OrderBar';
 import { AssessmentTab } from './tabs/AssessmentTab';
-import { DxPauseTab } from './tabs/DxPauseTab';
+import { ArchiveView } from './ArchiveView';
 
-import type { WorkflowStage } from '../types';
-
-// ── Error Boundary ────────────────────────────────────────────────────────────
+// ── Error Boundary ─────────────────────────────────────────────────────────────
 interface ErrorBoundaryProps { children: ReactNode; }
 interface ErrorBoundaryState { hasError: boolean; }
 
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError(_: Error): ErrorBoundaryState { return { hasError: true }; }
+  constructor(props: ErrorBoundaryProps) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError(): ErrorBoundaryState { return { hasError: true }; }
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('UI Crash:', error, info);
     Sentry.captureException(error, { extra: { componentStack: info.componentStack } });
@@ -70,15 +55,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
 export { ErrorBoundary };
 
-// ── Navigation dots config ────────────────────────────────────────────────────
-const NAV_ITEMS = [
-  { id: 'chart', label: 'Chart' },
-  { id: 'orders', label: 'Orders' },
-  { id: 'labs', label: 'Results' },
-  { id: 'assess', label: 'Score' },
-] as const;
-
-// ── Main Layout ───────────────────────────────────────────────────────────────
+// ── Main export ────────────────────────────────────────────────────────────────
 export function ClinicalLayout() {
   return (
     <ErrorBoundary>
@@ -88,18 +65,11 @@ export function ClinicalLayout() {
 }
 
 function ClinicalLayoutInner() {
-  const [moreMenuOpen, setMoreMenuOpen] = React.useState(false);
-  const [accountMenuOpen, setAccountMenuOpen] = React.useState(false);
-
-  // Pure UI state — only needed in this component, not shared globally
   const [vitalsExpanded, setVitalsExpanded] = React.useState(false);
   const [gcsState, setGcsState] = React.useState({ eyes: 4, verbal: 5, motor: 6 });
-  const [gcsExpanded, setGcsExpanded] = React.useState(false);
-  const [transferExpanded, setTransferExpanded] = React.useState(false);
-  const [selectedLab, setSelectedLab] = React.useState<import('../types').LabResult | null>(null);
   const [timeAdvanceOpen, setTimeAdvanceOpen] = React.useState(false);
-  const realStartTimeRef = React.useRef<number>(Date.now());
-  const [realElapsedMins, setRealElapsedMins] = React.useState(0);
+  const [assessmentOpen, setAssessmentOpen] = React.useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = React.useState(false);
 
   const { user, isAuthOpen, setIsAuthOpen, handleLogout, isSupabaseConfigured, isAuthLoading, isRecovery, clearRecovery } = useAuth();
   const {
@@ -113,39 +83,23 @@ function ClinicalLayoutInner() {
     isConsulting,
     isConsultOpen,
     setIsConsultOpen,
-    interventionInput,
-    setInterventionInput,
     intervening,
     userNotes,
     setUserNotes,
     evaluation,
-
     submitting,
     differential,
     setDifferential,
-    callTarget,
-    setCallTarget,
-    callMessage,
-    setCallMessage,
     calling,
     logs,
-    setLogs,
     reasoning,
     isDxPadOpen,
     setIsDxPadOpen,
     dxPadInitialTab,
-    setDxPadInitialTab,
     pendingStage,
     setPendingStage,
-    canUndo,
-    canRedo,
-    lastAction,
-    nextRedoAction,
-    handleUndo,
-    handleRedo,
     loadNewCase,
     handlePerformIntervention,
-    handleStaffCall,
     handleConsult,
     handleOrderTest,
     handleOrderMedication,
@@ -153,42 +107,13 @@ function ClinicalLayoutInner() {
     handleAdvanceTime,
     handleEndCase,
     handleStageNavigate,
-    simTime,
     setMedicalCase,
+    simTime,
   } = useCase();
-  const {
-    activeTab,
-    setActiveTab,
-    isLibraryOpen,
-    setIsLibraryOpen,
-    isCommandOpen,
-    setIsCommandOpen,
-  } = useNavigation();
 
-  const stageToTab: Record<WorkflowStage, string> = {
-    triage: 'chart',
-    history: 'chart',
-    exam: 'chart',
-    diagnostics: 'orders',
-    dxpause: 'dxpause',
-    management: 'orders',
-  };
+  const { isLibraryOpen, setIsLibraryOpen, isCommandOpen, setIsCommandOpen } = useNavigation();
 
-  // ── Real-time elapsed clock ───────────────────────────────────────────────
-  React.useEffect(() => {
-    if (!medicalCase) return;
-    realStartTimeRef.current = Date.now();
-    setRealElapsedMins(0);
-  }, [medicalCase?.id]);
-
-  React.useEffect(() => {
-    const id = setInterval(() => {
-      setRealElapsedMins(Math.floor((Date.now() - realStartTimeRef.current) / 60000));
-    }, 15000);
-    return () => clearInterval(id);
-  }, []);
-
-  // ── Derive abnormal vitals ──────────────────────────────────────────────────
+  // Derive abnormal vitals for alert strip
   const abnormalVitals: { label: string; value: string; critical: boolean }[] = [];
   if (medicalCase?.vitals) {
     const v = medicalCase.vitals;
@@ -196,9 +121,9 @@ function ClinicalLayoutInner() {
       abnormalVitals.push({ label: 'HR', value: `${v.heartRate}`, critical: v.heartRate > 150 || v.heartRate < 40 });
     if (v.oxygenSaturation < 94)
       abnormalVitals.push({ label: 'SpO2', value: `${v.oxygenSaturation}%`, critical: v.oxygenSaturation < 88 });
-    const sbp = parseInt(v.bloodPressure.split('/')[0]) || 120;
+    const sbp = parseInt(medicalCase.vitals.bloodPressure.split('/')[0]) || 120;
     if (sbp < 90 || sbp > 160)
-      abnormalVitals.push({ label: 'BP', value: v.bloodPressure, critical: sbp < 80 || sbp > 180 });
+      abnormalVitals.push({ label: 'BP', value: medicalCase.vitals.bloodPressure, critical: sbp < 80 || sbp > 180 });
     if (v.respiratoryRate > 24 || v.respiratoryRate < 10)
       abnormalVitals.push({ label: 'RR', value: `${v.respiratoryRate}`, critical: v.respiratoryRate > 30 || v.respiratoryRate < 8 });
     if (v.temperature > 38.5 || v.temperature < 36)
@@ -206,7 +131,7 @@ function ClinicalLayoutInner() {
   }
   const hasCritical = abnormalVitals.some(v => v.critical);
 
-  // ── Auth gate ───────────────────────────────────────────────────────────────
+  // ── Auth gate ────────────────────────────────────────────────────────────────
   if (isSupabaseConfigured && !isAuthLoading && !user) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8">
@@ -219,10 +144,7 @@ function ClinicalLayoutInner() {
           <p className="text-sm text-gray-500 mb-8 leading-relaxed">
             USMLE Step 3 CCS simulator. Sign in to access cases and track your progress.
           </p>
-          <button
-            onClick={() => setIsAuthOpen(true)}
-            className="px-8 py-3 bg-gray-900 text-white text-sm font-medium rounded-full hover:bg-gray-800 transition-colors"
-          >
+          <button onClick={() => setIsAuthOpen(true)} className="px-8 py-3 bg-gray-900 text-white text-sm font-medium rounded-full hover:bg-gray-800 transition-colors">
             Sign in
           </button>
         </motion.div>
@@ -230,7 +152,7 @@ function ClinicalLayoutInner() {
     );
   }
 
-  // ── Loading screen ──────────────────────────────────────────────────────────
+  // ── Loading / error screen ───────────────────────────────────────────────────
   if (isAuthLoading || loading || error) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -239,9 +161,7 @@ function ClinicalLayoutInner() {
             <>
               <p className="text-base font-medium text-gray-900 mb-2">Connection Failed</p>
               <p className="text-sm text-gray-500 mb-6">{error}</p>
-              <button onClick={() => loadNewCase()} className="px-6 py-2.5 bg-black text-white rounded-full text-sm font-medium hover:bg-gray-800 transition-colors">
-                Try Again
-              </button>
+              <button onClick={() => loadNewCase()} className="px-6 py-2.5 bg-black text-white rounded-full text-sm font-medium hover:bg-gray-800 transition-colors">Try Again</button>
             </>
           ) : (
             <>
@@ -254,22 +174,18 @@ function ClinicalLayoutInner() {
     );
   }
 
-  // ── Main render ─────────────────────────────────────────────────────────────
+  // ── Main render ──────────────────────────────────────────────────────────────
   return (
-    <div className={cn(
-      "h-screen flex flex-col overflow-hidden transition-colors duration-500",
-      hasCritical ? "bg-red-50" : "bg-white"
-    )} role="application">
+    <div className={cn('h-screen flex flex-col overflow-hidden transition-colors duration-500', hasCritical ? 'bg-red-50' : 'bg-white')} role="application">
 
-      {/* Modals & overlays */}
+      {/* Global modals */}
       <VitalsExpanded isOpen={vitalsExpanded} onClose={() => setVitalsExpanded(false)} vitalsHistory={vitalsHistory} />
       <CaseLibrary isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} onSelectCase={(d, c, e) => { setIsLibraryOpen(false); loadNewCase(d, c, e); }} />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} isRecovery={isRecovery} onRecoveryHandled={clearRecovery} />
-
       <CommandPalette
         isOpen={isCommandOpen}
         onClose={() => setIsCommandOpen(false)}
-        onNavigate={(tab) => setActiveTab(tab as any)}
+        onNavigate={() => {}}
         onNewCase={() => setIsLibraryOpen(true)}
         onConsult={handleConsult}
         hasArchive={!!user}
@@ -277,275 +193,6 @@ function ClinicalLayoutInner() {
         onAdminister={medicalCase ? (med) => handlePerformIntervention(2, `Administer ${med}`) : undefined}
         onAdvanceTime={medicalCase ? handleAdvanceTime : undefined}
       />
-
-      {/* ── Single header line ── */}
-      <header className="h-12 flex items-center px-4 shrink-0 relative z-30">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <button onClick={() => setVitalsExpanded(true)} className="text-sm font-semibold text-gray-900 truncate hover:underline">
-            {medicalCase?.patientName}
-          </button>
-          <span className="text-xs text-gray-400">
-            {medicalCase?.age}{medicalCase?.gender?.[0]?.toUpperCase()}
-          </span>
-          {medicalCase?.chiefComplaint && (
-            <span className="text-xs text-gray-400 truncate hidden sm:inline">
-              · {medicalCase.chiefComplaint.slice(0, 40)}{medicalCase.chiefComplaint.length > 40 ? '…' : ''}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          <span className={cn(
-            'text-xs font-mono font-medium',
-            simTime === 0 ? 'text-gray-300' :
-            simTime < 30 ? 'text-gray-500' :
-            simTime < 60 ? 'text-amber-500' : 'text-red-500'
-          )}>
-            {simTime}m
-          </span>
-          <button onClick={handleConsult} disabled={isConsulting || !medicalCase} className="text-xs text-gray-400 hover:text-gray-700 disabled:opacity-30 transition-colors font-medium" aria-label="AI Consultant">
-            AI
-          </button>
-          <button onClick={() => setIsLibraryOpen(true)} className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors" aria-label="New case">
-            <RefreshCw className="w-4 h-4" />
-          </button>
-          {user && (
-            <div className="relative">
-              <button
-                onClick={() => setAccountMenuOpen(p => !p)}
-                className="w-6 h-6 bg-gray-900 rounded-full flex items-center justify-center text-[10px] font-medium text-white"
-                aria-label="Account menu"
-              >
-                {user.email?.[0].toUpperCase()}
-              </button>
-              {accountMenuOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setAccountMenuOpen(false)} />
-                  <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-xl shadow-lg py-2 px-1 min-w-[160px] z-50">
-                    <p className="px-3 py-1 text-[10px] text-gray-400 truncate">{user.email}</p>
-                    <div className="border-t border-gray-100 mt-1 pt-1">
-                      <button
-                        onClick={() => { setAccountMenuOpen(false); handleLogout(); }}
-                        className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        Sign out
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </header>
-
-      {/* ── Abnormal vitals strip (only shows when something is wrong) ── */}
-      <AnimatePresence>
-        {(abnormalVitals.length > 0 || (medicalCase?.physiologicalTrend && medicalCase.physiologicalTrend !== 'stable' && medicalCase.physiologicalTrend !== 'improving')) && (
-          <motion.button
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            onClick={() => setVitalsExpanded(true)}
-            className={cn(
-              "flex items-center justify-center gap-4 py-2 px-4 shrink-0 transition-colors cursor-pointer",
-              hasCritical || medicalCase?.physiologicalTrend === 'critical' ? "bg-red-100" : "bg-amber-50"
-            )}
-          >
-            {abnormalVitals.map((v, i) => (
-              <span key={i} className={cn(
-                "text-xs font-bold font-mono",
-                v.critical ? "text-red-600" : "text-amber-600"
-              )}>
-                {v.label} {v.value}
-              </span>
-            ))}
-            {medicalCase?.physiologicalTrend === 'declining' && (
-              <span className="text-xs font-bold text-amber-600">↓ Declining</span>
-            )}
-            {medicalCase?.physiologicalTrend === 'critical' && (
-              <span className="text-xs font-bold text-red-600 animate-pulse">⚠ Critical deterioration</span>
-            )}
-          </motion.button>
-        )}
-      </AnimatePresence>
-
-      {/* ── Patient outcome overlay ── */}
-      <AnimatePresence>
-        {patientOutcome && patientOutcome !== 'alive' && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className={cn(
-              "py-3 px-4 flex items-center justify-center gap-3 shrink-0",
-              patientOutcome === 'deceased' ? "bg-gray-900 text-white" : "bg-red-600 text-white"
-            )}
-          >
-            <span className="text-sm font-medium">
-              {patientOutcome === 'deceased' ? 'Patient expired' : 'Critical deterioration'}
-            </span>
-            <button onClick={() => loadNewCase()} className="text-xs underline opacity-70 hover:opacity-100">
-              New case
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Content area (90% of screen) ── */}
-      <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-4 pb-28" role="main">
-        <div className="max-w-3xl mx-auto">
-          <AnimatePresence mode="wait">
-            {activeTab === 'chart' && medicalCase && (
-              <ChartTab
-                key="chart"
-                medicalCase={medicalCase}
-                gcsState={gcsState}
-                onGcsChange={(cat, score) => setGcsState(prev => ({ ...prev, [cat]: score }))}
-                gcsExpanded={gcsExpanded}
-                onToggleGcs={() => setGcsExpanded(p => !p)}
-                onExamineSystem={(system, finding) => {
-                  setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: `EXAM: ${system.toUpperCase()} examined` }]);
-                  reasoning.addFinding({ source: 'exam', text: `${system}: ${finding.slice(0, 60)}`, relevance: 'none', addedAt: medicalCase.simulationTime });
-                  setMedicalCase(prev => {
-                    if (!prev) return prev;
-                    return { ...prev, clinicalActions: [...(prev.clinicalActions || []), { id: `exam-${Date.now()}`, timestamp: prev.simulationTime, type: 'exam' as const, description: `Examined ${system}: ${finding.slice(0, 80)}` }] };
-                  });
-                }}
-              />
-            )}
-
-            {activeTab === 'orders' && medicalCase && (
-              <OrdersTab
-                key="orders"
-                medicalCase={medicalCase}
-                simTime={simTime}
-                intervening={intervening}
-                interventionInput={interventionInput}
-                transferExpanded={transferExpanded}
-                onInterventionChange={setInterventionInput}
-                onExecuteOrder={() => handlePerformIntervention()}
-                onOpenTimeAdvance={() => setTimeAdvanceOpen(true)}
-                onTransfer={(dept) => handlePerformIntervention(0, `Transfer to ${dept}`)}
-                onToggleTransfer={() => setTransferExpanded(p => !p)}
-                onOrderTest={handleOrderTest}
-                onOrderMedication={handleOrderMedication}
-                onDiscontinueMedication={handleDiscontinueMedication}
-                onPerformIntervention={handlePerformIntervention}
-              />
-            )}
-
-            {activeTab === 'labs' && medicalCase && (
-              <LabsTab key="labs" medicalCase={medicalCase} simTime={simTime} selectedLab={selectedLab} onSelectLab={setSelectedLab} />
-            )}
-
-            {activeTab === 'comms' && medicalCase && (
-              <CommsTab key="comms" medicalCase={medicalCase} callTarget={callTarget} callMessage={callMessage} calling={calling} onSelectTarget={setCallTarget} onMessageChange={setCallMessage} onSend={handleStaffCall} />
-            )}
-
-            {activeTab === 'dxpause' && medicalCase && (
-              <DxPauseTab key="dxpause" medicalCase={medicalCase} problemRepresentation={reasoning.problemRepresentation} onProblemRepresentationChange={reasoning.setProblemRepresentation} differentials={reasoning.differentials} findings={reasoning.findings} prHistory={reasoning.prHistory} prIsDirty={reasoning.prIsDirty} onUpdateFindingRelevanceForDx={reasoning.updateFindingRelevanceForDx} onSetIllnessScript={reasoning.setIllnessScript} onSetLead={reasoning.setLeadDiagnosis} simTime={simTime} onProceedToManagement={() => handleStageNavigate('management')} />
-            )}
-
-            {activeTab === 'assess' && medicalCase && (
-              <AssessmentTab key="assess" medicalCase={medicalCase} simTime={simTime} userNotes={userNotes} evaluation={evaluation} submitting={submitting} logs={logs} differential={differential} onDifferentialChange={setDifferential} onNotesChange={setUserNotes} onEndCase={handleEndCase} onNewCase={() => loadNewCase()} />
-            )}
-
-            {activeTab === 'archive' && (
-              <motion.div key="archive" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <ArchiveView user={user} />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </main>
-
-      {/* ── Dual elapsed timer strip ── */}
-      {medicalCase && (
-        <div className="fixed bottom-[64px] left-0 right-0 z-30 bg-gray-50/95 border-t border-gray-100 py-1 px-4">
-          <div className="max-w-md mx-auto flex items-center justify-between">
-            <span className="text-[10px] font-mono text-gray-400">
-              {(() => {
-                const t = simTime;
-                const d = Math.floor(t / 1440);
-                const h = Math.floor((t % 1440) / 60);
-                const m = t % 60;
-                return `SIM ${d > 0 ? `${d}d ` : ''}${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m`;
-              })()}
-            </span>
-            <span className="text-[10px] font-mono text-gray-400">
-              REAL {realElapsedMins}m
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* ── Bottom navigation: minimal dots ── */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/90 backdrop-blur-md border-t border-gray-100">
-        <div className="max-w-md mx-auto flex items-center justify-around py-3 px-4">
-          {NAV_ITEMS.map(item => {
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id as any)}
-                className="flex flex-col items-center gap-1 group"
-                aria-label={item.label}
-                aria-current={isActive ? 'page' : undefined}
-              >
-                <div className={cn(
-                  'w-2 h-2 rounded-full transition-all duration-200',
-                  isActive ? 'w-6 bg-gray-900' : 'bg-gray-300 group-hover:bg-gray-500'
-                )} />
-                <span className={cn(
-                  'text-[9px] font-medium transition-colors',
-                  isActive ? 'text-gray-900' : 'text-gray-400'
-                )}>
-                  {item.label}
-                </span>
-              </button>
-            );
-          })}
-          {/* More menu */}
-          <div className="relative">
-            <button
-              onClick={() => setMoreMenuOpen(p => !p)}
-              className="flex flex-col items-center gap-1 group"
-              aria-label="More"
-            >
-              <div className={cn(
-                'w-2 h-2 rounded-full transition-all duration-200',
-                moreMenuOpen ? 'w-6 bg-gray-900' : 'bg-gray-300 group-hover:bg-gray-500'
-              )} />
-              <span className={cn(
-                'text-[9px] font-medium transition-colors',
-                moreMenuOpen ? 'text-gray-900' : 'text-gray-400'
-              )}>
-                More
-              </span>
-            </button>
-            {moreMenuOpen && (
-              <div className="absolute bottom-12 right-0 bg-white border border-gray-200 rounded-xl shadow-lg py-2 px-1 min-w-[130px] z-50">
-                {[
-                  { id: 'archive', label: 'Stats' },
-                  { id: 'comms', label: 'Comms' },
-                  { id: 'dxpause', label: 'DxPause' },
-                ].map(item => (
-                  <button
-                    key={item.id}
-                    onClick={() => { setActiveTab(item.id as any); setMoreMenuOpen(false); }}
-                    className={cn(
-                      'w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors',
-                      activeTab === item.id ? 'bg-gray-100 text-gray-900 font-medium' : 'text-gray-600 hover:bg-gray-50'
-                    )}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </nav>
-
-      {/* ── Time Advance Modal ── */}
       {timeAdvanceOpen && medicalCase && (
         <TimeAdvanceModal
           medicalCase={medicalCase}
@@ -556,7 +203,159 @@ function ClinicalLayoutInner() {
         />
       )}
 
-      {/* ── Diagnosis Pad (floating, only when open) ── */}
+      {/* ── Header ── */}
+      <header className="h-12 flex items-center px-4 shrink-0 relative z-30">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <button onClick={() => setVitalsExpanded(true)} className="text-sm font-semibold text-gray-900 truncate hover:underline">
+            {medicalCase?.patientName}
+          </button>
+          <span className="text-xs text-gray-400">
+            {medicalCase?.age}{medicalCase?.gender?.[0]?.toUpperCase()}
+          </span>
+          {medicalCase?.chiefComplaint && (
+            <span className="text-xs text-gray-400 truncate hidden sm:inline">
+              · {medicalCase.chiefComplaint.slice(0, 50)}{medicalCase.chiefComplaint.length > 50 ? '…' : ''}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <span className={cn('text-xs font-mono font-medium',
+            simTime === 0 ? 'text-gray-300' :
+            simTime < 30 ? 'text-gray-500' :
+            simTime < 60 ? 'text-amber-500' : 'text-red-500'
+          )}>
+            T+{simTime}m
+          </span>
+          <button onClick={() => setIsLibraryOpen(true)} className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors" aria-label="New case">
+            <RefreshCw className="w-4 h-4" />
+          </button>
+          {user ? (
+            <div className="relative">
+              <button onClick={() => setAccountMenuOpen(p => !p)} className="w-6 h-6 bg-gray-900 rounded-full flex items-center justify-center text-[10px] font-medium text-white" aria-label="Account menu">
+                {user.email?.[0].toUpperCase()}
+              </button>
+              {accountMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setAccountMenuOpen(false)} />
+                  <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-xl shadow-lg py-2 px-1 min-w-[180px] z-50">
+                    <p className="px-3 py-1 text-[10px] text-gray-400 truncate">{user.email}</p>
+                    <div className="border-t border-gray-100 mt-1 pt-1">
+                      <button onClick={() => { setAccountMenuOpen(false); setAssessmentOpen(true); }} className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
+                        History &amp; score
+                      </button>
+                      <button onClick={() => { setAccountMenuOpen(false); handleLogout(); }} className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                        Sign out
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : null}
+        </div>
+      </header>
+
+      {/* Abnormal vitals alert strip */}
+      <AnimatePresence>
+        {(abnormalVitals.length > 0 || (medicalCase?.physiologicalTrend && medicalCase.physiologicalTrend !== 'stable' && medicalCase.physiologicalTrend !== 'improving')) && (
+          <motion.button
+            initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            onClick={() => setVitalsExpanded(true)}
+            className={cn('flex items-center justify-center gap-4 py-2 px-4 shrink-0 cursor-pointer', hasCritical || medicalCase?.physiologicalTrend === 'critical' ? 'bg-red-100' : 'bg-amber-50')}
+          >
+            {abnormalVitals.map((v, i) => (
+              <span key={i} className={cn('text-xs font-bold font-mono', v.critical ? 'text-red-600' : 'text-amber-600')}>{v.label} {v.value}</span>
+            ))}
+            {medicalCase?.physiologicalTrend === 'declining' && <span className="text-xs font-bold text-amber-600">↓ Declining</span>}
+            {medicalCase?.physiologicalTrend === 'critical' && <span className="text-xs font-bold text-red-600 animate-pulse">⚠ Critical deterioration</span>}
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* Patient outcome banner */}
+      <AnimatePresence>
+        {patientOutcome && patientOutcome !== 'alive' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className={cn('py-3 px-4 flex items-center justify-center gap-3 shrink-0', patientOutcome === 'deceased' ? 'bg-gray-900 text-white' : 'bg-red-600 text-white')}>
+            <span className="text-sm font-medium">{patientOutcome === 'deceased' ? 'Patient expired' : 'Critical deterioration'}</span>
+            <button onClick={() => loadNewCase()} className="text-xs underline opacity-70 hover:opacity-100">New case</button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Scrollable feed ── */}
+      <main className="flex-1 overflow-y-auto px-4 sm:px-6 pb-48" role="main">
+        <div className="max-w-2xl mx-auto">
+          {medicalCase && (
+            <ClinicalFeed
+              medicalCase={medicalCase}
+              simTime={simTime}
+              intervening={intervening}
+              gcsState={gcsState}
+              onGcsChange={(cat, score) => setGcsState(prev => ({ ...prev, [cat]: score }))}
+              onExamineSystem={(system, finding) => {
+                reasoning.addFinding({ source: 'exam', text: `${system}: ${finding.slice(0, 60)}`, relevance: 'none', addedAt: medicalCase.simulationTime });
+                setMedicalCase(prev => {
+                  if (!prev) return prev;
+                  return { ...prev, clinicalActions: [...(prev.clinicalActions || []), { id: `exam-${Date.now()}`, timestamp: prev.simulationTime, type: 'exam' as const, description: `Examined ${system}: ${finding.slice(0, 80)}` }] };
+                });
+              }}
+              onDiscontinueMedication={handleDiscontinueMedication}
+            />
+          )}
+        </div>
+      </main>
+
+      {/* ── Sticky order bar ── */}
+      <OrderBar
+        medicalCase={medicalCase}
+        simTime={simTime}
+        intervening={intervening || calling}
+        onOpenTimeAdvance={() => setTimeAdvanceOpen(true)}
+        onTransfer={(dept) => handlePerformIntervention(0, `Transfer to ${dept}`)}
+        onOrderTest={handleOrderTest}
+        onOrderMedication={handleOrderMedication}
+        onPerformIntervention={handlePerformIntervention}
+        onOpenAssessment={() => setAssessmentOpen(true)}
+        onConsult={handleConsult}
+      />
+
+      {/* ── Assessment overlay (End case) ── */}
+      <AnimatePresence>
+        {assessmentOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed inset-0 bg-white z-50 overflow-y-auto"
+          >
+            <div className="max-w-2xl mx-auto px-4 py-6 pb-24">
+              <button onClick={() => setAssessmentOpen(false)} className="text-sm text-gray-400 hover:text-gray-700 transition-colors mb-6 block">
+                ← Back to case
+              </button>
+              <AssessmentTab
+                medicalCase={medicalCase}
+                simTime={simTime}
+                userNotes={userNotes}
+                evaluation={evaluation}
+                submitting={submitting}
+                logs={logs}
+                differential={differential}
+                onDifferentialChange={setDifferential}
+                onNotesChange={setUserNotes}
+                onEndCase={handleEndCase}
+                onNewCase={() => { setAssessmentOpen(false); loadNewCase(); }}
+              />
+              {user && (
+                <div className="mt-12 border-t border-gray-100 pt-8">
+                  <ArchiveView user={user} />
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Diagnosis Pad (floating) ── */}
       {medicalCase && (
         <AnimatePresence>
           <DiagnosisPad
@@ -599,7 +398,6 @@ function ClinicalLayoutInner() {
             const snapId = reasoning.commitStage(fromStage, simTime);
             if (snapId && pendingStage) {
               reasoning.goToStage(pendingStage);
-              setActiveTab(stageToTab[pendingStage] as any);
               setPendingStage(null);
             }
             return snapId;
