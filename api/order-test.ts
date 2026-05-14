@@ -5,8 +5,14 @@
  * Does NOT reveal the result until availableAt <= simulationTime.
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import OpenAI from "openai";
 import { getCaseServerSide } from "./_supabase.js";
 import { normaliseTestName, inferTurnaround } from "../src/utils/normaliseTestName.js";
+
+const ai = new OpenAI({
+  baseURL: "https://api.deepseek.com",
+  apiKey: process.env.DEEPSEEK_API_KEY,
+});
 
 function validateRequest(body: any) {
   if (!body || typeof body !== "object") throw new Error("Request body must be a JSON object.");
@@ -20,6 +26,46 @@ function validateRequest(body: any) {
     testName:       body.testName       as string,
     currentSimTime: body.currentSimTime as number,
     priority:       (body.priority === "routine" ? "routine" : "stat") as "stat" | "routine",
+  };
+}
+
+async function generateLabResult(testName: string, fullCase: any): Promise<{ value: string; unit: string; normalRange: string; status: "normal" | "abnormal" | "critical" }> {
+  const context = `Diagnosis: ${fullCase.correctDiagnosis}. Chief complaint: ${fullCase.chiefComplaint}. Age: ${fullCase.age}, ${fullCase.gender}. Vitals: HR ${fullCase.vitals?.heartRate}, BP ${fullCase.vitals?.bloodPressure}, SpO2 ${fullCase.vitals?.oxygenSaturation}%.`;
+  const resp = await ai.chat.completions.create({
+    model: "deepseek-chat",
+    max_tokens: 80,
+    temperature: 0.2,
+    messages: [
+      { role: "system", content: 'You are a clinical simulator. Return ONLY valid JSON: {"value":"...","unit":"...","normalRange":"...","status":"normal"|"abnormal"|"critical"}. No markdown.' },
+      { role: "user", content: `${context}\n\nReturn a realistic ${testName} result for this patient.` },
+    ],
+  });
+  const raw = resp.choices[0]?.message?.content?.trim() ?? "{}";
+  const parsed = JSON.parse(raw);
+  return {
+    value:       String(parsed.value       ?? "—"),
+    unit:        String(parsed.unit        ?? ""),
+    normalRange: String(parsed.normalRange ?? ""),
+    status:      ["normal", "abnormal", "critical"].includes(parsed.status) ? parsed.status : "normal",
+  };
+}
+
+async function generateImagingResult(testName: string, fullCase: any): Promise<{ findings: string; impression: string }> {
+  const context = `Diagnosis: ${fullCase.correctDiagnosis}. Chief complaint: ${fullCase.chiefComplaint}. Age: ${fullCase.age}, ${fullCase.gender}. HPI: ${(fullCase.historyOfPresentIllness ?? "").slice(0, 200)}.`;
+  const resp = await ai.chat.completions.create({
+    model: "deepseek-chat",
+    max_tokens: 200,
+    temperature: 0.3,
+    messages: [
+      { role: "system", content: 'You are a radiologist. Return ONLY valid JSON: {"findings":"...","impression":"..."}. Findings: 2-4 sentences of realistic report language. Impression: 1 concise sentence. No markdown.' },
+      { role: "user", content: `${context}\n\nWrite a radiology report for: ${testName}` },
+    ],
+  });
+  const raw = resp.choices[0]?.message?.content?.trim() ?? "{}";
+  const parsed = JSON.parse(raw);
+  return {
+    findings:   String(parsed.findings   ?? "Examination performed. No acute abnormality identified."),
+    impression: String(parsed.impression ?? "No acute findings."),
   };
 }
 
@@ -66,9 +112,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         (l: any) => l.name.toLowerCase().includes(testName.toLowerCase()) ||
                     testName.toLowerCase().includes(l.name.toLowerCase())
       );
-      result = match
-        ? { ...match, orderedAt, availableAt }
-        : { name: rawName, value: "Pending", unit: "", normalRange: "", status: "normal", orderedAt, availableAt };
+      if (match) {
+        result = { ...match, orderedAt, availableAt };
+      } else {
+        const generated = await generateLabResult(rawName, fullCase);
+        result = { name: rawName, ...generated, orderedAt, availableAt };
+      }
     } else {
       const match = (fullCase.imaging || []).find(
         (i: any) => normaliseTestName(i.type) === testName
@@ -76,9 +125,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         (i: any) => i.type.toLowerCase().includes(testName.toLowerCase()) ||
                     testName.toLowerCase().includes(i.type.toLowerCase())
       );
-      result = match
-        ? { ...match, orderedAt, availableAt }
-        : { type: rawName, findings: "Pending read", impression: "Pending", orderedAt, availableAt };
+      if (match) {
+        result = { ...match, orderedAt, availableAt };
+      } else {
+        const generated = await generateImagingResult(rawName, fullCase);
+        result = { type: rawName, ...generated, orderedAt, availableAt };
+      }
     }
 
     const action = {
