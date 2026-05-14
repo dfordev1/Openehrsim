@@ -201,7 +201,6 @@ function ClinicalLayoutInner() {
   const [assessmentOpen, setAssessmentOpen]   = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
-  const { user, isAuthOpen, setIsAuthOpen, handleLogout, isSupabaseConfigured, isAuthLoading, isRecovery, clearRecovery } = useAuth();
   const {
     medicalCase, loading, error, loadingStep, patientOutcome, vitalsHistory,
     consultantAdvice, isConsulting, isConsultOpen, setIsConsultOpen,
@@ -272,12 +271,50 @@ function ClinicalLayoutInner() {
     </div>
   );
 
-  // ── Main render ──────────────────────────────────────────────────────────────
+  const mc = medicalCase;
+  const stream = mc ? buildStream(mc, simTime) : [];
+
+  const vitalsLine = mc ? [
+    `HR ${mc.vitals.heartRate}`,
+    `BP ${mc.vitals.bloodPressure}`,
+    `RR ${mc.vitals.respiratoryRate}`,
+    `SpO2 ${mc.vitals.oxygenSaturation}%`,
+    `T ${mc.vitals.temperature}°C`,
+  ].join('  ·  ') : '';
+
+  const isBusy = intervening || calling;
+
+  function submitInput() {
+    const val = input.trim();
+    if (!val || isBusy || !mc) return;
+    setInput('');
+    handlePerformIntervention(5, val);
+  }
+
+  // Quick-suggest: first few labs and imaging not yet ordered
+  const orderedLabNames = new Set((mc?.labs || []).map(l => l.name.toLowerCase()));
+  const orderedImgTypes = new Set((mc?.imaging || []).map(i => i.type.toLowerCase()));
+  const suggestLabs = (mc?.availableTests?.labs || []).filter(t => !orderedLabNames.has(t.name.toLowerCase())).slice(0, 3);
+  const suggestImgs = (mc?.availableTests?.imaging || []).filter(t => !orderedImgTypes.has(t.name.toLowerCase())).slice(0, 2);
+  const activeMeds = (mc?.medications || []).filter(m => m.discontinuedAt === undefined);
+
+  // Vitals status
+  const sbp = mc ? parseInt(mc.vitals.bloodPressure.split('/')[0]) || 120 : 120;
+  const isCritical = mc && (
+    mc.vitals.heartRate > 150 || mc.vitals.heartRate < 40 ||
+    mc.vitals.oxygenSaturation < 88 ||
+    sbp < 80 || sbp > 180 ||
+    mc.physiologicalTrend === 'critical'
+  );
+
+  const examSystems = mc?.physicalExam
+    ? (Object.entries(mc.physicalExam) as [string, string][])
+    : [];
+
   return (
     <div className={cn('h-screen flex flex-col overflow-hidden transition-colors duration-500', hasCritical ? 'bg-red-50' : 'bg-white')}>
 
       {/* Global modals */}
-      <VitalsExpanded isOpen={vitalsExpanded} onClose={() => setVitalsExpanded(false)} vitalsHistory={vitalsHistory} />
       <CaseLibrary isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} onSelectCase={(d, c, e) => { setIsLibraryOpen(false); loadNewCase(d, c, e); }} />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} isRecovery={isRecovery} onRecoveryHandled={clearRecovery} />
       <CommandPalette isOpen={isCommandOpen} onClose={() => setIsCommandOpen(false)} onNavigate={() => {}} onNewCase={() => setIsLibraryOpen(true)} onConsult={handleConsult} hasArchive={!!user} onOrderTest={medicalCase ? handleOrderTest : undefined} onAdminister={medicalCase ? med => handlePerformIntervention(2, `Administer ${med}`) : undefined} onAdvanceTime={medicalCase ? handleAdvanceTime : undefined} />
