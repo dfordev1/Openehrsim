@@ -289,7 +289,7 @@ function Shell() {
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: T.sans, fontSize: 13, background: T.bg, color: T.text }}>
 
-      {/* Global modals */}
+      {/* ── Global overlays ── */}
       <CaseLibrary isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} onSelectCase={(d, c, e) => { setIsLibraryOpen(false); loadNewCase(d, c, e); }} />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} isRecovery={isRecovery} onRecoveryHandled={clearRecovery} />
       <CommandPalette isOpen={isCommandOpen} onClose={() => setIsCommandOpen(false)} onNavigate={() => {}} onNewCase={() => setIsLibraryOpen(true)} onConsult={handleConsult} hasArchive={!!user} onOrderTest={mc ? handleOrderTest : undefined} onAdminister={mc ? (med) => handlePerformIntervention(2, `Administer ${med}`) : undefined} onAdvanceTime={mc ? handleAdvanceTime : undefined} />
@@ -306,6 +306,37 @@ function Shell() {
           {mc && <HeaderBtn onClick={() => setIsDxPadOpen(p => !p)}>Dx Pad</HeaderBtn>}
           {user && <span style={{ color: '#64748b', fontSize: 12, marginLeft: 8 }}>{user.email} · <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 12, padding: 0, textDecoration: 'underline' }}>Sign out</button></span>}
         </div>
+
+        {/* Patient subtitle row */}
+        {mc && (
+          <button onClick={() => setVitalsExpanded(true)} className="w-full flex items-center gap-2 px-4 pb-2.5 text-left">
+            <span className="text-[13px]" style={{ color: IOS.gray }}>
+              {mc.age} y/o {mc.gender}
+            </span>
+            {mc.difficulty && (
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: IOS.blue + '18', color: IOS.blue }}>
+                {mc.difficulty}
+              </span>
+            )}
+            {/* Vitals pills */}
+            <div className="flex items-center gap-1.5 flex-wrap ml-auto">
+              {[
+                { label: 'HR', value: mc.vitals.heartRate, crit: mc.vitals.heartRate > 150 || mc.vitals.heartRate < 40, abn: mc.vitals.heartRate > 100 || mc.vitals.heartRate < 60 },
+                { label: 'BP', value: mc.vitals.bloodPressure, crit: false, abn: false },
+                { label: 'SpO₂', value: `${mc.vitals.oxygenSaturation}%`, crit: mc.vitals.oxygenSaturation < 88, abn: mc.vitals.oxygenSaturation < 95 },
+                { label: 'T', value: `${mc.vitals.temperature}°`, crit: mc.vitals.temperature > 40 || mc.vitals.temperature < 34, abn: mc.vitals.temperature > 38.3 || mc.vitals.temperature < 36 },
+              ].map(({ label, value, crit, abn }) => (
+                <span key={label} className="text-[11px] font-medium px-1.5 py-0.5 rounded" style={{
+                  background: crit ? IOS.red + '18' : abn ? IOS.orange + '18' : 'rgba(120,120,128,0.12)',
+                  color: crit ? IOS.red : abn ? IOS.orange : IOS.gray,
+                }}>
+                  {label} {value}
+                </span>
+              ))}
+            </div>
+            <ChevronRight className="w-3.5 h-3.5 shrink-0" style={{ color: IOS.gray }} />
+          </button>
+        )}
       </header>
 
       {!mc ? (
@@ -741,6 +772,7 @@ function Shell() {
               </div>
             )}
           </div>
+        )}
 
           {/* ── Quick-order chips ── */}
           {(quickLabs.length > 0 || quickImgs.length > 0) && (
