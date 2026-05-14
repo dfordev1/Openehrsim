@@ -53,13 +53,14 @@ const CATEGORY_COLOR: Record<string, string> = {
 };
 
 function OrderBar({
-  caseId, simTime, busy,
+  caseId, simTime, busy, variant = 'fixed',
   onExecute, onOpenTimeAdvance, onTransfer,
   onOrderTest, onOrderMedication, onOpenAssessment, onConsult,
 }: {
   caseId: string | undefined;
   simTime: number;
   busy: boolean;
+  variant?: 'fixed' | 'panel';
   onExecute: (text: string) => Promise<void>;
   onOpenTimeAdvance: () => void;
   onTransfer: (dept: string) => void;
@@ -110,9 +111,10 @@ function OrderBar({
 
   const isBusy = busy || placing;
   const penaltyLevel = simTime >= 90 ? 'high' : simTime >= 60 ? 'moderate' : simTime >= 45 ? 'low' : null;
+  const isFixed = variant === 'fixed';
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 bg-white">
+    <div className={cn('bg-white', isFixed && 'fixed bottom-0 left-0 right-0 z-40')}>
       {/* Suggestions */}
       <AnimatePresence>
         {suggestions.length > 0 && (
@@ -226,6 +228,19 @@ function ClinicalLayoutInner() {
   }
   const hasCritical = abnormalVitals.some(v => v.critical);
 
+  const orderBarProps = {
+    caseId: medicalCase?.id,
+    simTime,
+    busy: intervening || calling,
+    onExecute: (text: string) => handlePerformIntervention(5, text),
+    onOpenTimeAdvance: () => setTimeAdvanceOpen(true),
+    onTransfer: (dept: string) => handlePerformIntervention(0, `Transfer to ${dept}`),
+    onOrderTest: handleOrderTest,
+    onOrderMedication: handleOrderMedication,
+    onOpenAssessment: () => setAssessmentOpen(true),
+    onConsult: handleConsult,
+  } as const;
+
   // ── Auth gate ────────────────────────────────────────────────────────────────
   if (isSupabaseConfigured && !isAuthLoading && !user) return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8">
@@ -328,45 +343,98 @@ function ClinicalLayoutInner() {
         )}
       </AnimatePresence>
 
-      {/* Scrollable timeline */}
-      <main className="flex-1 overflow-y-auto px-4 sm:px-6 pb-36">
-        <div className="max-w-xl mx-auto pt-6">
-          {medicalCase && (
-            <ClinicalTimeline
-              medicalCase={medicalCase}
-              simTime={simTime}
-              intervening={intervening}
-              gcsState={gcsState}
-              onGcsChange={(cat, score) => setGcsState(prev => ({ ...prev, [cat]: score }))}
-              onExamineSystem={(system, finding) => {
-                reasoning.addFinding({ source: 'exam', text: `${system}: ${finding.slice(0, 60)}`, relevance: 'none', addedAt: medicalCase.simulationTime });
-                setMedicalCase(prev => prev ? ({
-                  ...prev,
-                  clinicalActions: [...(prev.clinicalActions || []), {
-                    id: `exam-${Date.now()}`, timestamp: prev.simulationTime,
-                    type: 'exam' as const, description: `Examined ${system}: ${finding.slice(0, 80)}`,
-                  }],
-                }) : prev);
-              }}
-              onDiscontinueMedication={handleDiscontinueMedication}
-            />
-          )}
-        </div>
-      </main>
+      {/* ── Split body ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-1 overflow-hidden">
 
-      {/* Sticky order bar */}
-      <OrderBar
-        caseId={medicalCase?.id}
-        simTime={simTime}
-        busy={intervening || calling}
-        onExecute={text => handlePerformIntervention(5, text)}
-        onOpenTimeAdvance={() => setTimeAdvanceOpen(true)}
-        onTransfer={dept => handlePerformIntervention(0, `Transfer to ${dept}`)}
-        onOrderTest={handleOrderTest}
-        onOrderMedication={handleOrderMedication}
-        onOpenAssessment={() => setAssessmentOpen(true)}
-        onConsult={handleConsult}
-      />
+        {/* LEFT: Scrollable timeline */}
+        <main className="flex-1 overflow-y-auto px-4 sm:px-6 pb-36 lg:pb-6">
+          <div className="max-w-xl mx-auto lg:max-w-2xl pt-6">
+            {medicalCase && (
+              <ClinicalTimeline
+                medicalCase={medicalCase}
+                simTime={simTime}
+                intervening={intervening}
+                gcsState={gcsState}
+                onGcsChange={(cat, score) => setGcsState(prev => ({ ...prev, [cat]: score }))}
+                onExamineSystem={(system, finding) => {
+                  reasoning.addFinding({ source: 'exam', text: `${system}: ${finding.slice(0, 60)}`, relevance: 'none', addedAt: medicalCase.simulationTime });
+                  setMedicalCase(prev => prev ? ({
+                    ...prev,
+                    clinicalActions: [...(prev.clinicalActions || []), {
+                      id: `exam-${Date.now()}`, timestamp: prev.simulationTime,
+                      type: 'exam' as const, description: `Examined ${system}: ${finding.slice(0, 80)}`,
+                    }],
+                  }) : prev);
+                }}
+                onDiscontinueMedication={handleDiscontinueMedication}
+              />
+            )}
+          </div>
+        </main>
+
+        {/* RIGHT: Orders + Consultant — desktop only */}
+        <aside className="hidden lg:flex flex-col w-80 xl:w-96 border-l border-gray-100 shrink-0 bg-white">
+
+          {/* Consultant chat */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">AI Consultant</p>
+              {medicalCase && !isConsulting && (
+                <button onClick={handleConsult} disabled={intervening || calling}
+                  className="text-xs text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-30">
+                  Ask →
+                </button>
+              )}
+            </div>
+
+            {isConsulting ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <div className="w-6 h-6 border-2 border-gray-200 border-t-gray-900 rounded-full animate-spin" />
+                <p className="text-xs text-gray-400">Thinking…</p>
+              </div>
+            ) : consultantAdvice ? (
+              <div className="space-y-4">
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-sm text-gray-900 leading-relaxed italic">"{consultantAdvice.advice}"</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-medium text-gray-400 uppercase mb-1">Reasoning</p>
+                  <p className="text-sm text-gray-700 leading-relaxed">{consultantAdvice.reasoning}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-medium text-gray-400 uppercase mb-2">Next steps</p>
+                  <div className="space-y-2">
+                    {consultantAdvice.recommendedActions.map((action, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <span className="w-4 h-4 rounded-full bg-gray-900 text-white flex items-center justify-center text-[9px] font-medium shrink-0 mt-0.5">{i + 1}</span>
+                        <p className="text-sm text-gray-700">{action}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 gap-2">
+                <p className="text-xs text-gray-300">No consultation yet</p>
+                {medicalCase && (
+                  <button onClick={handleConsult} disabled={intervening || calling}
+                    className="text-xs text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-30 mt-1">
+                    Ask the consultant →
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Order bar (panel mode — not fixed) */}
+          <OrderBar {...orderBarProps} variant="panel" />
+        </aside>
+      </div>
+
+      {/* Mobile: fixed order bar */}
+      <div className="lg:hidden">
+        <OrderBar {...orderBarProps} variant="fixed" />
+      </div>
 
       {/* Assessment / history overlay */}
       <AnimatePresence>
@@ -414,40 +482,42 @@ function ClinicalLayoutInner() {
         />
       )}
 
-      {/* AI Consultant slide-over */}
-      <AnimatePresence>
-        {isConsultOpen && (<>
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsConsultOpen(false)} className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[100]" />
-          <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 28, stiffness: 260 }} className="fixed bottom-0 left-0 right-0 max-h-[80vh] bg-white rounded-t-2xl shadow-2xl z-[101] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <div><h3 className="text-sm font-semibold text-gray-900">AI Consultant</h3><p className="text-[10px] text-gray-400">Specialist reasoning</p></div>
-              <button onClick={() => setIsConsultOpen(false)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-4 h-4 text-gray-400" /></button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-5 space-y-5">
-              {isConsulting ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-3">
-                  <div className="w-6 h-6 border-2 border-gray-200 border-t-gray-900 rounded-full animate-spin" />
-                  <p className="text-xs text-gray-400">Thinking...</p>
-                </div>
-              ) : consultantAdvice ? (<>
-                <div className="bg-gray-50 rounded-xl p-4"><p className="text-sm text-gray-900 leading-relaxed italic">"{consultantAdvice.advice}"</p></div>
-                <div><p className="text-[10px] font-medium text-gray-400 uppercase mb-1">Reasoning</p><p className="text-sm text-gray-700 leading-relaxed">{consultantAdvice.reasoning}</p></div>
-                <div>
-                  <p className="text-[10px] font-medium text-gray-400 uppercase mb-2">Next steps</p>
-                  <div className="space-y-2">
-                    {consultantAdvice.recommendedActions.map((action, i) => (
-                      <div key={i} className="flex items-start gap-3">
-                        <span className="w-5 h-5 rounded-full bg-gray-900 text-white flex items-center justify-center text-[10px] font-medium shrink-0">{i + 1}</span>
-                        <p className="text-sm text-gray-700 pt-0.5">{action}</p>
-                      </div>
-                    ))}
+      {/* AI Consultant slide-over (mobile only — desktop uses right panel) */}
+      <div className="lg:hidden">
+        <AnimatePresence>
+          {isConsultOpen && (<>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsConsultOpen(false)} className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[100]" />
+            <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 28, stiffness: 260 }} className="fixed bottom-0 left-0 right-0 max-h-[80vh] bg-white rounded-t-2xl shadow-2xl z-[101] flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                <div><h3 className="text-sm font-semibold text-gray-900">AI Consultant</h3><p className="text-[10px] text-gray-400">Specialist reasoning</p></div>
+                <button onClick={() => setIsConsultOpen(false)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-4 h-4 text-gray-400" /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                {isConsulting ? (
+                  <div className="flex flex-col items-center justify-center py-12 gap-3">
+                    <div className="w-6 h-6 border-2 border-gray-200 border-t-gray-900 rounded-full animate-spin" />
+                    <p className="text-xs text-gray-400">Thinking...</p>
                   </div>
-                </div>
-              </>) : <div className="text-center py-12"><p className="text-sm text-gray-400">No consultation yet</p></div>}
-            </div>
-          </motion.div>
-        </>)}
-      </AnimatePresence>
+                ) : consultantAdvice ? (<>
+                  <div className="bg-gray-50 rounded-xl p-4"><p className="text-sm text-gray-900 leading-relaxed italic">"{consultantAdvice.advice}"</p></div>
+                  <div><p className="text-[10px] font-medium text-gray-400 uppercase mb-1">Reasoning</p><p className="text-sm text-gray-700 leading-relaxed">{consultantAdvice.reasoning}</p></div>
+                  <div>
+                    <p className="text-[10px] font-medium text-gray-400 uppercase mb-2">Next steps</p>
+                    <div className="space-y-2">
+                      {consultantAdvice.recommendedActions.map((action, i) => (
+                        <div key={i} className="flex items-start gap-3">
+                          <span className="w-5 h-5 rounded-full bg-gray-900 text-white flex items-center justify-center text-[10px] font-medium shrink-0">{i + 1}</span>
+                          <p className="text-sm text-gray-700 pt-0.5">{action}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>) : <div className="text-center py-12"><p className="text-sm text-gray-400">No consultation yet</p></div>}
+              </div>
+            </motion.div>
+          </>)}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
