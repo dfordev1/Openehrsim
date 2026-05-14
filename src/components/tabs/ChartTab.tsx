@@ -67,23 +67,23 @@ export function ChartTab({ medicalCase, gcsState, onGcsChange, gcsExpanded, onTo
     <motion.div key="chart" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-10 py-8">
 
       {/* Chief complaint */}
-      <p className="text-xl font-medium text-gray-900 leading-relaxed">
+      <p className="text-xl font-medium text-clinical-ink leading-relaxed">
         &ldquo;{medicalCase.chiefComplaint}&rdquo;
       </p>
 
       {/* Demographics */}
-      <p className="text-sm text-gray-400">
+      <p className="text-sm text-clinical-slate">
         {medicalCase.age}{genderAbbr} · {medicalCase.currentLocation}
       </p>
 
       {/* Vitals */}
       <div className="space-y-1">
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Vitals</p>
-        <p className="text-sm font-mono text-gray-700">
+        <p className="text-[10px] font-semibold text-clinical-slate uppercase tracking-widest">Vitals</p>
+        <p className="text-sm font-mono text-clinical-ink">
           HR {v.heartRate} · BP {v.bloodPressure} · SpO2 {v.oxygenSaturation}% · RR {v.respiratoryRate} · {v.temperature}°C
         </p>
         {v.heightCm != null && v.weightKg != null && (
-          <p className="text-xs font-mono text-gray-400">
+          <p className="text-xs font-mono text-clinical-slate">
             {v.heightCm}cm · {v.weightKg}kg{v.bmi != null ? ` · BMI ${v.bmi.toFixed(1)}` : ''}
           </p>
         )}
@@ -91,15 +91,15 @@ export function ChartTab({ medicalCase, gcsState, onGcsChange, gcsExpanded, onTo
 
       {/* Initial appearance */}
       {medicalCase.initialAppearance && (
-        <p className="text-sm text-gray-500 italic leading-relaxed border-l-2 border-gray-100 pl-3">
+        <p className="text-sm text-clinical-slate italic leading-relaxed border-l-2 border-clinical-line pl-3">
           {medicalCase.initialAppearance}
         </p>
       )}
 
       {/* HPI */}
       <div className="space-y-2">
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">History of Present Illness</p>
-        <p className="text-sm text-gray-900 leading-relaxed whitespace-pre-wrap">
+        <p className="text-[10px] font-semibold text-clinical-slate uppercase tracking-widest">History of Present Illness</p>
+        <p className="text-sm text-clinical-ink leading-relaxed whitespace-pre-wrap">
           {medicalCase.historyOfPresentIllness}
         </p>
       </div>
@@ -107,22 +107,22 @@ export function ChartTab({ medicalCase, gcsState, onGcsChange, gcsExpanded, onTo
       {/* PMH */}
       {pmh.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Past Medical History</p>
+          <p className="text-[10px] font-semibold text-clinical-slate uppercase tracking-widest">Past Medical History</p>
           <ul className="space-y-1">
-            {pmh.map((item, i) => <li key={i} className="text-sm text-gray-700">{item}</li>)}
+            {pmh.map((item, i) => <li key={i} className="text-sm text-clinical-ink">{item}</li>)}
           </ul>
         </div>
       )}
 
       {/* Physical exam — tap to reveal */}
       <div className="space-y-1">
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-3">Physical Examination</p>
+        <p className="text-[10px] font-semibold text-clinical-slate uppercase tracking-widest mb-3">Physical Examination</p>
         {examEntries.map(([key, finding]) => {
           const isExamined = !!revealedFindings[key];
           const isLoading = loadingSystem === key;
           const label = key.charAt(0).toUpperCase() + key.slice(1);
           return (
-            <div key={key} className="py-3 border-b border-gray-100 last:border-0">
+            <div key={key} className="py-3 border-b border-clinical-line last:border-0">
               <button
                 onClick={() => handleExamine(key, finding as string)}
                 disabled={isExamined || isLoading}
@@ -131,14 +131,14 @@ export function ChartTab({ medicalCase, gcsState, onGcsChange, gcsExpanded, onTo
                 {isExamined ? (
                   <AnimatePresence>
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                      <p className="text-xs font-medium text-gray-400 mb-0.5">{label}</p>
-                      <p className="text-sm text-gray-900 leading-relaxed">{revealedFindings[key]}</p>
+                      <p className="text-xs font-medium text-clinical-slate mb-0.5">{label}</p>
+                      <p className="text-sm text-clinical-ink leading-relaxed">{revealedFindings[key]}</p>
                     </motion.div>
                   </AnimatePresence>
                 ) : (
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-400">{label}</span>
-                    <span className="text-xs text-gray-300">{isLoading ? 'Examining…' : 'Tap to examine'}</span>
+                    <span className="text-sm font-medium text-clinical-slate">{label}</span>
+                    <span className="text-xs text-clinical-slate/50">{isLoading ? 'Examining…' : 'Tap to examine'}</span>
                   </div>
                 )}
               </button>
@@ -149,18 +149,18 @@ export function ChartTab({ medicalCase, gcsState, onGcsChange, gcsExpanded, onTo
         {/* GCS */}
         <div className="pt-3 space-y-3">
           <button onClick={onToggleGcs} className="flex items-center justify-between w-full">
-            <span className="text-sm font-medium text-gray-500">GCS</span>
-            <span className="text-sm font-mono text-gray-900">E{gcsState.eyes} V{gcsState.verbal} M{gcsState.motor} = {gcsTotal}</span>
+            <span className="text-sm font-medium text-clinical-slate">GCS</span>
+            <span className="text-sm font-mono text-clinical-ink">E{gcsState.eyes} V{gcsState.verbal} M{gcsState.motor} = {gcsTotal}</span>
           </button>
           {gcsExpanded && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-3 gap-4">
               {(['eyes', 'verbal', 'motor'] as const).map(cat => (
                 <div key={cat}>
-                  <p className="text-xs text-gray-400 mb-2 capitalize">{cat}</p>
+                  <p className="text-xs text-clinical-slate mb-2 capitalize">{cat}</p>
                   <select
                     value={gcsState[cat]}
                     onChange={e => onGcsChange(cat, Number(e.target.value))}
-                    className="w-full text-sm border border-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-gray-400"
+                    className="w-full text-sm border border-clinical-line rounded-md px-2 py-1.5 focus:outline-none focus:border-clinical-teal"
                   >
                     {GCS_MAPPING[cat].map(opt => (
                       <option key={opt.score} value={opt.score}>{opt.score} — {opt.label}</option>
@@ -174,7 +174,7 @@ export function ChartTab({ medicalCase, gcsState, onGcsChange, gcsExpanded, onTo
       </div>
 
       {Object.keys(revealedFindings).length === examEntries.length && examEntries.length > 0 && (
-        <p className="text-sm text-gray-400 text-center pt-2">All systems examined — proceed to Orders</p>
+        <p className="text-sm text-clinical-slate text-center pt-2">All systems examined — proceed to Orders</p>
       )}
     </motion.div>
   );

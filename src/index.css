@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;700&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -7,13 +7,19 @@
 
   --color-clinical-bg: var(--clinical-bg);
   --color-clinical-surface: var(--clinical-surface);
+  --color-clinical-surface-raised: var(--clinical-surface-raised);
   --color-clinical-ink: var(--clinical-ink);
+  --color-clinical-ink-muted: var(--clinical-ink-muted);
   --color-clinical-slate: var(--clinical-slate);
   --color-clinical-line: var(--clinical-line);
   --color-clinical-blue: var(--clinical-blue);
+  --color-clinical-blue-soft: var(--clinical-blue-soft);
   --color-clinical-red: var(--clinical-red);
+  --color-clinical-red-soft: var(--clinical-red-soft);
   --color-clinical-amber: var(--clinical-amber);
+  --color-clinical-amber-soft: var(--clinical-amber-soft);
   --color-clinical-green: var(--clinical-green);
+  --color-clinical-green-soft: var(--clinical-green-soft);
   --color-clinical-teal: var(--clinical-teal);
   --color-clinical-teal-soft: var(--clinical-teal-soft);
   --color-clinical-teal-strong: var(--clinical-teal-strong);
@@ -21,25 +27,68 @@
   --color-panel-dark: var(--panel-dark);
   --color-panel-dark-border: var(--panel-dark-border);
   --color-panel-muted: var(--panel-muted);
+
+  --color-glass: var(--glass-bg);
+  --color-glass-border: var(--glass-border);
 }
 
-/* Light mode (default) */
+/* ═══════════════════════════════════════════════════════════════════════
+   DARK MODE — Bloomberg Terminal aesthetic (DEFAULT)
+   Deep blacks, electric accents, data-dense. Professional. Immersive.
+   ═══════════════════════════════════════════════════════════════════════ */
 :root {
-  --clinical-bg: #F9FAFB;
+  --clinical-bg: #0A0E17;
+  --clinical-surface: #111827;
+  --clinical-surface-raised: #1A2233;
+  --clinical-ink: #E2E8F0;
+  --clinical-ink-muted: #94A3B8;
+  --clinical-slate: #64748B;
+  --clinical-line: #1E293B;
+  --clinical-blue: #60A5FA;
+  --clinical-blue-soft: rgba(96, 165, 250, 0.12);
+  --clinical-red: #F87171;
+  --clinical-red-soft: rgba(248, 113, 113, 0.12);
+  --clinical-amber: #FBBF24;
+  --clinical-amber-soft: rgba(251, 191, 36, 0.10);
+  --clinical-green: #34D399;
+  --clinical-green-soft: rgba(52, 211, 153, 0.12);
+  --clinical-teal: #2DD4BF;
+  --clinical-teal-strong: #14B8A6;
+  --clinical-teal-soft: rgba(45, 212, 191, 0.10);
+  --panel-dark: #0F172A;
+  --panel-dark-border: #1E293B;
+  --panel-muted: #131B2E;
+  --glass-bg: rgba(17, 24, 39, 0.80);
+  --glass-border: rgba(255, 255, 255, 0.06);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LIGHT MODE — Clean clinical white
+   ═══════════════════════════════════════════════════════════════════════ */
+.light {
+  --clinical-bg: #F8FAFC;
   --clinical-surface: #FFFFFF;
-  --clinical-ink: #334155;
-  --clinical-slate: #78859B;
-  --clinical-line: #E8ECF1;
-  --clinical-blue: #4F7DF2;
-  --clinical-red: #E8554E;
-  --clinical-amber: #E09B3D;
-  --clinical-green: #3DA877;
-  --clinical-teal: #0F766E;
-  --clinical-teal-strong: #115E59;
-  --clinical-teal-soft: #CCFBF1;
-  --panel-dark: #1B1F2A;
-  --panel-dark-border: #2A2F3C;
-  --panel-muted: #F3F5F8;
+  --clinical-surface-raised: #F1F5F9;
+  --clinical-ink: #1E293B;
+  --clinical-ink-muted: #64748B;
+  --clinical-slate: #94A3B8;
+  --clinical-line: #E2E8F0;
+  --clinical-blue: #3B82F6;
+  --clinical-blue-soft: rgba(59, 130, 246, 0.08);
+  --clinical-red: #EF4444;
+  --clinical-red-soft: rgba(239, 68, 68, 0.08);
+  --clinical-amber: #F59E0B;
+  --clinical-amber-soft: rgba(245, 158, 11, 0.08);
+  --clinical-green: #10B981;
+  --clinical-green-soft: rgba(16, 185, 129, 0.08);
+  --clinical-teal: #0D9488;
+  --clinical-teal-strong: #0F766E;
+  --clinical-teal-soft: rgba(13, 148, 136, 0.08);
+  --panel-dark: #1E293B;
+  --panel-dark-border: #334155;
+  --panel-muted: #F1F5F9;
+  --glass-bg: rgba(255, 255, 255, 0.80);
+  --glass-border: rgba(0, 0, 0, 0.06);
 }
 
 @layer base {
@@ -52,11 +101,13 @@
 
   h1, h2, h3, h4, h5, h6 {
     font-weight: 600;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.025em;
   }
 }
 
-/* Minimal Scrollbar */
+/* ═══════════════════════════════════════════════════════════════════════
+   SCROLLBAR — Thin, dark, disappearing
+   ═══════════════════════════════════════════════════════════════════════ */
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -67,12 +118,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #C8D0DA;
+  background: var(--clinical-line);
   border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #A0AEBE;
+  background: var(--clinical-slate);
 }
 
 ::-webkit-scrollbar-corner {
@@ -87,43 +138,121 @@
   scrollbar-width: none;
 }
 
-/* Clean Table */
+/* ═══════════════════════════════════════════════════════════════════════
+   GLASSMORPHISM
+   ═══════════════════════════════════════════════════════════════════════ */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border);
+}
+
+.glass-subtle {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CLINICAL TABLE
+   ═══════════════════════════════════════════════════════════════════════ */
 .clinical-table {
   @apply w-full border-collapse text-left;
 }
 
 .clinical-table th {
-  @apply py-2 px-3 text-clinical-slate font-medium text-xs tracking-wide border-b border-clinical-line bg-clinical-bg/50;
+  @apply py-2 px-3 text-clinical-slate font-medium text-xs tracking-wide border-b border-clinical-line;
+  background: var(--clinical-surface);
 }
 
 .clinical-table td {
   @apply py-2 px-3 border-b border-clinical-line/50 text-sm;
 }
 
-/* Skeleton loader animation */
+/* ═══════════════════════════════════════════════════════════════════════
+   SKELETON LOADER — Shimmer with theme-aware colors
+   ═══════════════════════════════════════════════════════════════════════ */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
 
 .skeleton {
-  background: linear-gradient(90deg, #E8ECF1 25%, #F3F5F8 50%, #E8ECF1 75%);
+  background: linear-gradient(90deg, var(--clinical-line) 25%, var(--clinical-surface-raised) 50%, var(--clinical-line) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
-/* Command palette */
+/* ═══════════════════════════════════════════════════════════════════════
+   VITALS WAVEFORM — Animated ECG line
+   ═══════════════════════════════════════════════════════════════════════ */
+@keyframes ecg-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.ecg-line {
+  animation: ecg-scroll 4s linear infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.vital-pulse {
+  animation: pulse-glow 1.5s ease-in-out infinite;
+}
+
+@keyframes critical-flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.critical-flash {
+  animation: critical-flash 0.8s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   STAGE STEPPER — Glowing active stage
+   ═══════════════════════════════════════════════════════════════════════ */
+.stage-active {
+  box-shadow: 0 0 12px rgba(45, 212, 191, 0.3), 0 0 4px rgba(45, 212, 191, 0.5);
+}
+
+.stage-completed {
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.2);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   COMMAND PALETTE — Glassmorphism overlay
+   ═══════════════════════════════════════════════════════════════════════ */
 .command-palette-overlay {
-  @apply fixed inset-0 bg-clinical-ink/40 backdrop-blur-sm z-[200] flex items-start justify-center pt-[15vh];
+  @apply fixed inset-0 z-[200] flex items-start justify-center pt-[15vh];
+  background: rgba(0, 0, 0, 0.60);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .command-palette {
-  @apply w-full max-w-lg bg-clinical-surface rounded-xl shadow-2xl border border-clinical-line overflow-hidden;
+  @apply w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden;
+  background: var(--clinical-surface);
+  border: 1px solid var(--clinical-line);
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.5),
+    0 0 0 1px var(--glass-border);
 }
 
 .command-palette-input {
-  @apply w-full px-5 py-4 text-sm bg-transparent border-b border-clinical-line focus:outline-none placeholder:text-clinical-slate/50;
+  @apply w-full px-5 py-4 text-sm bg-transparent border-b border-clinical-line focus:outline-none;
+  color: var(--clinical-ink);
+}
+
+.command-palette-input::placeholder {
+  color: var(--clinical-slate);
+  opacity: 0.5;
 }
 
 .command-palette-results {
@@ -131,14 +260,51 @@
 }
 
 .command-palette-item {
-  @apply flex items-center gap-3 px-5 py-2.5 text-sm text-clinical-ink hover:bg-clinical-blue/5 cursor-pointer transition-colors;
+  @apply flex items-center gap-3 px-5 py-2.5 text-sm cursor-pointer transition-colors;
+  color: var(--clinical-ink);
+}
+
+.command-palette-item:hover {
+  background: var(--clinical-blue-soft);
 }
 
 .command-palette-item.active {
-  @apply bg-clinical-blue/10 text-clinical-blue;
+  background: var(--clinical-blue-soft);
+  color: var(--clinical-blue);
 }
 
-/* Accessibility: Reduced motion support */
+/* ═══════════════════════════════════════════════════════════════════════
+   ORDER BAR — Floating, glassmorphic
+   ═══════════════════════════════════════════════════════════════════════ */
+.order-bar {
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-top: 1px solid var(--glass-border);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   GLOW EFFECTS — For interactive elements
+   ═══════════════════════════════════════════════════════════════════════ */
+.glow-blue {
+  box-shadow: 0 0 16px rgba(96, 165, 250, 0.15), 0 0 4px rgba(96, 165, 250, 0.3);
+}
+
+.glow-green {
+  box-shadow: 0 0 16px rgba(52, 211, 153, 0.15), 0 0 4px rgba(52, 211, 153, 0.3);
+}
+
+.glow-red {
+  box-shadow: 0 0 16px rgba(248, 113, 113, 0.2), 0 0 4px rgba(248, 113, 113, 0.4);
+}
+
+.glow-amber {
+  box-shadow: 0 0 16px rgba(251, 191, 36, 0.15), 0 0 4px rgba(251, 191, 36, 0.3);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ACCESSIBILITY
+   ═══════════════════════════════════════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -149,18 +315,20 @@
 
   .skeleton {
     animation: none;
-    background: #E8ECF1;
+    background: var(--clinical-line);
+  }
+
+  .ecg-line {
+    animation: none;
   }
 }
 
-/* Accessibility: Focus visible styling */
 :focus-visible {
-  outline: 2px solid var(--color-clinical-blue);
+  outline: 2px solid var(--clinical-blue);
   outline-offset: 2px;
   border-radius: 4px;
 }
 
-/* Tighter focus for small buttons */
 button:focus-visible,
 [role="option"]:focus-visible,
 [role="radio"]:focus-visible {
@@ -168,7 +336,6 @@ button:focus-visible,
   outline-offset: 1px;
 }
 
-/* Accessibility: Screen reader only utility */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -179,4 +346,11 @@ button:focus-visible,
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SAFE AREA — iOS/Android bottom notch padding
+   ═══════════════════════════════════════════════════════════════════════ */
+.pb-safe-or-3 {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }

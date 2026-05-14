@@ -29,12 +29,12 @@ function Section({ title, badge, children, defaultOpen = false }: {
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border-b border-gray-100">
+    <div className="border-b border-clinical-line">
       <button onClick={() => setOpen(p => !p)} className="w-full flex items-center justify-between py-3">
-        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">{title}</span>
+        <span className="text-[10px] font-semibold text-clinical-slate uppercase tracking-widest">{title}</span>
         <div className="flex items-center gap-2">
           {badge}
-          <span className="text-[10px] text-gray-300">{open ? '▲' : '▼'}</span>
+          <span className="text-[10px] text-clinical-slate/50">{open ? '▲' : '▼'}</span>
         </div>
       </button>
       <AnimatePresence initial={false}>
@@ -119,12 +119,12 @@ export function ClinicalFeed({ medicalCase, simTime, intervening, gcsState, onGc
   const pendingCount = resultItems.filter(r => !r.available).length;
 
   return (
-    <div className="divide-y divide-gray-100">
+    <div className="divide-y divide-clinical-line">
 
       {/* ── Vitals — always visible ── */}
       <div className="py-4 space-y-1.5">
         <div className="flex items-center justify-between">
-          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Vitals</p>
+          <p className="text-[10px] font-semibold text-clinical-slate uppercase tracking-widest">Vitals</p>
           {trend && trend !== 'stable' && (
             <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full',
               trend === 'improving' ? 'bg-green-50 text-green-600' :
@@ -135,11 +135,11 @@ export function ClinicalFeed({ medicalCase, simTime, intervening, gcsState, onGc
             </span>
           )}
         </div>
-        <p className="text-sm font-mono text-gray-800">
+        <p className="text-sm font-mono text-clinical-ink">
           HR {v.heartRate} · BP {v.bloodPressure} · SpO2 {v.oxygenSaturation}% · RR {v.respiratoryRate} · {v.temperature}°C
         </p>
         {v.heightCm != null && v.weightKg != null && (
-          <p className="text-xs font-mono text-gray-400">
+          <p className="text-xs font-mono text-clinical-slate">
             {v.heightCm}cm · {v.weightKg}kg{v.bmi != null ? ` · BMI ${v.bmi.toFixed(1)}` : ''}
           </p>
         )}
@@ -148,21 +148,21 @@ export function ClinicalFeed({ medicalCase, simTime, intervening, gcsState, onGc
       {/* ── History — collapsed ── */}
       <Section title="History">
         <div className="space-y-4">
-          <p className="text-xs text-gray-400">{medicalCase.age}{genderAbbr} · {medicalCase.currentLocation}</p>
+          <p className="text-xs text-clinical-slate">{medicalCase.age}{genderAbbr} · {medicalCase.currentLocation}</p>
           {medicalCase.initialAppearance && (
-            <p className="text-sm text-gray-500 italic leading-relaxed border-l-2 border-gray-100 pl-3">
+            <p className="text-sm text-clinical-ink-muted italic leading-relaxed border-l-2 border-clinical-line pl-3">
               {medicalCase.initialAppearance}
             </p>
           )}
           <div>
-            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">HPI</p>
-            <p className="text-sm text-gray-900 leading-relaxed whitespace-pre-wrap">{medicalCase.historyOfPresentIllness}</p>
+            <p className="text-[10px] font-semibold text-clinical-slate uppercase tracking-widest mb-1.5">HPI</p>
+            <p className="text-sm text-clinical-ink leading-relaxed whitespace-pre-wrap">{medicalCase.historyOfPresentIllness}</p>
           </div>
           {pmh.length > 0 && (
             <div>
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">PMH</p>
+              <p className="text-[10px] font-semibold text-clinical-slate uppercase tracking-widest mb-1.5">PMH</p>
               <ul className="space-y-0.5">
-                {pmh.map((item, i) => <li key={i} className="text-sm text-gray-700">{item}</li>)}
+                {pmh.map((item, i) => <li key={i} className="text-sm text-clinical-ink">{item}</li>)}
               </ul>
             </div>
           )}
@@ -177,17 +177,17 @@ export function ClinicalFeed({ medicalCase, simTime, intervening, gcsState, onGc
             const isLoading = loadingSystem === key;
             const label = key.charAt(0).toUpperCase() + key.slice(1);
             return (
-              <div key={key} className="py-2.5 border-b border-gray-50 last:border-0">
+              <div key={key} className="py-2.5 border-b border-clinical-line/50 last:border-0">
                 <button onClick={() => handleExamine(key, finding as string)} disabled={isExamined || isLoading} className="w-full text-left">
                   {isExamined ? (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                      <p className="text-xs font-medium text-gray-400 mb-0.5">{label}</p>
-                      <p className="text-sm text-gray-900 leading-relaxed">{revealedFindings[key]}</p>
+                      <p className="text-xs font-medium text-clinical-slate mb-0.5">{label}</p>
+                      <p className="text-sm text-clinical-ink leading-relaxed">{revealedFindings[key]}</p>
                     </motion.div>
                   ) : (
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-400">{label}</span>
-                      <span className="text-xs text-gray-300">{isLoading ? 'Examining…' : 'Tap to examine'}</span>
+                      <span className="text-sm font-medium text-clinical-slate">{label}</span>
+                      <span className="text-xs text-clinical-slate/50">{isLoading ? 'Examining…' : 'Tap to examine'}</span>
                     </div>
                   )}
                 </button>
@@ -196,15 +196,15 @@ export function ClinicalFeed({ medicalCase, simTime, intervening, gcsState, onGc
           })}
           <div className="pt-3 space-y-2">
             <button onClick={() => setGcsExpanded(p => !p)} className="flex items-center justify-between w-full">
-              <span className="text-sm font-medium text-gray-500">GCS</span>
-              <span className="text-sm font-mono text-gray-900">E{gcsState.eyes} V{gcsState.verbal} M{gcsState.motor} = {gcsTotal}</span>
+              <span className="text-sm font-medium text-clinical-slate">GCS</span>
+              <span className="text-sm font-mono text-clinical-ink">E{gcsState.eyes} V{gcsState.verbal} M{gcsState.motor} = {gcsTotal}</span>
             </button>
             {gcsExpanded && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-3 gap-3">
                 {(['eyes', 'verbal', 'motor'] as const).map(cat => (
                   <div key={cat}>
-                    <p className="text-xs text-gray-400 mb-1 capitalize">{cat}</p>
-                    <select value={gcsState[cat]} onChange={e => onGcsChange(cat, Number(e.target.value))} className="w-full text-sm border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:border-gray-400">
+                    <p className="text-xs text-clinical-slate mb-1 capitalize">{cat}</p>
+                    <select value={gcsState[cat]} onChange={e => onGcsChange(cat, Number(e.target.value))} className="w-full text-sm border border-clinical-line rounded-md px-2 py-1 focus:outline-none focus:border-clinical-blue bg-clinical-surface text-clinical-ink">
                       {GCS_MAPPING[cat].map(opt => <option key={opt.score} value={opt.score}>{opt.score} — {opt.label}</option>)}
                     </select>
                   </div>
@@ -220,26 +220,26 @@ export function ClinicalFeed({ medicalCase, simTime, intervening, gcsState, onGc
         title="Results"
         defaultOpen
         badge={pendingCount > 0 ? (
-          <span className="text-[10px] bg-amber-50 text-amber-600 rounded-full px-1.5 py-0.5">{pendingCount} pending</span>
+          <span className="text-[10px] bg-clinical-amber-soft text-clinical-amber rounded-full px-1.5 py-0.5">{pendingCount} pending</span>
         ) : undefined}
       >
         {resultItems.length === 0 ? (
-          <p className="text-xs text-gray-300">No tests ordered yet.</p>
+          <p className="text-xs text-clinical-slate/50">No tests ordered yet.</p>
         ) : (
           <div>
             {resultItems.map((item, i) => {
               if (item.kind === 'lab') {
                 const lab = item.data;
                 return (
-                  <div key={`lab-${lab.name}-${i}`} className="py-2 border-b border-gray-50 flex items-baseline justify-between">
-                    <span className={cn('text-sm', !item.available ? 'text-gray-300' : 'text-gray-600')}>{lab.name}</span>
+                  <div key={`lab-${lab.name}-${i}`} className="py-2 border-b border-clinical-line/50 flex items-baseline justify-between">
+                    <span className={cn('text-sm', !item.available ? 'text-clinical-slate/40' : 'text-clinical-ink-muted')}>{lab.name}</span>
                     {!item.available ? (
-                      <span className="text-xs text-gray-300">T+{lab.availableAt}m</span>
+                      <span className="text-xs text-clinical-slate/40">T+{lab.availableAt}m</span>
                     ) : (
                       <span className={cn('font-mono text-sm',
-                        lab.status === 'critical' && 'font-bold text-red-600 bg-red-50 px-1.5 rounded',
-                        lab.status === 'abnormal' && 'font-bold text-red-600',
-                        lab.status === 'normal' && 'text-gray-900'
+                        lab.status === 'critical' && 'font-bold text-clinical-red bg-clinical-red-soft px-1.5 rounded',
+                        lab.status === 'abnormal' && 'font-bold text-clinical-red',
+                        lab.status === 'normal' && 'text-clinical-ink'
                       )}>{lab.value} {lab.unit}</span>
                     )}
                   </div>
@@ -249,23 +249,23 @@ export function ClinicalFeed({ medicalCase, simTime, intervening, gcsState, onGc
               const imgKey = `${img.type}-${i}`;
               const isExpanded = expandedImaging === imgKey;
               return (
-                <div key={`img-${img.type}-${i}`} className="border-b border-gray-50">
+                <div key={`img-${img.type}-${i}`} className="border-b border-clinical-line/50">
                   <button
                     onClick={() => item.available && setExpandedImaging(isExpanded ? null : imgKey)}
                     disabled={!item.available}
-                    className={cn('w-full text-left py-2 flex items-baseline justify-between', item.available && 'hover:bg-gray-50 -mx-1 px-1 rounded')}
+                    className={cn('w-full text-left py-2 flex items-baseline justify-between', item.available && 'hover:bg-clinical-line/30 -mx-1 px-1 rounded')}
                   >
-                    <span className={cn('text-sm', !item.available ? 'text-gray-300' : 'text-gray-600')}>{img.type}</span>
+                    <span className={cn('text-sm', !item.available ? 'text-clinical-slate/40' : 'text-clinical-ink-muted')}>{img.type}</span>
                     {!item.available
-                      ? <span className="text-xs text-gray-300">T+{img.availableAt ?? '?'}m</span>
-                      : <span className="text-xs text-gray-400">{isExpanded ? '▲' : '▼ Report'}</span>
+                      ? <span className="text-xs text-clinical-slate/40">T+{img.availableAt ?? '?'}m</span>
+                      : <span className="text-xs text-clinical-slate">{isExpanded ? '▲' : '▼ Report'}</span>
                     }
                   </button>
                   {isExpanded && item.available && (
-                    <div className="bg-gray-50 rounded-lg p-3 mb-2 space-y-2">
-                      {img.findings && <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{img.findings}</p>}
+                    <div className="rounded-lg p-3 mb-2 space-y-2" style={{ background: 'var(--clinical-surface-raised)' }}>
+                      {img.findings && <p className="text-sm text-clinical-ink leading-relaxed whitespace-pre-line">{img.findings}</p>}
                       {img.impression && (
-                        <p className="text-sm font-medium text-gray-900 border-t border-gray-200 pt-2">{img.impression}</p>
+                        <p className="text-sm font-medium text-clinical-ink border-t border-clinical-line pt-2">{img.impression}</p>
                       )}
                     </div>
                   )}
@@ -287,8 +287,8 @@ export function ClinicalFeed({ medicalCase, simTime, intervening, gcsState, onGc
           <div className="space-y-1">
             {[...medicalCase.clinicalActions].reverse().map((action, i) => (
               <div key={i} className="flex gap-3 text-xs">
-                <span className="font-mono shrink-0 text-gray-300">T+{action.timestamp}m</span>
-                <span className="text-gray-500">{action.description}</span>
+                <span className="font-mono shrink-0 text-clinical-slate/50">T+{action.timestamp}m</span>
+                <span className="text-clinical-slate">{action.description}</span>
               </div>
             ))}
           </div>

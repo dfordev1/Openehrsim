@@ -72,7 +72,7 @@ export function AssessmentTab({
             value={userNotes}
             onChange={(e) => onNotesChange(e.target.value)}
             placeholder="Final assessment, diagnosis, disposition plan..."
-            className="w-full text-sm border-b border-gray-200 py-3 px-1 focus:outline-none focus:border-gray-900 transition-colors bg-transparent resize-none leading-relaxed"
+            className="w-full text-sm border-b border-clinical-line py-3 px-1 focus:outline-none focus:border-clinical-teal transition-colors bg-transparent text-clinical-ink resize-none leading-relaxed placeholder-clinical-slate"
             rows={4}
           />
 
@@ -83,8 +83,8 @@ export function AssessmentTab({
               className={cn(
                 "px-8 py-3 text-sm font-medium rounded-full disabled:opacity-50 transition-all",
                 confirmState === 'confirming'
-                  ? 'bg-red-600 text-white'
-                  : 'bg-gray-900 text-white'
+                  ? 'bg-clinical-red text-white glow-red'
+                  : 'bg-clinical-teal text-white glow-green'
               )}
             >
               {submitting ? 'Scoring...' : confirmState === 'confirming' ? 'Confirm — End Case?' : 'End Case'}
@@ -98,40 +98,40 @@ export function AssessmentTab({
           <div className="text-center pt-4">
             <p className={cn(
               'text-6xl font-bold font-mono',
-              score >= 80 ? 'text-green-600' :
-              score >= 60 ? 'text-gray-900' :
-              'text-red-600'
+              score >= 80 ? 'text-clinical-green' :
+              score >= 60 ? 'text-clinical-ink' :
+              'text-clinical-red'
             )}>
               {score}
             </p>
           </div>
 
           {/* #13: Simulation time */}
-          <p className="text-xs text-gray-400 text-center">
+          <p className="text-xs text-clinical-slate text-center">
             Completed in {simTime} minutes
           </p>
 
           {/* Feedback */}
           {feedbackText && (
-            <p className="text-sm text-gray-600 leading-relaxed text-center max-w-md mx-auto">
+            <p className="text-sm text-clinical-ink-muted leading-relaxed text-center max-w-md mx-auto">
               {feedbackText}
             </p>
           )}
 
           {/* #8: Reasoning score breakdown */}
           {evaluation?.reasoningScore && (
-            <div className="flex flex-wrap justify-center gap-4 text-xs text-gray-400">
-              <span>Data: <span className="font-mono text-gray-600">{evaluation.reasoningScore.dataAcquisitionThoroughness}</span></span>
-              <span>PR: <span className="font-mono text-gray-600">{evaluation.reasoningScore.problemRepresentation}</span></span>
-              <span>DDx: <span className="font-mono text-gray-600">{evaluation.reasoningScore.differentialAccuracy}</span></span>
-              <span>Plan: <span className="font-mono text-gray-600">{evaluation.reasoningScore.managementPlan}</span></span>
+            <div className="flex flex-wrap justify-center gap-4 text-xs text-clinical-slate">
+              <span>Data: <span className="font-mono text-clinical-ink">{evaluation.reasoningScore.dataAcquisitionThoroughness}</span></span>
+              <span>PR: <span className="font-mono text-clinical-ink">{evaluation.reasoningScore.problemRepresentation}</span></span>
+              <span>DDx: <span className="font-mono text-clinical-ink">{evaluation.reasoningScore.differentialAccuracy}</span></span>
+              <span>Plan: <span className="font-mono text-clinical-ink">{evaluation.reasoningScore.managementPlan}</span></span>
             </div>
           )}
 
           {/* Correct diagnosis */}
           {correctDx && (
-            <p className="text-sm text-gray-400 text-center">
-              Diagnosis: <span className="font-medium text-gray-900">{correctDx}</span>
+            <p className="text-sm text-clinical-slate text-center">
+              Diagnosis: <span className="font-medium text-clinical-ink">{correctDx}</span>
             </p>
           )}
 
@@ -139,7 +139,7 @@ export function AssessmentTab({
           {evaluation?.keyActions && evaluation.keyActions.length > 0 && (
             <ul className="space-y-1.5 max-w-md mx-auto">
               {evaluation.keyActions.map((action, i) => (
-                <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
+                <li key={i} className="text-sm text-clinical-ink-muted flex items-start gap-2">
                   <span className="shrink-0 mt-0.5">{action.startsWith('✓') ? '•' : '×'}</span>
                   <span>{action.replace(/^[✓✗]\s*/, '')}</span>
                 </li>
@@ -149,7 +149,7 @@ export function AssessmentTab({
 
           {/* #7: Clinical pearl */}
           {evaluation?.clinicalPearl && (
-            <p className="text-sm text-gray-500 italic text-center max-w-md mx-auto border-t border-gray-100 pt-6">
+            <p className="text-sm text-clinical-slate italic text-center max-w-md mx-auto border-t border-clinical-line pt-6">
               {evaluation.clinicalPearl}
             </p>
           )}
@@ -158,7 +158,7 @@ export function AssessmentTab({
           <div className="flex justify-center pt-6">
             <button
               onClick={onNewCase}
-              className="px-8 py-3 bg-gray-900 text-white text-sm font-medium rounded-full hover:bg-gray-800 transition-colors"
+              className="px-8 py-3 bg-clinical-teal text-white text-sm font-medium rounded-full hover:opacity-90 transition-all glow-green"
             >
               New Case
             </button>

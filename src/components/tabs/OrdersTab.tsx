@@ -27,7 +27,7 @@ const CATEGORY_COLOR: Record<string, string> = {
   imaging:   'bg-purple-50 text-purple-600',
   medication:'bg-green-50 text-green-600',
   consult:   'bg-amber-50 text-amber-700',
-  procedure: 'bg-gray-100 text-gray-600',
+  procedure: 'bg-clinical-line text-clinical-ink-muted',
 };
 const CATEGORY_LABEL: Record<string, string> = {
   lab: 'Lab', imaging: 'Imaging', medication: 'Medication', consult: 'Consult', procedure: 'Procedure',
@@ -87,7 +87,7 @@ export function OrdersTab({
 
       {/* Vitals + trend */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <p className="text-xs text-gray-400 font-mono">
+        <p className="text-xs text-clinical-slate font-mono">
           HR {medicalCase.vitals.heartRate} · BP {medicalCase.vitals.bloodPressure} · SpO2 {medicalCase.vitals.oxygenSaturation}% · RR {medicalCase.vitals.respiratoryRate} · {medicalCase.vitals.temperature}°C
         </p>
         {trend && trend !== 'stable' && (
@@ -121,10 +121,10 @@ export function OrdersTab({
           value={query}
           onChange={e => { setQuery(e.target.value); search(e.target.value); }}
           placeholder="Search labs, imaging, medications, consults…"
-          className="w-full text-sm border-b border-gray-200 py-2.5 px-1 focus:outline-none focus:border-gray-900 transition-colors bg-transparent pr-20"
+          className="w-full text-sm border-b border-clinical-line py-2.5 px-1 focus:outline-none focus:border-clinical-teal transition-colors bg-transparent pr-20"
           autoComplete="off"
         />
-        {searching && <span className="absolute right-0 top-2.5 text-xs text-gray-300">searching…</span>}
+        {searching && <span className="absolute right-0 top-2.5 text-xs text-clinical-slate/50">searching…</span>}
       </div>
 
       {results.length > 0 && (
@@ -132,15 +132,15 @@ export function OrdersTab({
           {results.map(r => (
             <label key={r.name} className={cn(
               'flex items-center gap-3 py-2 px-2 rounded-lg cursor-pointer transition-colors',
-              selected.has(r.name) ? 'bg-gray-50' : 'hover:bg-gray-50'
+              selected.has(r.name) ? 'bg-clinical-line/50' : 'hover:bg-clinical-line/50'
             )}>
-              <input type="checkbox" checked={selected.has(r.name)} onChange={() => toggle(r.name)} className="accent-gray-900" />
+              <input type="checkbox" checked={selected.has(r.name)} onChange={() => toggle(r.name)} className="accent-clinical-teal" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-800">{r.name}</p>
-                {(r.route || r.frequency) && <p className="text-[10px] text-gray-400">{[r.route, r.frequency].filter(Boolean).join(' · ')}</p>}
-                {r.stat != null && <p className="text-[10px] text-gray-400">STAT {r.stat}m · Routine {r.routine}m</p>}
+                <p className="text-sm text-clinical-ink">{r.name}</p>
+                {(r.route || r.frequency) && <p className="text-[10px] text-clinical-slate">{[r.route, r.frequency].filter(Boolean).join(' · ')}</p>}
+                {r.stat != null && <p className="text-[10px] text-clinical-slate">STAT {r.stat}m · Routine {r.routine}m</p>}
               </div>
-              <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0', CATEGORY_COLOR[r.category] ?? 'bg-gray-100 text-gray-500')}>
+              <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0', CATEGORY_COLOR[r.category] ?? 'bg-clinical-line text-clinical-slate')}>
                 {CATEGORY_LABEL[r.category] ?? r.category}
               </span>
             </label>
@@ -148,7 +148,7 @@ export function OrdersTab({
           {selected.size > 0 && (
             <div className="pt-2">
               <button onClick={confirmOrders} disabled={confirming || intervening}
-                className="px-5 py-2 bg-gray-900 text-white text-sm font-medium rounded-full disabled:opacity-30 transition-opacity">
+                className="px-5 py-2 bg-clinical-teal text-white text-sm font-medium rounded-full disabled:opacity-30 transition-opacity">
                 {confirming ? 'Placing…' : `Place ${selected.size} order${selected.size > 1 ? 's' : ''}`}
               </button>
             </div>
@@ -157,32 +157,32 @@ export function OrdersTab({
       )}
 
       {results.length === 0 && !query && (
-        <p className="text-xs text-gray-300">Type to search — labs, imaging, medications, consults, procedures.</p>
+        <p className="text-xs text-clinical-slate/50">Type to search — labs, imaging, medications, consults, procedures.</p>
       )}
       {results.length === 0 && query && !searching && (
-        <p className="text-sm text-gray-400">No results for &ldquo;{query}&rdquo;</p>
+        <p className="text-sm text-clinical-slate">No results for &ldquo;{query}&rdquo;</p>
       )}
 
       {/* ── Free-text intervention ── */}
-      <div className="border-t border-gray-100 pt-6">
+      <div className="border-t border-clinical-line pt-6">
         <textarea
           value={interventionInput}
           onChange={e => onInterventionChange(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (interventionInput.trim() && !intervening) onExecuteOrder(); } }}
           placeholder="Free-text order or intervention…"
-          className="w-full text-sm border-b border-gray-200 py-3 px-1 focus:outline-none focus:border-gray-900 transition-colors bg-transparent resize-none leading-relaxed"
+          className="w-full text-sm border-b border-clinical-line py-3 px-1 focus:outline-none focus:border-clinical-teal transition-colors bg-transparent resize-none leading-relaxed"
           rows={2}
         />
         <div className="flex items-center gap-4 mt-3 flex-wrap">
           <button onClick={onExecuteOrder} disabled={intervening || !interventionInput.trim()}
-            className="px-5 py-2 bg-gray-900 text-white text-sm font-medium rounded-full disabled:opacity-30 transition-opacity">
+            className="px-5 py-2 bg-clinical-teal text-white text-sm font-medium rounded-full disabled:opacity-30 transition-opacity">
             Execute
           </button>
           <button onClick={onOpenTimeAdvance} disabled={intervening}
-            className="text-sm text-gray-500 hover:text-gray-900 transition-colors disabled:opacity-30">
+            className="text-sm text-clinical-slate hover:text-clinical-ink transition-colors disabled:opacity-30">
             Obtain Results or See Patient Later
           </button>
-          <button onClick={onToggleTransfer} className="text-sm text-gray-400 hover:text-gray-900 transition-colors">
+          <button onClick={onToggleTransfer} className="text-sm text-clinical-slate hover:text-clinical-ink transition-colors">
             Transfer
           </button>
         </div>
@@ -193,7 +193,7 @@ export function OrdersTab({
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-wrap gap-3 text-sm">
           {['ICU', 'OR', 'Cath Lab', 'Ward', 'Radiology'].map(dept => (
             <button key={dept} onClick={() => onTransfer(dept)} disabled={intervening}
-              className="text-gray-500 hover:text-gray-900 transition-colors disabled:opacity-30">
+              className="text-clinical-slate hover:text-clinical-ink transition-colors disabled:opacity-30">
               {dept}
             </button>
           ))}
@@ -205,13 +205,13 @@ export function OrdersTab({
 
       {/* ── Activity log ── */}
       {(medicalCase.clinicalActions || []).length > 0 && (
-        <div className="border-t border-gray-100 pt-4">
-          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Activity log</p>
+        <div className="border-t border-clinical-line pt-4">
+          <p className="text-[10px] font-semibold text-clinical-slate uppercase tracking-widest mb-2">Activity log</p>
           <div className="max-h-40 overflow-y-auto space-y-1">
             {[...medicalCase.clinicalActions].reverse().map((action, i) => (
               <div key={i} className="flex gap-3 text-xs">
-                <span className="font-mono shrink-0 text-gray-300">T+{action.timestamp}m</span>
-                <span className="text-gray-500">{action.description}</span>
+                <span className="font-mono shrink-0 text-clinical-slate/50">T+{action.timestamp}m</span>
+                <span className="text-clinical-slate">{action.description}</span>
               </div>
             ))}
           </div>

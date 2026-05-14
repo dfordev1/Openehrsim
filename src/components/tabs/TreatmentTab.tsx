@@ -52,7 +52,7 @@ export function TreatmentTab({
     >
       {/* Vitals + trend */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <p className="text-xs text-gray-400 font-mono">
+        <p className="text-xs text-clinical-slate font-mono">
           HR {medicalCase.vitals.heartRate} · BP {medicalCase.vitals.bloodPressure} · SpO2 {medicalCase.vitals.oxygenSaturation}% · RR {medicalCase.vitals.respiratoryRate} · {medicalCase.vitals.temperature}°C
           {medicalCase.vitals.heightCm != null && medicalCase.vitals.weightKg != null && (
             <> · {medicalCase.vitals.heightCm}cm {medicalCase.vitals.weightKg}kg{medicalCase.vitals.bmi != null ? ` BMI ${medicalCase.vitals.bmi.toFixed(1)}` : ''}</>
@@ -96,13 +96,13 @@ export function TreatmentTab({
             }
           }}
           placeholder="Describe your intervention..."
-          className="w-full text-base border-b border-gray-200 py-3 px-1 focus:outline-none focus:border-gray-900 transition-colors bg-transparent resize-none leading-relaxed"
+          className="w-full text-base border-b border-clinical-line py-3 px-1 focus:outline-none focus:border-clinical-teal transition-colors bg-transparent resize-none leading-relaxed"
           rows={3}
         />
         <button
           onClick={onExecuteOrder}
           disabled={intervening || !interventionInput.trim()}
-          className="mt-3 px-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-full disabled:opacity-30 transition-opacity"
+          className="mt-3 px-6 py-2.5 bg-clinical-teal text-white text-sm font-medium rounded-full disabled:opacity-30 transition-opacity"
         >
           Execute
         </button>
@@ -113,13 +113,13 @@ export function TreatmentTab({
         <button
           onClick={onOpenTimeAdvance}
           disabled={intervening}
-          className="text-gray-500 hover:text-gray-900 transition-colors disabled:opacity-30 font-medium"
+          className="text-clinical-slate hover:text-clinical-ink transition-colors disabled:opacity-30 font-medium"
         >
           Obtain Results or See Patient Later
         </button>
         <button
           onClick={onToggleTransfer}
-          className="text-gray-400 hover:text-gray-900 transition-colors"
+          className="text-clinical-slate hover:text-clinical-ink transition-colors"
         >
           Transfer
         </button>
@@ -137,7 +137,7 @@ export function TreatmentTab({
               key={dept}
               onClick={() => onTransfer(dept)}
               disabled={intervening}
-              className="text-gray-500 hover:text-gray-900 transition-colors disabled:opacity-30"
+              className="text-clinical-slate hover:text-clinical-ink transition-colors disabled:opacity-30"
             >
               {dept}
             </button>
@@ -157,11 +157,11 @@ export function TreatmentTab({
       <div className="flex-1 min-h-0">
         {(medicalCase.clinicalActions || []).length > 0 && (
           <div className="max-h-48 overflow-y-auto space-y-1">
-            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Activity log</p>
+            <p className="text-[10px] font-semibold text-clinical-slate uppercase tracking-widest mb-2">Activity log</p>
             {[...medicalCase.clinicalActions].reverse().map((action, i) => (
-              <div key={i} className="flex gap-3 text-xs text-gray-400">
-                <span className="font-mono shrink-0 text-gray-300">T+{action.timestamp}m</span>
-                <span className="text-gray-500">{action.description}</span>
+              <div key={i} className="flex gap-3 text-xs text-clinical-slate">
+                <span className="font-mono shrink-0 text-clinical-slate/50">T+{action.timestamp}m</span>
+                <span className="text-clinical-slate">{action.description}</span>
               </div>
             ))}
           </div>

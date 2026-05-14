@@ -152,12 +152,12 @@ export function DiagnosisPad({
       return (
         <button
           onClick={onToggle}
-          className="fixed bottom-20 right-4 z-50 bg-gray-900 hover:bg-gray-800 text-white w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-colors"
+          className="fixed bottom-20 right-4 z-50 bg-clinical-teal hover:opacity-90 text-white w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all glow-green"
           aria-label="Open Diagnosis Pad"
         >
           <Lightbulb className="w-5 h-5" />
           {(differentials.length > 0 || findings.length > 0) && (
-            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-clinical-red text-white text-[10px] font-bold flex items-center justify-center">
               {differentials.length + findings.length}
             </span>
           )}
@@ -167,7 +167,7 @@ export function DiagnosisPad({
     return (
       <button
         onClick={onToggle}
-        className="fixed right-0 top-1/2 -translate-y-1/2 z-50 bg-gray-900 hover:bg-gray-800 text-white px-2 py-4 rounded-l-lg shadow-lg transition-colors flex flex-col items-center gap-1"
+        className="fixed right-0 top-1/2 -translate-y-1/2 z-50 bg-clinical-teal hover:opacity-90 text-white px-2 py-4 rounded-l-lg shadow-lg transition-all flex flex-col items-center gap-1 glow-green"
         aria-label="Open Diagnosis Pad"
       >
         <ChevronLeft className="w-4 h-4" />
@@ -203,22 +203,22 @@ export function DiagnosisPad({
       {/* ── Differential Diagnosis Builder ── */}
       {activeTab === 'ddx' && (
         <div className="space-y-3 animate-in fade-in">
-          <label className="text-[10px] font-bold text-gray-700 uppercase tracking-wide">
+          <label className="text-[10px] font-bold text-clinical-ink uppercase tracking-wide">
             Build your differential
-            <span className="ml-2 text-gray-500 font-normal">
+            <span className="ml-2 text-clinical-slate font-normal">
               Count: {differentials.length}
             </span>
           </label>
 
           {/* Search input */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-clinical-slate" />
             <input
               type="text"
               value={ddxSearch}
               onChange={e => setDdxSearch(e.target.value)}
               placeholder="Start typing a diagnosis..."
-              className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-300"
+              className="w-full pl-9 pr-3 py-2.5 border border-clinical-line rounded-lg text-xs text-clinical-ink focus:outline-none focus:border-clinical-teal focus:ring-1 focus:ring-clinical-teal/30" style={{ background: 'var(--clinical-surface-raised)' }}
               aria-label="Search diagnoses"
             />
           </div>
@@ -230,7 +230,7 @@ export function DiagnosisPad({
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="border border-gray-200 rounded-lg overflow-hidden"
+                className="border border-clinical-line rounded-lg overflow-hidden"
               >
                 {filteredDiagnoses.map(dx => (
                   <button
@@ -239,9 +239,9 @@ export function DiagnosisPad({
                       onAddDifferential(dx);
                       setDdxSearch('');
                     }}
-                    className="w-full text-left px-3 py-2 text-xs hover:bg-gray-100 text-gray-700 transition-colors flex items-center gap-2 border-b border-gray-100 last:border-b-0"
+                    className="w-full text-left px-3 py-2 text-xs hover:bg-clinical-line/50 text-clinical-ink transition-colors flex items-center gap-2 border-b border-clinical-line last:border-b-0"
                   >
-                    <Plus className="w-3 h-3 text-gray-700 shrink-0" />
+                    <Plus className="w-3 h-3 text-clinical-teal shrink-0" />
                     {dx}
                   </button>
                 ))}
@@ -256,7 +256,7 @@ export function DiagnosisPad({
                 onAddDifferential(ddxSearch.trim());
                 setDdxSearch('');
               }}
-              className="w-full text-left px-3 py-2.5 text-xs bg-gray-100 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-200 transition-colors flex items-center gap-2"
+              className="w-full text-left px-3 py-2.5 text-xs border border-clinical-line rounded-lg text-clinical-ink font-medium hover:bg-clinical-line/50 transition-colors flex items-center gap-2" style={{ background: 'var(--clinical-surface-raised)' }}
             >
               <Plus className="w-3 h-3" />
               Add "{ddxSearch.trim()}"
@@ -266,7 +266,7 @@ export function DiagnosisPad({
           {/* Current differential list */}
           <div className="space-y-2 mt-2">
             {differentials.length === 0 ? (
-              <p className="text-xs text-gray-400 italic text-center py-4">
+              <p className="text-xs text-clinical-slate italic text-center py-4">
                 No diagnoses added yet. Search above to add.
               </p>
             ) : (
@@ -276,19 +276,19 @@ export function DiagnosisPad({
                   className={cn(
                     'rounded-lg border transition-all',
                     entry.isLead
-                      ? 'bg-gray-100 border-gray-300 ring-1 ring-gray-300'
-                      : 'bg-gray-50 border-gray-200',
+                      ? 'border-clinical-teal/40 ring-1 ring-clinical-teal/30'
+                      : 'border-clinical-line',
                   )}
                 >
                   <div className="flex items-center gap-2 px-3 py-2.5">
-                    <span className="text-[10px] font-mono text-gray-400 w-4">
+                    <span className="text-[10px] font-mono text-clinical-slate w-4">
                       {idx + 1}.
                     </span>
                     <div className="flex-1 min-w-0">
                       <p
                         className={cn(
                           'text-xs font-medium truncate',
-                          entry.isLead && 'text-gray-900',
+                          entry.isLead && 'text-clinical-ink',
                         )}
                       >
                         {entry.diagnosis}
@@ -299,8 +299,8 @@ export function DiagnosisPad({
                       className={cn(
                         'p-1 rounded transition-colors',
                         entry.isLead
-                          ? 'text-gray-900'
-                          : 'text-gray-300 hover:text-gray-700',
+                          ? 'text-clinical-teal'
+                          : 'text-clinical-slate/40 hover:text-clinical-teal',
                       )}
                       title={entry.isLead ? 'Lead diagnosis' : 'Set as lead'}
                       aria-label={
@@ -318,7 +318,7 @@ export function DiagnosisPad({
                       onChange={e =>
                         onUpdateConfidence(entry.id, e.target.value as any)
                       }
-                      className="text-[10px] bg-transparent border-none outline-none text-gray-500 cursor-pointer"
+                      className="text-[10px] bg-transparent border-none outline-none text-clinical-slate cursor-pointer"
                       aria-label="Confidence level"
                     >
                       <option value="high">High</option>
@@ -327,7 +327,7 @@ export function DiagnosisPad({
                     </select>
                     <button
                       onClick={() => onRemoveDifferential(entry.id)}
-                      className="p-1 text-gray-300 hover:text-red-500 transition-colors"
+                      className="p-1 text-clinical-slate/40 hover:text-clinical-red transition-colors"
                       aria-label="Remove"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -352,19 +352,19 @@ export function DiagnosisPad({
       {activeTab === 'findings' && (
         <div className="space-y-3 animate-in fade-in">
           <div className="flex items-center justify-between">
-            <label className="text-[10px] font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
+            <label className="text-[10px] font-bold text-clinical-ink uppercase tracking-wide flex items-center gap-1.5">
               <FileSearch className="w-3 h-3" />
               Review your selected findings
             </label>
-            <span className="text-[10px] text-gray-500 font-mono">
+            <span className="text-[10px] text-clinical-slate font-mono">
               Count: {findings.length}
             </span>
           </div>
 
           {findings.length === 0 ? (
             <div className="text-center py-8 space-y-2">
-              <FileSearch className="w-8 h-8 text-gray-300 mx-auto" />
-              <p className="text-xs text-gray-400">
+              <FileSearch className="w-8 h-8 text-clinical-slate/30 mx-auto" />
+              <p className="text-xs text-clinical-slate">
                 Findings will appear here as you examine the patient, order
                 labs, and review imaging.
               </p>
@@ -378,7 +378,7 @@ export function DiagnosisPad({
                 return (
                   <div
                     key={f.id}
-                    className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg"
+                    className="flex items-center gap-2 px-3 py-2 border border-clinical-line rounded-lg" style={{ background: 'var(--clinical-surface-raised)' }}
                   >
                     <div
                       className={cn(
@@ -391,15 +391,15 @@ export function DiagnosisPad({
                           ? 'bg-purple-400'
                           : f.source === 'vitals'
                           ? 'bg-red-400'
-                          : 'bg-gray-400',
+                          : 'bg-clinical-slate',
                       )}
                     />
-                    <span className="text-xs text-gray-700 flex-1 truncate">
+                    <span className="text-xs text-clinical-ink flex-1 truncate">
                       {f.text}
                     </span>
                     {linkedCount > 0 && (
                       <span
-                        className="text-[9px] font-medium text-gray-700 bg-gray-200 rounded px-1.5 py-0.5"
+                        className="text-[9px] font-medium text-clinical-ink bg-clinical-line rounded px-1.5 py-0.5"
                         title={`Linked to ${linkedCount} differential${linkedCount === 1 ? '' : 's'}`}
                       >
                         {linkedCount}↔
@@ -413,10 +413,10 @@ export function DiagnosisPad({
                       className={cn(
                         'text-[10px] font-medium bg-transparent border-none outline-none cursor-pointer',
                         f.relevance === 'positive'
-                          ? 'text-green-600'
+                          ? 'text-clinical-green'
                           : f.relevance === 'negative'
-                          ? 'text-red-500'
-                          : 'text-gray-400',
+                          ? 'text-clinical-red'
+                          : 'text-clinical-slate',
                       )}
                       aria-label="Finding relevance"
                     >
@@ -426,7 +426,7 @@ export function DiagnosisPad({
                     </select>
                     <button
                       onClick={() => onRemoveFinding(f.id)}
-                      className="p-0.5 text-gray-300 hover:text-red-500 transition-colors"
+                      className="p-0.5 text-clinical-slate/40 hover:text-clinical-red transition-colors"
                       aria-label="Remove finding"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -439,7 +439,7 @@ export function DiagnosisPad({
 
           {/* Source legend */}
           {findings.length > 0 && (
-            <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-100">
+            <div className="flex flex-wrap gap-3 pt-2 border-t border-clinical-line">
               {[
                 { color: 'bg-red-400', label: 'Vitals' },
                 { color: 'bg-blue-400', label: 'Exam' },
@@ -448,7 +448,7 @@ export function DiagnosisPad({
               ].map(l => (
                 <span
                   key={l.label}
-                  className="flex items-center gap-1 text-[9px] text-gray-400"
+                  className="flex items-center gap-1 text-[9px] text-clinical-slate"
                 >
                   <div className={cn('w-1.5 h-1.5 rounded-full', l.color)} />
                   {l.label}
@@ -459,7 +459,7 @@ export function DiagnosisPad({
           {findings.length > 0 && differentials.length > 0 && (
             <button
               onClick={() => setActiveTab('matrix')}
-              className="mt-2 w-full text-[10px] font-medium text-gray-700 bg-gray-100 border border-gray-200 rounded-md py-1.5 hover:bg-gray-200 transition-colors flex items-center justify-center gap-1.5"
+              className="mt-2 w-full text-[10px] font-medium text-clinical-ink border border-clinical-line rounded-md py-1.5 hover:bg-clinical-line/50 transition-colors flex items-center justify-center gap-1.5" style={{ background: 'var(--clinical-surface-raised)' }}
             >
               <Grid3x3 className="w-3 h-3" />
               Open Findings × Differentials matrix
@@ -495,7 +495,7 @@ export function DiagnosisPad({
 
   // Tabs bar — shared chrome
   const tabBar = (
-    <div className="flex border-b border-gray-100 shrink-0 overflow-x-auto no-scrollbar">
+    <div className="flex border-b border-clinical-line shrink-0 overflow-x-auto no-scrollbar">
       {tabs.map(tab => (
         <button
           key={tab.id}
@@ -503,8 +503,8 @@ export function DiagnosisPad({
           className={cn(
             'flex-1 min-w-[64px] py-2 text-[10px] font-semibold transition-colors relative flex flex-col items-center gap-0.5',
             activeTab === tab.id
-              ? 'text-gray-900 border-b-2 border-gray-900 bg-gray-50'
-              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50',
+              ? 'text-clinical-teal border-b-2 border-clinical-teal'
+              : 'text-clinical-slate hover:text-clinical-ink hover:bg-clinical-line/30',
           )}
           aria-current={activeTab === tab.id ? 'page' : undefined}
         >
@@ -513,7 +513,7 @@ export function DiagnosisPad({
             {tab.label}
           </span>
           {tab.badge !== undefined && tab.badge > 0 && (
-            <span className="absolute top-1 right-1 inline-flex items-center justify-center min-w-[14px] h-3.5 px-1 text-[8px] font-bold bg-gray-900 text-white rounded-full">
+            <span className="absolute top-1 right-1 inline-flex items-center justify-center min-w-[14px] h-3.5 px-1 text-[8px] font-bold bg-clinical-teal text-white rounded-full">
               {tab.badge}
             </span>
           )}
@@ -544,7 +544,7 @@ export function DiagnosisPad({
           exit={{ y: '100%' }}
           transition={{ type: 'spring', damping: 28, stiffness: 260 }}
           style={{ height }}
-          className="fixed left-0 right-0 bottom-0 bg-clinical-surface rounded-t-2xl shadow-2xl z-50 flex flex-col lg:hidden border-t-2 border-gray-900"
+          className="fixed left-0 right-0 bottom-0 glass rounded-t-2xl shadow-2xl z-50 flex flex-col lg:hidden border-t border-clinical-line"
           role="dialog"
           aria-modal="true"
           aria-label="Diagnosis Pad"
@@ -562,14 +562,14 @@ export function DiagnosisPad({
               <ChevronUp className="w-3 h-3 text-clinical-slate/50" />
             )}
           </button>
-          <div className="h-10 bg-gray-900 text-white px-4 flex items-center justify-between shrink-0">
+          <div className="h-10 px-4 flex items-center justify-between shrink-0" style={{ background: 'var(--clinical-surface-raised)' }}>
             <div className="flex items-center gap-2">
               <Lightbulb className="w-4 h-4" />
               <span className="text-sm font-bold tracking-wide">DIAGNOSIS PAD</span>
             </div>
             <button
               onClick={onToggle}
-              className="p-1.5 hover:bg-gray-800 rounded-md transition-colors"
+              className="p-1.5 hover:bg-clinical-line/50 rounded-md transition-colors text-clinical-ink"
               aria-label="Close"
             >
               <ChevronDown className="w-4 h-4" />
@@ -589,18 +589,18 @@ export function DiagnosisPad({
       animate={{ x: 0 }}
       exit={{ x: '100%' }}
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-      className="fixed right-0 top-0 bottom-0 w-[360px] bg-clinical-surface border-l-2 border-gray-900 shadow-2xl z-50 flex-col hidden lg:flex"
+      className="fixed right-0 top-0 bottom-0 w-[360px] glass border-l border-clinical-line shadow-2xl z-50 flex-col hidden lg:flex"
       role="complementary"
       aria-label="Diagnosis Pad"
     >
-      <div className="h-12 bg-gray-900 text-white px-4 flex items-center justify-between shrink-0">
+      <div className="h-12 px-4 flex items-center justify-between shrink-0" style={{ background: 'var(--clinical-surface-raised)' }}>
         <div className="flex items-center gap-2">
           <Lightbulb className="w-4 h-4" />
           <span className="text-sm font-bold tracking-wide">DIAGNOSIS PAD</span>
         </div>
         <button
           onClick={onToggle}
-          className="p-1.5 hover:bg-gray-800 rounded-md transition-colors"
+          className="p-1.5 hover:bg-clinical-line/50 rounded-md transition-colors text-clinical-ink"
           aria-label="Collapse"
         >
           <ChevronRight className="w-4 h-4" />
@@ -644,17 +644,17 @@ function PRTab({ value, onChange, prIsDirty, hasHistory }: PRTabProps) {
   return (
     <div className="space-y-3 animate-in fade-in">
       <div className="flex items-center justify-between">
-        <label className="text-[10px] font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
+        <label className="text-[10px] font-bold text-clinical-ink uppercase tracking-wide flex items-center gap-1.5">
           <PenTool className="w-3 h-3" />
           Update your problem representation
         </label>
         {prIsDirty && hasHistory && (
-          <span className="text-[9px] font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+          <span className="text-[9px] font-medium text-clinical-amber bg-clinical-amber-soft border border-clinical-amber/20 rounded-full px-2 py-0.5">
             Uncommitted
           </span>
         )}
       </div>
-      <p className="text-[10px] text-gray-500 leading-relaxed">
+      <p className="text-[10px] text-clinical-slate leading-relaxed">
         Summarize the key patient features in 1-2 sentences. Update it as
         you gather more data — the Timeline tab will show every version
         you've committed.
@@ -663,10 +663,10 @@ function PRTab({ value, onChange, prIsDirty, hasHistory }: PRTabProps) {
         value={local}
         onChange={e => setLocal(e.target.value)}
         placeholder="A [age]-year-old [gender] presents with [chief complaint], [key features], concerning for [suspected diagnosis]..."
-        className="w-full h-32 bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm leading-relaxed focus:outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-300 resize-none"
+        className="w-full h-32 border border-clinical-line rounded-lg p-3 text-sm text-clinical-ink leading-relaxed focus:outline-none focus:border-clinical-teal focus:ring-1 focus:ring-clinical-teal/30 resize-none placeholder-clinical-slate" style={{ background: 'var(--clinical-surface-raised)' }}
         aria-label="Problem representation"
       />
-      <div className="text-[10px] text-gray-400 text-right">
+      <div className="text-[10px] text-clinical-slate text-right">
         {local.length} characters
       </div>
     </div>

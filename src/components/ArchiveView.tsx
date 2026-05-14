@@ -102,9 +102,9 @@ export function ArchiveView({ user }: ArchiveViewProps) {
   return (
     <div className="flex flex-col">
       {/* ── Summary bar ──────────────────────────────────────────────────── */}
-      <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/40 flex flex-wrap items-center gap-4">
+      <div className="px-4 py-3 border-b border-clinical-line flex flex-wrap items-center gap-4" style={{ background: 'var(--clinical-surface-raised)' }}>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-semibold text-gray-500 uppercase">Overall avg</span>
+          <span className="text-[10px] font-semibold text-clinical-slate uppercase">Overall avg</span>
           <span className={cn(
             'text-sm font-bold',
             overallAvg >= 80 ? 'text-clinical-green' : overallAvg >= 60 ? 'text-clinical-blue' : 'text-clinical-amber'
@@ -112,11 +112,11 @@ export function ArchiveView({ user }: ArchiveViewProps) {
           <MiniSparkline values={allScores} color={overallAvg >= 80 ? 'var(--color-clinical-green)' : overallAvg >= 60 ? 'var(--color-clinical-blue)' : 'var(--color-clinical-amber)'} />
           <TrendIcon values={allScores} />
         </div>
-        <div className="w-px h-5 bg-gray-200" />
+        <div className="w-px h-5 bg-clinical-line" />
         <div className="flex flex-wrap gap-3">
           {categoryStats.map(({ cat, avg, scores }) => (
             <div key={cat} className="flex items-center gap-1.5">
-              <span className="text-[10px] capitalize text-gray-500">{cat}</span>
+              <span className="text-[10px] capitalize text-clinical-slate">{cat}</span>
               <span className={cn(
                 'text-[10px] font-bold',
                 avg >= 80 ? 'text-clinical-green' : avg >= 60 ? 'text-clinical-blue' : 'text-clinical-amber'
@@ -133,7 +133,7 @@ export function ArchiveView({ user }: ArchiveViewProps) {
               onClick={() => setView(v)}
               className={cn(
                 'text-[10px] font-medium px-2.5 py-1 rounded transition-colors capitalize',
-                view === v ? 'bg-gray-700 text-white' : 'text-gray-500 hover:bg-gray-100'
+                view === v ? 'bg-clinical-teal text-white' : 'text-clinical-slate hover:bg-clinical-line'
               )}
             >{v}</button>
           ))}

@@ -90,11 +90,11 @@ export function PharmacyTab({ customMedInput, onCustomMedChange, onAdminister, i
             }
           }}
           placeholder="Administer medication..."
-          className="w-full text-lg bg-transparent border-b border-gray-200 pb-2 text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-gray-400 transition-colors"
+          className="w-full text-lg bg-transparent border-b border-clinical-line pb-2 text-clinical-ink placeholder:text-clinical-slate/50 focus:outline-none focus:border-clinical-teal transition-colors"
         />
         <div className="flex items-center justify-between mt-2">
-          <span className="text-xs text-gray-400">Press Enter to administer</span>
-          {intervening && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
+          <span className="text-xs text-clinical-slate">Press Enter to administer</span>
+          {intervening && <Loader2 className="w-3 h-3 animate-spin text-clinical-slate" />}
         </div>
         {pendingWarnings.map((w, i) => (
           <div key={i} className={`mt-2 px-3 py-2 rounded-lg text-xs leading-relaxed ${w.severity === 'high' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
@@ -105,20 +105,20 @@ export function PharmacyTab({ customMedInput, onCustomMedChange, onAdminister, i
 
       {/* Quick meds */}
       <div>
-        <p className="text-xs text-gray-400 mb-3">Quick medications</p>
+        <p className="text-xs text-clinical-slate mb-3">Quick medications</p>
         <div className="flex flex-wrap gap-x-4 gap-y-2">
           {QUICK_MEDS.map((med) => (
             <span key={med.label} className="inline-flex items-center gap-1">
               <button
                 onClick={() => onAdminister(med.label)}
                 disabled={intervening}
-                className="text-sm text-gray-900 hover:text-gray-600 transition-colors disabled:opacity-40"
+                className="text-sm text-clinical-ink hover:text-clinical-ink-muted transition-colors disabled:opacity-40"
               >
                 {med.label}
               </button>
               <button
                 onClick={() => setTooltip(tooltip === med.label ? null : med.label)}
-                className="text-xs text-gray-300 hover:text-gray-500 transition-colors"
+                className="text-xs text-clinical-slate/50 hover:text-clinical-slate transition-colors"
               >
                 ?
               </button>
@@ -128,7 +128,7 @@ export function PharmacyTab({ customMedInput, onCustomMedChange, onAdminister, i
 
         {/* Drug info tooltip */}
         {tooltip && (
-          <p className="text-xs text-gray-400 mt-3 italic">
+          <p className="text-xs text-clinical-slate mt-3 italic">
             {QUICK_MEDS.find(m => m.label === tooltip)?.hint}
           </p>
         )}
@@ -137,11 +137,11 @@ export function PharmacyTab({ customMedInput, onCustomMedChange, onAdminister, i
       {/* Administered medications */}
       {(medicalCase?.medications || []).length > 0 && (
         <div>
-          <p className="text-xs text-gray-400 mb-3">Administered</p>
+          <p className="text-xs text-clinical-slate mb-3">Administered</p>
           <div className="flex flex-col gap-1">
             {medicalCase!.medications.map((med) => (
-              <p key={med.id} className="text-sm text-gray-900">
-                <span className="text-gray-400 font-mono">T+{med.timestamp}m</span>
+              <p key={med.id} className="text-sm text-clinical-ink">
+                <span className="text-clinical-slate font-mono">T+{med.timestamp}m</span>
                 {' — '}
                 {med.name} {med.dose} {med.route}
               </p>
@@ -153,15 +153,15 @@ export function PharmacyTab({ customMedInput, onCustomMedChange, onAdminister, i
       {/* Drug interaction warnings */}
       {interactions.length > 0 && (
         <div>
-          <p className="text-xs text-gray-400 mb-3">Interactions detected</p>
+          <p className="text-xs text-clinical-slate mb-3">Interactions detected</p>
           <div className="flex flex-col gap-2">
             {interactions.map((ix, i) => (
-              <p key={i} className="text-sm text-gray-900">
+              <p key={i} className="text-sm text-clinical-ink">
                 <span className={ix.severity === 'high' ? 'font-medium' : ''}>
                   {ix.severity === 'high' ? '⚠ ' : ''}{ix.drugs}
                 </span>
                 {' — '}
-                <span className="text-gray-500">{ix.message}</span>
+                <span className="text-clinical-slate">{ix.message}</span>
               </p>
             ))}
           </div>

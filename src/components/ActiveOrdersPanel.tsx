@@ -26,17 +26,17 @@ export function ActiveOrdersPanel({ medicalCase, simTime, intervening, onDiscont
   if (totalActive === 0) return null;
 
   return (
-    <div className="border border-gray-100 rounded-xl overflow-hidden">
+    <div className="border border-clinical-line rounded-xl overflow-hidden">
       <button
         onClick={() => setOpen(p => !p)}
-        className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-clinical-line/30 transition-colors" style={{ background: 'var(--clinical-surface-raised)' }}
       >
-        <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
+        <span className="text-xs font-semibold text-clinical-slate uppercase tracking-widest">
           Active Orders
         </span>
         <span className="flex items-center gap-2">
-          <span className="text-[10px] font-mono text-gray-400">{totalActive}</span>
-          <span className="text-[10px] text-gray-400">{open ? '▲' : '▼'}</span>
+          <span className="text-[10px] font-mono text-clinical-slate">{totalActive}</span>
+          <span className="text-[10px] text-clinical-slate/50">{open ? '▲' : '▼'}</span>
         </span>
       </button>
 
@@ -49,13 +49,13 @@ export function ActiveOrdersPanel({ medicalCase, simTime, intervening, onDiscont
             transition={{ duration: 0.15 }}
             className="overflow-hidden"
           >
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-clinical-line/50">
               {/* Active medications */}
               {activeMeds.map(med => (
                 <div key={med.id} className="flex items-center justify-between px-4 py-2 group">
                   <div className="min-w-0">
-                    <p className="text-xs font-medium text-gray-700 truncate">{med.name}</p>
-                    <p className="text-[10px] text-gray-400">
+                    <p className="text-xs font-medium text-clinical-ink truncate">{med.name}</p>
+                    <p className="text-[10px] text-clinical-slate">
                       {[med.dose, med.route].filter(Boolean).join(' · ')}
                       {' '}· T+{med.timestamp}m
                     </p>
@@ -65,7 +65,7 @@ export function ActiveOrdersPanel({ medicalCase, simTime, intervening, onDiscont
                     disabled={intervening}
                     className={cn(
                       'ml-3 shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors disabled:opacity-30',
-                      'border-red-200 text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100'
+                      'border-clinical-red/30 text-clinical-red hover:bg-clinical-red-soft opacity-0 group-hover:opacity-100'
                     )}
                   >
                     D/C
@@ -77,10 +77,10 @@ export function ActiveOrdersPanel({ medicalCase, simTime, intervening, onDiscont
               {pendingLabs.map((lab, i) => (
                 <div key={`lab-${i}`} className="flex items-center justify-between px-4 py-2">
                   <div>
-                    <p className="text-xs text-gray-600">{lab.name}</p>
-                    <p className="text-[10px] text-gray-400">Lab · pending T+{lab.availableAt ?? '?'}m</p>
+                    <p className="text-xs text-clinical-ink">{lab.name}</p>
+                    <p className="text-[10px] text-clinical-slate">Lab · pending T+{lab.availableAt ?? '?'}m</p>
                   </div>
-                  <span className="text-[10px] font-mono text-amber-500">
+                  <span className="text-[10px] font-mono text-clinical-amber">
                     {lab.availableAt != null ? `+${lab.availableAt - simTime}m` : 'pending'}
                   </span>
                 </div>
@@ -90,10 +90,10 @@ export function ActiveOrdersPanel({ medicalCase, simTime, intervening, onDiscont
               {pendingImaging.map((img, i) => (
                 <div key={`img-${i}`} className="flex items-center justify-between px-4 py-2">
                   <div>
-                    <p className="text-xs text-gray-600">{img.type}</p>
-                    <p className="text-[10px] text-gray-400">Imaging · pending T+{img.availableAt ?? '?'}m</p>
+                    <p className="text-xs text-clinical-ink">{img.type}</p>
+                    <p className="text-[10px] text-clinical-slate">Imaging · pending T+{img.availableAt ?? '?'}m</p>
                   </div>
-                  <span className="text-[10px] font-mono text-purple-500">
+                  <span className="text-[10px] font-mono text-purple-400">
                     {img.availableAt != null ? `+${img.availableAt - simTime}m` : 'pending'}
                   </span>
                 </div>

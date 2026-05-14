@@ -72,12 +72,12 @@ export function TimeAdvanceModal({ medicalCase, simTime, intervening, onAdvance,
         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       >
         <motion.div
-          className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-5"
+          className="glass rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-5"
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
         >
-          <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-widest">
+          <h2 className="text-sm font-semibold text-clinical-ink uppercase tracking-widest">
             Obtain Results or See Patient Later
           </h2>
 
@@ -91,36 +91,36 @@ export function TimeAdvanceModal({ medicalCase, simTime, intervening, onAdvance,
                 value="in"
                 checked={mode === 'in'}
                 onChange={() => setMode('in')}
-                className="mt-0.5 accent-gray-900"
+                className="mt-0.5 accent-clinical-teal"
               />
               <div className="flex-1">
-                <span className="text-sm text-gray-700">Advance by duration</span>
+                <span className="text-sm text-clinical-ink">Advance by duration</span>
                 {mode === 'in' && (
                   <div className="flex items-center gap-3 mt-3">
                     <div className="flex flex-col items-center gap-1">
-                      <span className="text-[10px] text-gray-400 uppercase tracking-wide">Days</span>
+                      <span className="text-[10px] text-clinical-slate uppercase tracking-wide">Days</span>
                       <input
                         type="number"
                         min={0}
                         max={30}
                         value={days}
                         onChange={e => setDays(Math.max(0, Math.min(30, parseInt(e.target.value) || 0)))}
-                        className="w-14 text-center text-sm border border-gray-200 rounded-lg py-1.5 focus:outline-none focus:border-gray-900"
+                        className="w-14 text-center text-sm border border-clinical-line rounded-lg py-1.5 focus:outline-none focus:border-clinical-teal bg-transparent text-clinical-ink"
                       />
                     </div>
                     <div className="flex flex-col items-center gap-1">
-                      <span className="text-[10px] text-gray-400 uppercase tracking-wide">Hours</span>
+                      <span className="text-[10px] text-clinical-slate uppercase tracking-wide">Hours</span>
                       <input
                         type="number"
                         min={0}
                         max={23}
                         value={hours}
                         onChange={e => setHours(Math.max(0, Math.min(23, parseInt(e.target.value) || 0)))}
-                        className="w-14 text-center text-sm border border-gray-200 rounded-lg py-1.5 focus:outline-none focus:border-gray-900"
+                        className="w-14 text-center text-sm border border-clinical-line rounded-lg py-1.5 focus:outline-none focus:border-clinical-teal bg-transparent text-clinical-ink"
                       />
                     </div>
                     <div className="flex flex-col items-center gap-1">
-                      <span className="text-[10px] text-gray-400 uppercase tracking-wide">Mins</span>
+                      <span className="text-[10px] text-clinical-slate uppercase tracking-wide">Mins</span>
                       <input
                         type="number"
                         min={0}
@@ -128,7 +128,7 @@ export function TimeAdvanceModal({ medicalCase, simTime, intervening, onAdvance,
                         step={5}
                         value={mins}
                         onChange={e => setMins(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
-                        className="w-14 text-center text-sm border border-gray-200 rounded-lg py-1.5 focus:outline-none focus:border-gray-900"
+                        className="w-14 text-center text-sm border border-clinical-line rounded-lg py-1.5 focus:outline-none focus:border-clinical-teal bg-transparent text-clinical-ink"
                       />
                     </div>
                   </div>
@@ -148,17 +148,17 @@ export function TimeAdvanceModal({ medicalCase, simTime, intervening, onAdvance,
                 checked={mode === 'next'}
                 onChange={() => setMode('next')}
                 disabled={nextDelta === null}
-                className="mt-0.5 accent-gray-900"
+                className="mt-0.5 accent-clinical-teal"
               />
               <div>
-                <span className="text-sm text-gray-700">With next available result</span>
+                <span className="text-sm text-clinical-ink">With next available result</span>
                 {nextDelta !== null && (
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-xs text-clinical-slate mt-0.5">
                     +{nextDelta} min (T+{nextAt})
                   </p>
                 )}
                 {nextDelta === null && (
-                  <p className="text-xs text-gray-400 mt-0.5">No pending results</p>
+                  <p className="text-xs text-clinical-slate mt-0.5">No pending results</p>
                 )}
               </div>
             </label>
@@ -171,11 +171,11 @@ export function TimeAdvanceModal({ medicalCase, simTime, intervening, onAdvance,
                 value="asneeded"
                 checked={mode === 'asneeded'}
                 onChange={() => setMode('asneeded')}
-                className="mt-0.5 accent-gray-900"
+                className="mt-0.5 accent-clinical-teal"
               />
               <div>
-                <span className="text-sm text-gray-700">Call/see me as needed</span>
-                <p className="text-xs text-gray-400 mt-0.5">Advance +5 min; patient or staff will alert you</p>
+                <span className="text-sm text-clinical-ink">Call/see me as needed</span>
+                <p className="text-xs text-clinical-slate mt-0.5">Advance +5 min; patient or staff will alert you</p>
               </div>
             </label>
           </div>
@@ -185,13 +185,13 @@ export function TimeAdvanceModal({ medicalCase, simTime, intervening, onAdvance,
             <button
               onClick={handleOk}
               disabled={okDisabled}
-              className="flex-1 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-full disabled:opacity-30 transition-opacity"
+              className="flex-1 py-2.5 bg-clinical-teal text-white text-sm font-medium rounded-full disabled:opacity-30 transition-all glow-green"
             >
               {intervening ? 'Advancing…' : 'OK'}
             </button>
             <button
               onClick={onClose}
-              className="flex-1 py-2.5 border border-gray-200 text-gray-700 text-sm font-medium rounded-full hover:bg-gray-50 transition-colors"
+              className="flex-1 py-2.5 border border-clinical-line text-clinical-ink text-sm font-medium rounded-full hover:bg-clinical-line/30 transition-colors"
             >
               Cancel
             </button>

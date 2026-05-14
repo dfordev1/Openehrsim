@@ -43,13 +43,13 @@ export function DxPauseTab({
       animate={{ opacity: 1 }}
       className="flex flex-col gap-8 py-8"
     >
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-clinical-slate">
         Pause and reflect. What's your leading diagnosis?
       </p>
 
       {/* Show current PR if any */}
       {problemRepresentation.trim() && (
-        <p className="text-sm text-gray-700 italic">"{problemRepresentation}"</p>
+        <p className="text-sm text-clinical-ink italic">"{problemRepresentation}"</p>
       )}
 
       {/* Show differentials as read-only list */}
@@ -61,7 +61,7 @@ export function DxPauseTab({
               onClick={() => onSetLead(d.id)}
               className={cn(
                 'block text-left text-sm',
-                d.isLead ? 'text-gray-900 font-medium' : 'text-gray-500 hover:text-gray-700',
+                d.isLead ? 'text-clinical-ink font-medium' : 'text-clinical-slate hover:text-clinical-ink',
               )}
             >
               {i + 1}. {d.diagnosis} {d.isLead && '←'}
@@ -74,13 +74,13 @@ export function DxPauseTab({
       <button
         onClick={onProceedToManagement}
         disabled={!canProceed}
-        className="text-sm text-gray-400 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        className="text-sm text-clinical-slate hover:text-clinical-ink disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
         Proceed to Management →
       </button>
 
       {!canProceed && (
-        <p className="text-xs text-gray-300">
+        <p className="text-xs text-clinical-slate/50">
           Complete your problem representation (≥80 chars) and add ≥2 differentials in the Dx Pad.
         </p>
       )}

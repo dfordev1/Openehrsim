@@ -1,21 +1,24 @@
 /**
- * ClinicalLayout — single scrollable feed, no tabs.
- * Header · Feed · Sticky order bar. That's it.
+ * ClinicalLayout — Bloomberg Terminal-meets-Apple Health clinical simulator.
+ * Dark-first, data-dense, cinematic. Header · Vitals Monitor · Feed · Order Bar.
  */
 
 import * as Sentry from '@sentry/react';
 import React, { Component, type ErrorInfo, type ReactNode } from 'react';
-import { X, RefreshCw } from 'lucide-react';
+import { X, RefreshCw, Sun, Moon, LogOut, History, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useCase } from '../contexts/CaseContext';
 import { useNavigation } from '../contexts/NavigationContext';
+import { useDarkMode } from '../hooks/useDarkMode';
 
 import { AuthModal } from './Auth';
 import { CaseLibrary } from './CaseLibrary';
 import { CommandPalette } from './CommandPalette';
 import VitalsExpanded from './VitalsExpanded';
+import { VitalsMonitor } from './VitalsMonitor';
+import { WorkflowStepper } from './WorkflowStepper';
 import { DiagnosisPad } from './DiagnosisPad';
 import { StageCommitGate } from './StageCommitGate';
 import { TimeAdvanceModal } from './TimeAdvanceModal';
@@ -23,6 +26,7 @@ import { ClinicalFeed } from './ClinicalFeed';
 import { OrderBar } from './OrderBar';
 import { AssessmentTab } from './tabs/AssessmentTab';
 import { ArchiveView } from './ArchiveView';
+import { OnboardingTour } from './OnboardingTour';
 
 // ── Error Boundary ─────────────────────────────────────────────────────────────
 interface ErrorBoundaryProps { children: ReactNode; }
@@ -38,11 +42,11 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-white flex items-center justify-center p-8">
+        <div className="min-h-screen bg-clinical-bg flex items-center justify-center p-8">
           <div className="max-w-sm text-center">
-            <p className="text-lg font-medium text-gray-900 mb-2">Something went wrong</p>
-            <p className="text-sm text-gray-500 mb-6">The simulator encountered an error.</p>
-            <button onClick={() => window.location.reload()} className="px-6 py-2.5 bg-black text-white rounded-full text-sm font-medium hover:bg-gray-800 transition-colors">
+            <p className="text-lg font-medium text-clinical-ink mb-2">Something went wrong</p>
+            <p className="text-sm text-clinical-slate mb-6">The simulator encountered an error.</p>
+            <button onClick={() => window.location.reload()} className="px-6 py-2.5 bg-clinical-teal text-white rounded-full text-sm font-medium hover:opacity-90 transition-opacity">
               Restart
             </button>
           </div>
@@ -70,6 +74,7 @@ function ClinicalLayoutInner() {
   const [timeAdvanceOpen, setTimeAdvanceOpen] = React.useState(false);
   const [assessmentOpen, setAssessmentOpen] = React.useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = React.useState(false);
+  const [isDark, toggleDarkMode] = useDarkMode();
 
   const { user, isAuthOpen, setIsAuthOpen, handleLogout, isSupabaseConfigured, isAuthLoading, isRecovery, clearRecovery } = useAuth();
   const {
@@ -113,38 +118,20 @@ function ClinicalLayoutInner() {
 
   const { isLibraryOpen, setIsLibraryOpen, isCommandOpen, setIsCommandOpen } = useNavigation();
 
-  // Derive abnormal vitals for alert strip
-  const abnormalVitals: { label: string; value: string; critical: boolean }[] = [];
-  if (medicalCase?.vitals) {
-    const v = medicalCase.vitals;
-    if (v.heartRate > 120 || v.heartRate < 50)
-      abnormalVitals.push({ label: 'HR', value: `${v.heartRate}`, critical: v.heartRate > 150 || v.heartRate < 40 });
-    if (v.oxygenSaturation < 94)
-      abnormalVitals.push({ label: 'SpO2', value: `${v.oxygenSaturation}%`, critical: v.oxygenSaturation < 88 });
-    const sbp = parseInt(medicalCase.vitals.bloodPressure.split('/')[0]) || 120;
-    if (sbp < 90 || sbp > 160)
-      abnormalVitals.push({ label: 'BP', value: medicalCase.vitals.bloodPressure, critical: sbp < 80 || sbp > 180 });
-    if (v.respiratoryRate > 24 || v.respiratoryRate < 10)
-      abnormalVitals.push({ label: 'RR', value: `${v.respiratoryRate}`, critical: v.respiratoryRate > 30 || v.respiratoryRate < 8 });
-    if (v.temperature > 38.5 || v.temperature < 36)
-      abnormalVitals.push({ label: 'T', value: `${v.temperature}°`, critical: v.temperature > 40 || v.temperature < 34 });
-  }
-  const hasCritical = abnormalVitals.some(v => v.critical);
-
   // ── Auth gate ────────────────────────────────────────────────────────────────
   if (isSupabaseConfigured && !isAuthLoading && !user) {
     return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8">
+      <div className="min-h-screen bg-clinical-bg flex flex-col items-center justify-center p-8">
         <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} isRecovery={isRecovery} onRecoveryHandled={clearRecovery} />
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center max-w-sm">
-          <div className="w-14 h-14 bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <span className="text-white text-xl font-black">Rx</span>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ type: 'spring', damping: 20, stiffness: 200 }} className="text-center max-w-sm">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-clinical-line" style={{ background: 'var(--clinical-surface)' }}>
+            <span className="text-clinical-teal text-2xl font-black tracking-tight">Rx</span>
           </div>
-          <h1 className="text-2xl font-black text-gray-900 mb-2 uppercase tracking-tight">OpenEHR Sim</h1>
-          <p className="text-sm text-gray-500 mb-8 leading-relaxed">
-            USMLE Step 3 CCS simulator. Sign in to access cases and track your progress.
+          <h1 className="text-3xl font-black text-clinical-ink mb-2 uppercase tracking-tight">OpenEHR Sim</h1>
+          <p className="text-sm text-clinical-slate mb-8 leading-relaxed">
+            Clinical simulation engine. Sign in to begin.
           </p>
-          <button onClick={() => setIsAuthOpen(true)} className="px-8 py-3 bg-gray-900 text-white text-sm font-medium rounded-full hover:bg-gray-800 transition-colors">
+          <button onClick={() => setIsAuthOpen(true)} className="px-8 py-3 bg-clinical-teal text-white text-sm font-semibold rounded-full hover:opacity-90 transition-all glow-green">
             Sign in
           </button>
         </motion.div>
@@ -155,18 +142,18 @@ function ClinicalLayoutInner() {
   // ── Loading / error screen ───────────────────────────────────────────────────
   if (isAuthLoading || loading || error) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center max-w-xs">
+      <div className="min-h-screen bg-clinical-bg flex items-center justify-center">
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', damping: 20 }} className="text-center max-w-xs">
           {error ? (
             <>
-              <p className="text-base font-medium text-gray-900 mb-2">Connection Failed</p>
-              <p className="text-sm text-gray-500 mb-6">{error}</p>
-              <button onClick={() => loadNewCase()} className="px-6 py-2.5 bg-black text-white rounded-full text-sm font-medium hover:bg-gray-800 transition-colors">Try Again</button>
+              <p className="text-base font-semibold text-clinical-ink mb-2">Connection Failed</p>
+              <p className="text-sm text-clinical-slate mb-6">{error}</p>
+              <button onClick={() => loadNewCase()} className="px-6 py-2.5 bg-clinical-teal text-white rounded-full text-sm font-medium hover:opacity-90 transition-all">Try Again</button>
             </>
           ) : (
             <>
-              <div className="w-8 h-8 mx-auto mb-4 border-2 border-gray-200 border-t-gray-900 rounded-full animate-spin" />
-              <p className="text-sm text-gray-500">{loadingStep}</p>
+              <div className="w-10 h-10 mx-auto mb-4 border-2 border-clinical-line border-t-clinical-teal rounded-full animate-spin" />
+              <p className="text-sm text-clinical-slate font-mono">{loadingStep}</p>
             </>
           )}
         </motion.div>
@@ -175,8 +162,13 @@ function ClinicalLayoutInner() {
   }
 
   // ── Main render ──────────────────────────────────────────────────────────────
+  const hasCritical = medicalCase?.physiologicalTrend === 'critical';
+
   return (
-    <div className={cn('h-screen flex flex-col overflow-hidden transition-colors duration-500', hasCritical ? 'bg-red-50' : 'bg-white')} role="application">
+    <div className={cn('h-screen flex flex-col overflow-hidden transition-colors duration-700')} style={{ background: hasCritical ? 'var(--clinical-red-soft)' : 'var(--clinical-bg)' }} role="application">
+
+      {/* Onboarding tour */}
+      <OnboardingTour />
 
       {/* Global modals */}
       <VitalsExpanded isOpen={vitalsExpanded} onClose={() => setVitalsExpanded(false)} vitalsHistory={vitalsHistory} />
@@ -204,47 +196,52 @@ function ClinicalLayoutInner() {
       )}
 
       {/* ── Header ── */}
-      <header className="h-12 flex items-center px-4 shrink-0 relative z-30">
+      <header className="h-12 flex items-center px-4 shrink-0 relative z-30 border-b border-clinical-line" style={{ background: 'var(--clinical-surface)' }}>
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <button onClick={() => setVitalsExpanded(true)} className="text-sm font-semibold text-gray-900 truncate hover:underline">
+          {/* Brand mark */}
+          <div className="w-6 h-6 rounded-md flex items-center justify-center border border-clinical-line shrink-0" style={{ background: 'var(--clinical-surface-raised)' }}>
+            <span className="text-clinical-teal text-[9px] font-black">Rx</span>
+          </div>
+          <button onClick={() => setVitalsExpanded(true)} className="text-sm font-semibold text-clinical-ink truncate hover:text-clinical-teal transition-colors">
             {medicalCase?.patientName}
           </button>
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-clinical-slate">
             {medicalCase?.age}{medicalCase?.gender?.[0]?.toUpperCase()}
           </span>
           {medicalCase?.chiefComplaint && (
-            <span className="text-xs text-gray-400 truncate hidden sm:inline">
+            <span className="text-xs text-clinical-slate/60 truncate hidden sm:inline">
               · {medicalCase.chiefComplaint.slice(0, 50)}{medicalCase.chiefComplaint.length > 50 ? '…' : ''}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3">
-          <span className={cn('text-xs font-mono font-medium',
-            simTime === 0 ? 'text-gray-300' :
-            simTime < 30 ? 'text-gray-500' :
-            simTime < 60 ? 'text-amber-500' : 'text-red-500'
-          )}>
-            T+{simTime}m
-          </span>
-          <button onClick={() => setIsLibraryOpen(true)} className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors" aria-label="New case">
-            <RefreshCw className="w-4 h-4" />
+        <div className="flex items-center gap-2">
+          {/* Dark/light toggle */}
+          <button
+            onClick={toggleDarkMode}
+            className="p-1.5 text-clinical-slate hover:text-clinical-ink transition-colors rounded-lg hover:bg-clinical-line/50"
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+          </button>
+          <button onClick={() => setIsLibraryOpen(true)} className="p-1.5 text-clinical-slate hover:text-clinical-ink transition-colors rounded-lg hover:bg-clinical-line/50" aria-label="New case">
+            <RefreshCw className="w-3.5 h-3.5" />
           </button>
           {user ? (
             <div className="relative">
-              <button onClick={() => setAccountMenuOpen(p => !p)} className="w-6 h-6 bg-gray-900 rounded-full flex items-center justify-center text-[10px] font-medium text-white" aria-label="Account menu">
+              <button onClick={() => setAccountMenuOpen(p => !p)} className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border border-clinical-line text-clinical-ink" style={{ background: 'var(--clinical-surface-raised)' }} aria-label="Account menu">
                 {user.email?.[0].toUpperCase()}
               </button>
               {accountMenuOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setAccountMenuOpen(false)} />
-                  <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-xl shadow-lg py-2 px-1 min-w-[180px] z-50">
-                    <p className="px-3 py-1 text-[10px] text-gray-400 truncate">{user.email}</p>
-                    <div className="border-t border-gray-100 mt-1 pt-1">
-                      <button onClick={() => { setAccountMenuOpen(false); setAssessmentOpen(true); }} className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
-                        History &amp; score
+                  <div className="absolute right-0 top-8 rounded-xl shadow-2xl py-2 px-1 min-w-[180px] z-50 border border-clinical-line" style={{ background: 'var(--clinical-surface)' }}>
+                    <p className="px-3 py-1 text-[10px] text-clinical-slate truncate">{user.email}</p>
+                    <div className="border-t border-clinical-line mt-1 pt-1">
+                      <button onClick={() => { setAccountMenuOpen(false); setAssessmentOpen(true); }} className="w-full text-left px-3 py-1.5 text-xs text-clinical-ink hover:bg-clinical-line/50 rounded-lg transition-colors flex items-center gap-2">
+                        <History className="w-3 h-3" /> History & score
                       </button>
-                      <button onClick={() => { setAccountMenuOpen(false); handleLogout(); }} className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                        Sign out
+                      <button onClick={() => { setAccountMenuOpen(false); handleLogout(); }} className="w-full text-left px-3 py-1.5 text-xs text-clinical-red hover:bg-clinical-red-soft rounded-lg transition-colors flex items-center gap-2">
+                        <LogOut className="w-3 h-3" /> Sign out
                       </button>
                     </div>
                   </div>
@@ -255,35 +252,44 @@ function ClinicalLayoutInner() {
         </div>
       </header>
 
-      {/* Abnormal vitals alert strip */}
-      <AnimatePresence>
-        {(abnormalVitals.length > 0 || (medicalCase?.physiologicalTrend && medicalCase.physiologicalTrend !== 'stable' && medicalCase.physiologicalTrend !== 'improving')) && (
-          <motion.button
-            initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            onClick={() => setVitalsExpanded(true)}
-            className={cn('flex items-center justify-center gap-4 py-2 px-4 shrink-0 cursor-pointer', hasCritical || medicalCase?.physiologicalTrend === 'critical' ? 'bg-red-100' : 'bg-amber-50')}
-          >
-            {abnormalVitals.map((v, i) => (
-              <span key={i} className={cn('text-xs font-bold font-mono', v.critical ? 'text-red-600' : 'text-amber-600')}>{v.label} {v.value}</span>
-            ))}
-            {medicalCase?.physiologicalTrend === 'declining' && <span className="text-xs font-bold text-amber-600">↓ Declining</span>}
-            {medicalCase?.physiologicalTrend === 'critical' && <span className="text-xs font-bold text-red-600 animate-pulse">⚠ Critical deterioration</span>}
-          </motion.button>
-        )}
-      </AnimatePresence>
+      {/* ── Vitals Monitor + Stage Stepper ── */}
+      {medicalCase && (
+        <div className="px-3 sm:px-4 pt-2 pb-1 shrink-0 space-y-2">
+          <VitalsMonitor
+            vitals={medicalCase.vitals}
+            trend={medicalCase.physiologicalTrend}
+            simTime={simTime}
+            onExpand={() => setVitalsExpanded(true)}
+          />
+          <WorkflowStepper
+            currentStage={reasoning.currentStage}
+            commitments={reasoning.stageCommitments}
+            onNavigate={handleStageNavigate}
+          />
+        </div>
+      )}
 
       {/* Patient outcome banner */}
       <AnimatePresence>
         {patientOutcome && patientOutcome !== 'alive' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className={cn('py-3 px-4 flex items-center justify-center gap-3 shrink-0', patientOutcome === 'deceased' ? 'bg-gray-900 text-white' : 'bg-red-600 text-white')}>
-            <span className="text-sm font-medium">{patientOutcome === 'deceased' ? 'Patient expired' : 'Critical deterioration'}</span>
-            <button onClick={() => loadNewCase()} className="text-xs underline opacity-70 hover:opacity-100">New case</button>
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ type: 'spring', damping: 20 }}
+            className={cn(
+              'py-3 px-4 flex items-center justify-center gap-3 shrink-0 mx-3 sm:mx-4 rounded-xl',
+              patientOutcome === 'deceased' ? 'bg-clinical-red/20 border border-clinical-red/30 text-clinical-red' : 'bg-clinical-amber/20 border border-clinical-amber/30 text-clinical-amber'
+            )}
+          >
+            <span className="text-sm font-semibold">{patientOutcome === 'deceased' ? 'Patient expired' : 'Critical deterioration'}</span>
+            <button onClick={() => loadNewCase()} className="text-xs underline opacity-70 hover:opacity-100 transition-opacity">New case</button>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* ── Scrollable feed ── */}
-      <main className="flex-1 overflow-y-auto px-4 sm:px-6 pb-48" role="main">
+      <main className="flex-1 overflow-y-auto px-3 sm:px-4 pb-48" role="main">
         <div className="max-w-2xl mx-auto">
           {medicalCase && (
             <ClinicalFeed
@@ -326,11 +332,12 @@ function ClinicalLayoutInner() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="fixed inset-0 bg-white z-50 overflow-y-auto"
+            transition={{ type: 'spring', damping: 24, stiffness: 260 }}
+            className="fixed inset-0 bg-clinical-bg z-50 overflow-y-auto"
           >
             <div className="max-w-2xl mx-auto px-4 py-6 pb-24">
-              <button onClick={() => setAssessmentOpen(false)} className="text-sm text-gray-400 hover:text-gray-700 transition-colors mb-6 block">
-                ← Back to case
+              <button onClick={() => setAssessmentOpen(false)} className="text-sm text-clinical-slate hover:text-clinical-ink transition-colors mb-6 flex items-center gap-1">
+                <ChevronRight className="w-3 h-3 rotate-180" /> Back to case
               </button>
               <AssessmentTab
                 medicalCase={medicalCase}
@@ -346,7 +353,7 @@ function ClinicalLayoutInner() {
                 onNewCase={() => { setAssessmentOpen(false); loadNewCase(); }}
               />
               {user && (
-                <div className="mt-12 border-t border-gray-100 pt-8">
+                <div className="mt-12 border-t border-clinical-line pt-8">
                   <ArchiveView user={user} />
                 </div>
               )}
@@ -410,37 +417,44 @@ function ClinicalLayoutInner() {
       <AnimatePresence>
         {isConsultOpen && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsConsultOpen(false)} className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[100]" />
-            <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 28, stiffness: 260 }} className="fixed bottom-0 left-0 right-0 max-h-[80vh] bg-white rounded-t-2xl shadow-2xl z-[101] flex flex-col overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsConsultOpen(false)} className="fixed inset-0 z-[100]" style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }} />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+              className="fixed bottom-0 left-0 right-0 max-h-[80vh] rounded-t-2xl shadow-2xl z-[101] flex flex-col overflow-hidden border-t border-clinical-line"
+              style={{ background: 'var(--clinical-surface)' }}
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-clinical-line">
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900">AI Consultant</h3>
-                  <p className="text-[10px] text-gray-400">Specialist reasoning</p>
+                  <h3 className="text-sm font-semibold text-clinical-ink">AI Consultant</h3>
+                  <p className="text-[10px] text-clinical-slate">Specialist reasoning</p>
                 </div>
-                <button onClick={() => setIsConsultOpen(false)} className="p-2 hover:bg-gray-100 rounded-full" aria-label="Close"><X className="w-4 h-4 text-gray-400" /></button>
+                <button onClick={() => setIsConsultOpen(false)} className="p-2 hover:bg-clinical-line/50 rounded-full transition-colors" aria-label="Close"><X className="w-4 h-4 text-clinical-slate" /></button>
               </div>
               <div className="flex-1 overflow-y-auto p-5 space-y-5">
                 {isConsulting ? (
                   <div className="flex flex-col items-center justify-center py-12 gap-3">
-                    <div className="w-6 h-6 border-2 border-gray-200 border-t-gray-900 rounded-full animate-spin" />
-                    <p className="text-xs text-gray-400">Thinking...</p>
+                    <div className="w-6 h-6 border-2 border-clinical-line border-t-clinical-teal rounded-full animate-spin" />
+                    <p className="text-xs text-clinical-slate font-mono">Thinking...</p>
                   </div>
                 ) : consultantAdvice ? (
                   <>
-                    <div className="bg-gray-50 rounded-xl p-4">
-                      <p className="text-sm text-gray-900 leading-relaxed italic">"{consultantAdvice.advice}"</p>
+                    <div className="rounded-xl p-4 border border-clinical-line" style={{ background: 'var(--clinical-surface-raised)' }}>
+                      <p className="text-sm text-clinical-ink leading-relaxed italic">"{consultantAdvice.advice}"</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-medium text-gray-400 uppercase mb-1">Reasoning</p>
-                      <p className="text-sm text-gray-700 leading-relaxed">{consultantAdvice.reasoning}</p>
+                      <p className="text-[10px] font-semibold text-clinical-slate uppercase tracking-widest mb-1">Reasoning</p>
+                      <p className="text-sm text-clinical-ink-muted leading-relaxed">{consultantAdvice.reasoning}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-medium text-gray-400 uppercase mb-2">Next steps</p>
+                      <p className="text-[10px] font-semibold text-clinical-slate uppercase tracking-widest mb-2">Next steps</p>
                       <div className="space-y-2">
                         {consultantAdvice.recommendedActions.map((action, i) => (
                           <div key={i} className="flex items-start gap-3">
-                            <span className="w-5 h-5 rounded-full bg-gray-900 text-white flex items-center justify-center text-[10px] font-medium shrink-0">{i + 1}</span>
-                            <p className="text-sm text-gray-700 pt-0.5">{action}</p>
+                            <span className="w-5 h-5 rounded-full bg-clinical-teal text-white flex items-center justify-center text-[10px] font-bold shrink-0">{i + 1}</span>
+                            <p className="text-sm text-clinical-ink pt-0.5">{action}</p>
                           </div>
                         ))}
                       </div>
@@ -448,7 +462,7 @@ function ClinicalLayoutInner() {
                   </>
                 ) : (
                   <div className="text-center py-12">
-                    <p className="text-sm text-gray-400">No consultation yet</p>
+                    <p className="text-sm text-clinical-slate">No consultation yet</p>
                   </div>
                 )}
               </div>

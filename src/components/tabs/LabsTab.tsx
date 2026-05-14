@@ -48,7 +48,7 @@ export function LabsTab({ medicalCase, simTime, selectedLab, onSelectLab }: Labs
       className="flex flex-col gap-4 py-8"
     >
       {results.length === 0 && (
-        <p className="text-sm text-gray-300 py-4">No results yet — order tests from the Orders tab.</p>
+        <p className="text-sm text-clinical-slate/50 py-4">No results yet — order tests from the Orders tab.</p>
       )}
 
       <div className="space-y-1">
@@ -63,21 +63,21 @@ export function LabsTab({ medicalCase, simTime, selectedLab, onSelectLab }: Labs
                 key={`lab-${lab.name}-${i}`}
                 onClick={() => available && onSelectLab(lab)}
                 className={cn(
-                  'w-full text-left py-2.5 border-b border-gray-50 flex items-baseline justify-between transition-colors',
-                  available && 'cursor-pointer hover:bg-gray-50'
+                  'w-full text-left py-2.5 border-b border-clinical-line/50 flex items-baseline justify-between transition-colors',
+                  available && 'cursor-pointer hover:bg-clinical-line/50'
                 )}
               >
-                <span className={cn('text-sm', pending ? 'text-gray-300' : 'text-gray-600')}>
+                <span className={cn('text-sm', pending ? 'text-clinical-slate/50' : 'text-clinical-ink-muted')}>
                   {lab.name}
                 </span>
                 {pending ? (
-                  <span className="text-xs text-gray-300">T+{lab.availableAt}m</span>
+                  <span className="text-xs text-clinical-slate/50">T+{lab.availableAt}m</span>
                 ) : available ? (
                   <span className={cn(
                     'font-mono text-sm',
                     lab.status === 'critical' && 'font-bold text-red-600 bg-red-50 px-1.5 rounded',
                     lab.status === 'abnormal' && 'font-bold text-red-600',
-                    lab.status === 'normal' && 'text-gray-900'
+                    lab.status === 'normal' && 'text-clinical-ink'
                   )}>
                     {lab.value} {lab.unit}
                   </span>
@@ -92,37 +92,37 @@ export function LabsTab({ medicalCase, simTime, selectedLab, onSelectLab }: Labs
           const isExpanded = expandedImaging === imgKey;
 
           return (
-            <div key={`img-${img.type}-${i}`} className="border-b border-gray-50">
+            <div key={`img-${img.type}-${i}`} className="border-b border-clinical-line/50">
               <button
                 onClick={() => !img.pending && setExpandedImaging(isExpanded ? null : imgKey)}
                 disabled={img.pending}
                 className={cn(
                   'w-full text-left py-2.5 flex items-baseline justify-between',
-                  !img.pending && 'cursor-pointer hover:bg-gray-50'
+                  !img.pending && 'cursor-pointer hover:bg-clinical-line/50'
                 )}
               >
-                <span className={cn('text-sm', img.pending ? 'text-gray-300' : 'text-gray-600')}>
+                <span className={cn('text-sm', img.pending ? 'text-clinical-slate/50' : 'text-clinical-ink-muted')}>
                   {img.type}
                 </span>
                 {img.pending
-                  ? <span className="text-xs text-gray-300">T+{img.availableAt ?? '?'}m</span>
-                  : <span className="text-xs text-gray-400">{isExpanded ? '▲' : '▼ Report'}</span>
+                  ? <span className="text-xs text-clinical-slate/50">T+{img.availableAt ?? '?'}m</span>
+                  : <span className="text-xs text-clinical-slate">{isExpanded ? '▲' : '▼ Report'}</span>
                 }
               </button>
 
               {isExpanded && !img.pending && (
-                <div className="bg-gray-50 rounded-lg p-4 mb-2 space-y-3">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">{img.type}</p>
+                <div className="bg-clinical-line/50 rounded-lg p-4 mb-2 space-y-3">
+                  <p className="text-[10px] font-semibold text-clinical-slate uppercase tracking-widest">{img.type}</p>
                   {img.findings && (
                     <div>
-                      <p className="text-[10px] font-medium text-gray-400 uppercase mb-1">Findings</p>
-                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{img.findings}</p>
+                      <p className="text-[10px] font-medium text-clinical-slate uppercase mb-1">Findings</p>
+                      <p className="text-sm text-clinical-ink leading-relaxed whitespace-pre-line">{img.findings}</p>
                     </div>
                   )}
                   {img.impression && (
-                    <div className="border-t border-gray-200 pt-3">
-                      <p className="text-[10px] font-medium text-gray-400 uppercase mb-1">Impression</p>
-                      <p className="text-sm font-medium text-gray-900 leading-relaxed">{img.impression}</p>
+                    <div className="border-t border-clinical-line pt-3">
+                      <p className="text-[10px] font-medium text-clinical-slate uppercase mb-1">Impression</p>
+                      <p className="text-sm font-medium text-clinical-ink leading-relaxed">{img.impression}</p>
                     </div>
                   )}
                 </div>

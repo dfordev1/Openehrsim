@@ -191,14 +191,14 @@ export function ClinicalGuidelines() {
           placeholder="Search protocols..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full bg-transparent border-b border-gray-200 pb-2 text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-gray-400 transition-colors"
+          className="w-full bg-transparent border-b border-clinical-line pb-2 text-sm text-clinical-ink placeholder:text-clinical-slate/50 focus:outline-none focus:border-clinical-teal transition-colors"
         />
       </div>
 
       {/* Protocol list */}
       <div className="flex flex-col gap-1">
         {filtered.length === 0 && (
-          <p className="text-sm text-gray-300 italic">No protocols match &ldquo;{searchTerm}&rdquo;</p>
+          <p className="text-sm text-clinical-slate/50 italic">No protocols match &ldquo;{searchTerm}&rdquo;</p>
         )}
 
         {filtered.map((g) => (
@@ -207,8 +207,8 @@ export function ClinicalGuidelines() {
               onClick={() => setSelectedId(selectedId === g.id ? null : g.id)}
               className={
                 selectedId === g.id
-                  ? 'text-sm font-medium text-gray-900 py-1'
-                  : 'text-sm text-gray-500 hover:text-gray-900 transition-colors py-1'
+                  ? 'text-sm font-medium text-clinical-ink py-1'
+                  : 'text-sm text-clinical-slate hover:text-clinical-ink transition-colors py-1'
               }
             >
               {g.title}
@@ -222,15 +222,15 @@ export function ClinicalGuidelines() {
                     key={i}
                     className={
                       step.critical
-                        ? 'text-sm text-gray-900 font-medium'
-                        : 'text-sm text-gray-700'
+                        ? 'text-sm text-clinical-ink font-medium'
+                        : 'text-sm text-clinical-ink'
                     }
                   >
                     {i + 1}. {step.text}
                   </p>
                 ))}
                 {g.pearl && (
-                  <p className="text-sm text-gray-500 italic mt-2">
+                  <p className="text-sm text-clinical-slate italic mt-2">
                     {g.pearl}
                   </p>
                 )}

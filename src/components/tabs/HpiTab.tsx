@@ -16,17 +16,17 @@ export function HpiTab({ medicalCase }: HpiTabProps) {
       className="flex flex-col gap-10 py-8"
     >
       {/* Hero: History of present illness */}
-      <p className="text-base text-gray-900 leading-relaxed whitespace-pre-wrap">
+      <p className="text-base text-clinical-ink leading-relaxed whitespace-pre-wrap">
         {medicalCase.historyOfPresentIllness}
       </p>
 
       {/* Past medical history */}
       {pmh.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-gray-500">Past Medical History</p>
+          <p className="text-sm font-medium text-clinical-slate">Past Medical History</p>
           <ul className="space-y-1">
             {pmh.map((item, i) => (
-              <li key={i} className="text-sm text-gray-700">
+              <li key={i} className="text-sm text-clinical-ink">
                 {item}
               </li>
             ))}

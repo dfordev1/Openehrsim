@@ -104,31 +104,31 @@ export function OrderSearchModal({ caseId, onConfirm, onClose }: Props) {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 8, scale: 0.97 }}
           transition={{ duration: 0.18, ease: 'easeOut' }}
-          className="relative bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden"
+          className="relative bg-clinical-surface rounded-xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden"
           style={{ maxHeight: '70vh' }}
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-            <span className="text-sm font-semibold text-gray-800">Order Verification</span>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-clinical-line">
+            <span className="text-sm font-semibold text-clinical-ink">Order Verification</span>
+            <button onClick={onClose} className="text-clinical-slate hover:text-clinical-ink-muted transition-colors">
               <X size={16} />
             </button>
           </div>
 
           {/* Search input */}
           <div className="px-4 pt-3 pb-2">
-            <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 focus-within:border-gray-400 transition-colors">
-              <Search size={14} className="text-gray-400 shrink-0" />
+            <div className="flex items-center gap-2 border border-clinical-line rounded-lg px-3 py-2 focus-within:border-clinical-teal transition-colors">
+              <Search size={14} className="text-clinical-slate shrink-0" />
               <input
                 ref={inputRef}
                 type="text"
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 placeholder="Type to search labs, imaging, medications…"
-                className="flex-1 text-sm outline-none bg-transparent placeholder-gray-300"
+                className="flex-1 text-sm outline-none bg-transparent placeholder-clinical-slate/40 text-clinical-ink"
               />
-              {loading && <Loader2 size={14} className="text-gray-400 animate-spin shrink-0" />}
+              {loading && <Loader2 size={14} className="text-clinical-slate animate-spin shrink-0" />}
             </div>
           </div>
 
@@ -139,13 +139,13 @@ export function OrderSearchModal({ caseId, onConfirm, onClose }: Props) {
             )}
 
             {!query.trim() && (
-              <p className="text-xs text-gray-300 py-4 text-center">
+              <p className="text-xs text-clinical-slate/50 py-4 text-center">
                 Start typing to search orders
               </p>
             )}
 
             {query.trim() && !loading && results.length === 0 && !error && (
-              <p className="text-xs text-gray-400 py-4 text-center">
+              <p className="text-xs text-clinical-slate py-4 text-center">
                 No matches — try Broaden Search
               </p>
             )}
@@ -158,13 +158,13 @@ export function OrderSearchModal({ caseId, onConfirm, onClose }: Props) {
                   onClick={() => toggleItem(item.name)}
                   className={cn(
                     'w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-left transition-colors mb-0.5',
-                    isChecked ? 'bg-blue-50' : 'hover:bg-gray-50'
+                    isChecked ? 'bg-blue-50' : 'hover:bg-clinical-line/50'
                   )}
                 >
                   {/* Checkbox */}
                   <div className={cn(
                     'w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors',
-                    isChecked ? 'border-blue-600 bg-blue-600' : 'border-gray-300'
+                    isChecked ? 'border-blue-600 bg-blue-600' : 'border-clinical-line'
                   )}>
                     {isChecked && (
                       <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10" fill="none">
@@ -175,14 +175,14 @@ export function OrderSearchModal({ caseId, onConfirm, onClose }: Props) {
 
                   {/* Name + sub-details */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-800 truncate">{item.name}</p>
+                    <p className="text-sm text-clinical-ink truncate">{item.name}</p>
                     {item.category === 'medication' && (item.route || item.frequency) && (
-                      <p className="text-xs text-gray-400 truncate">
+                      <p className="text-xs text-clinical-slate truncate">
                         {[item.route, item.frequency].filter(Boolean).join(' · ')}
                       </p>
                     )}
                     {item.category !== 'medication' && item.stat != null && (
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-clinical-slate">
                         STAT {item.stat}m · Routine {item.routine}m
                       </p>
                     )}
@@ -201,7 +201,7 @@ export function OrderSearchModal({ caseId, onConfirm, onClose }: Props) {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center gap-2 px-4 py-3 border-t border-gray-100 bg-gray-50">
+          <div className="flex items-center gap-2 px-4 py-3 border-t border-clinical-line bg-clinical-line/50">
             <button
               onClick={handleConfirm}
               disabled={selected.size === 0}
@@ -209,7 +209,7 @@ export function OrderSearchModal({ caseId, onConfirm, onClose }: Props) {
                 'flex-1 text-sm font-medium py-2 rounded-lg transition-colors',
                 selected.size > 0
                   ? 'bg-blue-600 text-white hover:bg-blue-700'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-clinical-line text-clinical-slate cursor-not-allowed'
               )}
             >
               Confirm Orders ({selected.size})
@@ -218,7 +218,7 @@ export function OrderSearchModal({ caseId, onConfirm, onClose }: Props) {
             <button
               onClick={() => doSearch(query, true)}
               disabled={!query.trim() || broadening}
-              className="text-sm font-medium text-gray-600 hover:text-gray-900 disabled:text-gray-300 transition-colors px-2 py-2 whitespace-nowrap"
+              className="text-sm font-medium text-clinical-ink-muted hover:text-clinical-ink disabled:text-clinical-slate/50 transition-colors px-2 py-2 whitespace-nowrap"
             >
               {broadening ? (
                 <span className="flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Broadening…</span>
@@ -227,7 +227,7 @@ export function OrderSearchModal({ caseId, onConfirm, onClose }: Props) {
 
             <button
               onClick={onClose}
-              className="text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors px-2 py-2"
+              className="text-sm font-medium text-clinical-slate hover:text-clinical-ink transition-colors px-2 py-2"
             >
               Cancel
             </button>

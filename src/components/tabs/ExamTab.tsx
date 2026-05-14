@@ -113,7 +113,7 @@ export function ExamTab({
           const label = key.charAt(0).toUpperCase() + key.slice(1);
 
           return (
-            <div key={key} className="py-3 border-b border-gray-100 last:border-0">
+            <div key={key} className="py-3 border-b border-clinical-line last:border-0">
               <button
                 onClick={() => handleExamine(key, finding as string)}
                 disabled={isExamined || isLoading}
@@ -128,16 +128,16 @@ export function ExamTab({
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                     >
-                      <p className="text-xs font-medium text-gray-400 mb-0.5">{label}</p>
-                      <p className="text-sm text-gray-900 leading-relaxed">
+                      <p className="text-xs font-medium text-clinical-slate mb-0.5">{label}</p>
+                      <p className="text-sm text-clinical-ink leading-relaxed">
                         {revealedFindings[key]}
                       </p>
                     </motion.div>
                   </AnimatePresence>
                 ) : (
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-400">{label}</span>
-                    <span className="text-xs text-gray-300">
+                    <span className="text-sm font-medium text-clinical-slate">{label}</span>
+                    <span className="text-xs text-clinical-slate/50">
                       {isLoading ? 'Examining...' : 'Tap to examine'}
                     </span>
                   </div>
@@ -150,7 +150,7 @@ export function ExamTab({
 
       {/* #12: Exam complete nudge */}
       {Object.keys(revealedFindings).length === examEntries.length && examEntries.length > 0 && (
-        <p className="text-sm text-gray-400 text-center pt-4">
+        <p className="text-sm text-clinical-slate text-center pt-4">
           All systems examined — proceed to Tests
         </p>
       )}
@@ -161,8 +161,8 @@ export function ExamTab({
           onClick={onToggleGcs}
           className="flex items-center justify-between w-full"
         >
-          <span className="text-sm font-medium text-gray-500">GCS</span>
-          <span className="text-sm font-mono text-gray-900">
+          <span className="text-sm font-medium text-clinical-slate">GCS</span>
+          <span className="text-sm font-mono text-clinical-ink">
             E{gcsState.eyes} V{gcsState.verbal} M{gcsState.motor} = {gcsTotal}
           </span>
         </button>
@@ -175,11 +175,11 @@ export function ExamTab({
           >
             {(['eyes', 'verbal', 'motor'] as const).map(category => (
               <div key={category}>
-                <p className="text-xs text-gray-400 mb-2 capitalize">{category}</p>
+                <p className="text-xs text-clinical-slate mb-2 capitalize">{category}</p>
                 <select
                   value={gcsState[category]}
                   onChange={(e) => onGcsChange(category, Number(e.target.value))}
-                  className="w-full text-sm border border-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-gray-400"
+                  className="w-full text-sm border border-clinical-line rounded-md px-2 py-1.5 focus:outline-none focus:border-clinical-teal"
                 >
                   {GCS_MAPPING[category].map(opt => (
                     <option key={opt.score} value={opt.score}>

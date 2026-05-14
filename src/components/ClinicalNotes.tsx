@@ -98,7 +98,7 @@ export function ClinicalNotes() {
           onKeyDown={handleKeyDown}
           placeholder="Document your thinking..."
           rows={8}
-          className="w-full bg-transparent border-b border-gray-200 pb-2 text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-gray-400 resize-none leading-relaxed"
+          className="w-full bg-transparent border-b border-clinical-line pb-2 text-sm text-clinical-ink placeholder:text-clinical-slate/50 focus:outline-none focus:border-clinical-teal resize-none leading-relaxed"
         />
       </div>
 
@@ -107,45 +107,45 @@ export function ClinicalNotes() {
         <button
           onClick={handleSave}
           disabled={!draft.trim()}
-          className="text-sm text-gray-900 hover:text-gray-600 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+          className="text-sm text-clinical-ink hover:text-clinical-ink-muted disabled:text-clinical-slate/50 disabled:cursor-not-allowed transition-colors"
         >
           Save
         </button>
-        <span className="text-xs text-gray-300">⌘S</span>
-        {saved && <span className="text-xs text-gray-400">Saved</span>}
+        <span className="text-xs text-clinical-slate/50">⌘S</span>
+        {saved && <span className="text-xs text-clinical-slate">Saved</span>}
       </div>
 
       {/* Saved notes */}
       {history.length > 0 && (
         <div>
-          <p className="text-xs text-gray-400 mb-3">Saved notes</p>
+          <p className="text-xs text-clinical-slate mb-3">Saved notes</p>
           <div className="flex flex-col gap-2">
             {history.map((note) => (
               <div key={note.id}>
                 <button
                   onClick={() => setExpanded(expanded === note.id ? null : note.id)}
-                  className="text-sm text-gray-900 hover:text-gray-600 transition-colors text-left"
+                  className="text-sm text-clinical-ink hover:text-clinical-ink-muted transition-colors text-left"
                 >
-                  <span className="text-gray-400 font-mono text-xs">{note.timestamp}</span>
+                  <span className="text-clinical-slate font-mono text-xs">{note.timestamp}</span>
                   {' — '}
                   {note.label}
                 </button>
 
                 {expanded === note.id && (
                   <div className="mt-2 pl-4">
-                    <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
+                    <pre className="text-sm text-clinical-ink whitespace-pre-wrap font-sans leading-relaxed">
                       {note.content}
                     </pre>
                     <div className="flex gap-4 mt-3">
                       <button
                         onClick={() => { setDraft(note.content); setExpanded(null); }}
-                        className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
+                        className="text-xs text-clinical-slate hover:text-clinical-ink transition-colors"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleDelete(note.id)}
-                        className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
+                        className="text-xs text-clinical-slate hover:text-clinical-ink transition-colors"
                       >
                         Delete
                       </button>
