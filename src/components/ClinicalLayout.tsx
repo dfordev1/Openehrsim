@@ -289,7 +289,7 @@ function Shell() {
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: T.sans, fontSize: 13, background: T.bg, color: T.text }}>
 
-      {/* Global modals */}
+      {/* Global overlays */}
       <CaseLibrary isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} onSelectCase={(d, c, e) => { setIsLibraryOpen(false); loadNewCase(d, c, e); }} />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} isRecovery={isRecovery} onRecoveryHandled={clearRecovery} />
       <CommandPalette isOpen={isCommandOpen} onClose={() => setIsCommandOpen(false)} onNavigate={() => {}} onNewCase={() => setIsLibraryOpen(true)} onConsult={handleConsult} hasArchive={!!user} onOrderTest={mc ? handleOrderTest : undefined} onAdminister={mc ? (med) => handlePerformIntervention(2, `Administer ${med}`) : undefined} onAdvanceTime={mc ? handleAdvanceTime : undefined} />
@@ -908,6 +908,10 @@ function Card({ title, children, fullWidth, action, titleColor }: { title: React
   );
 }
 
+function SubHead({ label, color = E.textSm, bg = E.panelHead }: { label: string; color?: string; bg?: string }) {
+  return (
+    <div style={{ background: bg, padding: '3px 10px', fontSize: 10, fontWeight: 600, color, textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: `1px solid ${E.border}`, borderTop: `1px solid ${E.border}` }}>
+      {label}
 function SectionHead({ children, color = T.muted }: { children: ReactNode; color?: string }) {
   return (
     <div style={{ padding: '6px 16px', background: '#f8fafc', borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, fontWeight: 600, fontSize: 11, color, textTransform: 'uppercase', letterSpacing: 0.5 }}>
@@ -916,6 +920,17 @@ function SectionHead({ children, color = T.muted }: { children: ReactNode; color
   );
 }
 
+const th: React.CSSProperties = {
+  padding: '3px 8px',
+  textAlign: 'left',
+  fontSize: 10,
+  fontWeight: 600,
+  color: E.muted,
+  textTransform: 'uppercase' as const,
+  letterSpacing: 0.3,
+  borderBottom: `1px solid ${E.border}`,
+  borderRight: `1px solid #eef1f4`,
+};
 function Divider() { return <div style={{ height: 1, background: T.border }} />; }
 
 function EmptyState({ children }: { children: ReactNode }) {
