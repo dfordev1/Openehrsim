@@ -33,6 +33,7 @@ import { HpiTab } from './tabs/HpiTab';
 import { ExamTab } from './tabs/ExamTab';
 import { LabsTab } from './tabs/LabsTab';
 import { OrderSearchModal } from './OrderSearchModal';
+import { OrdersTab } from './tabs/OrdersTab';
 import { PharmacyTab } from './tabs/PharmacyTab';
 import { TreatmentTab } from './tabs/TreatmentTab';
 import { CommsTab } from './tabs/CommsTab';
@@ -81,10 +82,10 @@ const NAV_ITEMS = [
   { id: 'triage', label: 'Patient' },
   { id: 'hpi', label: 'History' },
   { id: 'exam', label: 'Exam' },
-  { id: 'labs', label: 'Tests' },
+  { id: 'orders', label: 'Orders' },
+  { id: 'labs', label: 'Results' },
   { id: 'treatment', label: 'Treat' },
   { id: 'assess', label: 'Score' },
-  { id: 'archive', label: 'Stats' },
 ] as const;
 
 // ── Main Layout ───────────────────────────────────────────────────────────────
@@ -450,18 +451,21 @@ function ClinicalLayoutInner() {
               />
             )}
 
+            {activeTab === 'orders' && medicalCase && (
+              <OrdersTab
+                key="orders"
+                medicalCase={medicalCase}
+                simTime={simTime}
+                intervening={intervening}
+                onOrderTest={handleOrderTest}
+                onOrderMedication={handleOrderMedication}
+                onDiscontinueMedication={handleDiscontinueMedication}
+                onPerformIntervention={handlePerformIntervention}
+              />
+            )}
+
             {activeTab === 'labs' && medicalCase && (
-              <>
-                {/* CCS-style Order button */}
-                <button
-                  onClick={() => setOrderModalOpen(true)}
-                  disabled={intervening}
-                  className="w-full mb-4 py-2.5 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-40 transition-all"
-                >
-                  + Write Orders
-                </button>
-                <LabsTab key="labs" medicalCase={medicalCase} simTime={simTime} selectedLab={selectedLab} onSelectLab={setSelectedLab} onOrderLab={(name) => handleOrderTest('lab', name)} revealedStudies={revealedStudies} onRevealStudy={(type) => setRevealedStudies(prev => [...prev, type])} onOrderImaging={(name) => handleOrderTest('imaging', name)} />
-              </>
+              <LabsTab key="labs" medicalCase={medicalCase} simTime={simTime} selectedLab={selectedLab} onSelectLab={setSelectedLab} />
             )}
 
             {activeTab === 'pharmacy' && (
@@ -581,7 +585,8 @@ function ClinicalLayoutInner() {
             {moreMenuOpen && (
               <div className="absolute bottom-12 right-0 bg-white border border-gray-200 rounded-xl shadow-lg py-2 px-1 min-w-[130px] z-50">
                 {[
-                  { id: 'pharmacy', label: 'Pharmacy' },
+                  { id: 'archive', label: 'Stats' },
+                  { id: 'pharmacy', label: 'Meds (MAR)' },
                   { id: 'comms', label: 'Comms' },
                   { id: 'dxpause', label: 'DxPause' },
                   { id: 'notes', label: 'Notes' },
