@@ -135,7 +135,7 @@ attending (MASTERY-LEVEL — career-defining cases):
   historyOfPresentIllness : 4-6 sentences (see above)
   pastMedicalHistory    : string[] — 2-4 comorbidities with durations and relevance to management
   initialAppearance     : vivid 2-sentence bedside impression including affect, skin colour/texture, breathing pattern, posture/position of comfort
-  vitals                : { heartRate, bloodPressure, temperature, respiratoryRate, oxygenSaturation }
+  vitals                : { heartRate, bloodPressure, temperature, respiratoryRate, oxygenSaturation, heightCm, weightKg, bmi }
   physicalExam          : { heent, cardiac, respiratory, abdomen, extremities, neurological } — 2-3 sentences each
   labs                  : full array with specific values — NO orderedAt/availableAt at generation time
   imaging               : full array with detailed multi-sentence findings — NO orderedAt/availableAt at generation time

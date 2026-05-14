@@ -16,6 +16,7 @@ interface TreatmentTabProps {
   onInterventionChange: (val: string) => void;
   onExecuteOrder: () => void;
   onWait: (minutes: number) => void;
+  onOpenTimeAdvance: () => void;
   onTransfer: (dept: string) => void;
   onToggleTransfer: () => void;
   onOrderTest: (type: 'lab' | 'imaging', name: string) => Promise<void>;
@@ -33,6 +34,7 @@ export function TreatmentTab({
   onInterventionChange,
   onExecuteOrder,
   onWait,
+  onOpenTimeAdvance,
   onTransfer,
   onToggleTransfer,
   onOrderTest,
@@ -52,6 +54,9 @@ export function TreatmentTab({
       <div className="flex items-center justify-between flex-wrap gap-2">
         <p className="text-xs text-gray-400 font-mono">
           HR {medicalCase.vitals.heartRate} · BP {medicalCase.vitals.bloodPressure} · SpO2 {medicalCase.vitals.oxygenSaturation}% · RR {medicalCase.vitals.respiratoryRate} · {medicalCase.vitals.temperature}°C
+          {medicalCase.vitals.heightCm != null && medicalCase.vitals.weightKg != null && (
+            <> · {medicalCase.vitals.heightCm}cm {medicalCase.vitals.weightKg}kg{medicalCase.vitals.bmi != null ? ` BMI ${medicalCase.vitals.bmi.toFixed(1)}` : ''}</>
+          )}
         </p>
         {trend && trend !== 'stable' && (
           <span className={cn(
@@ -105,16 +110,13 @@ export function TreatmentTab({
 
       {/* Quick actions */}
       <div className="flex flex-wrap items-center gap-4 text-sm">
-        {[5, 15, 30].map(mins => (
-          <button
-            key={mins}
-            onClick={() => onWait(mins)}
-            disabled={intervening}
-            className="text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-30"
-          >
-            +{mins} min
-          </button>
-        ))}
+        <button
+          onClick={onOpenTimeAdvance}
+          disabled={intervening}
+          className="text-gray-500 hover:text-gray-900 transition-colors disabled:opacity-30 font-medium"
+        >
+          Obtain Results or See Patient Later
+        </button>
         <button
           onClick={onToggleTransfer}
           className="text-gray-400 hover:text-gray-900 transition-colors"

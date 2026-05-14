@@ -26,6 +26,7 @@ import VitalsExpanded from './VitalsExpanded';
 import { DiagnosisPad } from './DiagnosisPad';
 import { StageCommitGate } from './StageCommitGate';
 import { ArchiveView } from './ArchiveView';
+import { TimeAdvanceModal } from './TimeAdvanceModal';
 
 // Tab components
 import { HpiTab } from './tabs/HpiTab';
@@ -108,6 +109,9 @@ function ClinicalLayoutInner() {
   const [selectedLab, setSelectedLab] = React.useState<import('../types').LabResult | null>(null);
   const [revealedStudies, setRevealedStudies] = React.useState<string[]>([]);
   const [orderModalOpen, setOrderModalOpen] = React.useState(false);
+  const [timeAdvanceOpen, setTimeAdvanceOpen] = React.useState(false);
+  const realStartTimeRef = React.useRef<number>(Date.now());
+  const [realElapsedMins, setRealElapsedMins] = React.useState(0);
 
   const { user, isAuthOpen, setIsAuthOpen, handleLogout, isSupabaseConfigured, isAuthLoading, isRecovery, clearRecovery } = useAuth();
   const {
@@ -181,6 +185,20 @@ function ClinicalLayoutInner() {
     dxpause: 'dxpause',
     management: 'treatment',
   };
+
+  // ── Real-time elapsed clock ───────────────────────────────────────────────
+  React.useEffect(() => {
+    if (!medicalCase) return;
+    realStartTimeRef.current = Date.now();
+    setRealElapsedMins(0);
+  }, [medicalCase?.id]);
+
+  React.useEffect(() => {
+    const id = setInterval(() => {
+      setRealElapsedMins(Math.floor((Date.now() - realStartTimeRef.current) / 60000));
+    }, 15000);
+    return () => clearInterval(id);
+  }, []);
 
   // ── Derive abnormal vitals ──────────────────────────────────────────────────
   const abnormalVitals: { label: string; value: string; critical: boolean }[] = [];
@@ -402,7 +420,7 @@ function ClinicalLayoutInner() {
       </AnimatePresence>
 
       {/* ── Content area (90% of screen) ── */}
-      <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-4 pb-20" role="main">
+      <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-4 pb-28" role="main">
         <div className="max-w-3xl mx-auto">
           <AnimatePresence mode="wait">
             {activeTab === 'triage' && medicalCase && (
@@ -468,7 +486,7 @@ function ClinicalLayoutInner() {
             )}
 
             {activeTab === 'treatment' && medicalCase && (
-              <TreatmentTab key="treatment" medicalCase={medicalCase} vitalsHistory={vitalsHistory} interventionInput={interventionInput} intervening={intervening} transferExpanded={transferExpanded} simTime={simTime} onInterventionChange={setInterventionInput} onExecuteOrder={() => handlePerformIntervention()} onWait={(mins) => handlePerformIntervention(mins, 'Observe patient')} onTransfer={(dept) => handlePerformIntervention(0, `Transfer to ${dept}`)} onToggleTransfer={() => setTransferExpanded(p => !p)} onOrderTest={handleOrderTest} onAdvanceTime={handleAdvanceTime} onDiscontinueMedication={handleDiscontinueMedication} />
+              <TreatmentTab key="treatment" medicalCase={medicalCase} vitalsHistory={vitalsHistory} interventionInput={interventionInput} intervening={intervening} transferExpanded={transferExpanded} simTime={simTime} onInterventionChange={setInterventionInput} onExecuteOrder={() => handlePerformIntervention()} onWait={(mins) => handlePerformIntervention(mins, 'Observe patient')} onOpenTimeAdvance={() => setTimeAdvanceOpen(true)} onTransfer={(dept) => handlePerformIntervention(0, `Transfer to ${dept}`)} onToggleTransfer={() => setTransferExpanded(p => !p)} onOrderTest={handleOrderTest} onAdvanceTime={handleAdvanceTime} onDiscontinueMedication={handleDiscontinueMedication} />
             )}
 
             {activeTab === 'assess' && medicalCase && (
@@ -495,6 +513,26 @@ function ClinicalLayoutInner() {
           </AnimatePresence>
         </div>
       </main>
+
+      {/* ── Dual elapsed timer strip ── */}
+      {medicalCase && (
+        <div className="fixed bottom-[64px] left-0 right-0 z-30 bg-gray-50/95 border-t border-gray-100 py-1 px-4">
+          <div className="max-w-md mx-auto flex items-center justify-between">
+            <span className="text-[10px] font-mono text-gray-400">
+              {(() => {
+                const t = simTime;
+                const d = Math.floor(t / 1440);
+                const h = Math.floor((t % 1440) / 60);
+                const m = t % 60;
+                return `SIM ${d > 0 ? `${d}d ` : ''}${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m`;
+              })()}
+            </span>
+            <span className="text-[10px] font-mono text-gray-400">
+              REAL {realElapsedMins}m
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ── Bottom navigation: minimal dots ── */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/90 backdrop-blur-md border-t border-gray-100">
@@ -565,6 +603,17 @@ function ClinicalLayoutInner() {
           </div>
         </div>
       </nav>
+
+      {/* ── Time Advance Modal ── */}
+      {timeAdvanceOpen && medicalCase && (
+        <TimeAdvanceModal
+          medicalCase={medicalCase}
+          simTime={simTime}
+          intervening={intervening}
+          onAdvance={handleAdvanceTime}
+          onClose={() => setTimeAdvanceOpen(false)}
+        />
+      )}
 
       {/* ── Diagnosis Pad (floating, only when open) ── */}
       {medicalCase && (

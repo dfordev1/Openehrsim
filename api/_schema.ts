@@ -20,6 +20,9 @@ export const MEDICAL_CASE_SCHEMA = `
       temperature: number;
       respiratoryRate: number;
       oxygenSaturation: number;
+      heightCm?: number;
+      weightKg?: number;
+      bmi?: number;
     };
     physicalExam: {
       heent: string;

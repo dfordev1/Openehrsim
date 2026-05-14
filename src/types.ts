@@ -4,6 +4,9 @@ export interface Vitals {
   temperature: number;
   respiratoryRate: number;
   oxygenSaturation: number;
+  heightCm?: number;
+  weightKg?: number;
+  bmi?: number;
 }
 
 export interface PhysicalExam {

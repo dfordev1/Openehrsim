@@ -21,6 +21,9 @@ export const MEDICAL_CASE_SCHEMA = `
       temperature: number;             // °C
       respiratoryRate: number;
       oxygenSaturation: number;        // %
+      heightCm?: number;               // e.g. 172
+      weightKg?: number;               // e.g. 84.5
+      bmi?: number;                    // computed: weightKg / (heightCm/100)^2
     };
     physicalExam: {
       heent: string;     // 2-3 sentences — subtle findings matter
