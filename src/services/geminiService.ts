@@ -1,5 +1,5 @@
 import * as Sentry from '@sentry/react';
-import { CaseEvaluation, MedicalCase } from "../types";
+import { CaseEvaluation, MedicalCase, OrderSearchResult } from "../types";
 
 function trimCase(mc: MedicalCase): Partial<MedicalCase> {
   return {
@@ -86,6 +86,21 @@ export async function orderTest(
     return await post("/api/order-test", { caseId, testType, testName, currentSimTime, priority });
   } catch (err) {
     Sentry.captureException(err, { tags: { endpoint: 'order-test', testType, testName } });
+    throw err;
+  }
+}
+
+// ── CCS: search orderable items ──────────────────────────────────────────────
+
+export async function searchOrders(
+  caseId: string,
+  query: string,
+  broaden = false
+): Promise<{ results: OrderSearchResult[] }> {
+  try {
+    return await post("/api/search-orders", { caseId, query, broaden });
+  } catch (err) {
+    Sentry.captureException(err, { tags: { endpoint: 'search-orders' }, extra: { query } });
     throw err;
   }
 }

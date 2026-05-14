@@ -48,9 +48,20 @@ export const MEDICAL_CASE_SCHEMA = `
       orderedAt?: number;
       availableAt?: number;
     }[];
-    availableTests: {                  // Comprehensive catalog — ≥30 labs, ≥15 imaging
-      labs: string[];
-      imaging: string[];
+    availableMedications: {
+      // AI generates every orderable medication for this case — NO hardcoded list.
+      // Include dose in name. Use realistic routes + frequencies.
+      // Min 30 covering: analgesics, antibiotics, antihypertensives, anticoagulants,
+      // bronchodilators, diuretics, vasopressors, IV fluids, antiemetics, sedatives, electrolytes.
+      name: string;      // e.g. "Metoprolol tartrate 25mg"
+      route: string;     // e.g. "Oral" | "Intravenous" | "Subcutaneous"
+      frequency: string; // e.g. "BID" | "Daily" | "Continuous" | "PRN"
+      category: string;  // e.g. "Antihypertensive" | "Antibiotic"
+    }[];
+    availableTests: {
+      // Each entry carries its OWN realistic turnaround times — no hard-coded lookup table.
+      labs: { name: string; stat: number; routine: number }[];
+      imaging: { name: string; stat: number; routine: number }[];
     };
     medications: {
       id: string;

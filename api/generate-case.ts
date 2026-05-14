@@ -139,7 +139,16 @@ attending (MASTERY-LEVEL — career-defining cases):
   physicalExam          : { heent, cardiac, respiratory, abdomen, extremities, neurological } — 2-3 sentences each
   labs                  : full array with specific values — NO orderedAt/availableAt at generation time
   imaging               : full array with detailed multi-sentence findings — NO orderedAt/availableAt at generation time
-  availableTests        : { labs: string[], imaging: string[] } — comprehensive catalog
+  availableMedications  : { name, route, frequency, category }[] — MINIMUM 30 orderable medications.
+                          Include dose in name. Span: analgesics, antibiotics, antihypertensives,
+                          anticoagulants, bronchodilators, diuretics, vasopressors, IV fluids,
+                          antiemetics, sedatives, electrolytes, steroids, antiarrhythmics.
+                          Make them clinically relevant to THIS patient's presentation and comorbidities.
+                          Example: {name:"Metoprolol tartrate 25mg",route:"Oral",frequency:"BID",category:"Antihypertensive"}
+  availableTests        : {
+                            labs:    { name: string; stat: number; routine: number }[],
+                            imaging: { name: string; stat: number; routine: number }[]
+                          } — comprehensive catalog with AI-declared turnaround times
   medications           : []
   activeAlarms          : [] or populated if vitals are critical
   currentCondition      : one-line clinical status
@@ -186,9 +195,20 @@ Make it genuinely harrowing. This is the case that gets discussed at morning rep
     if (!fullCase.id) fullCase.id = `case-${Math.random().toString(36).slice(2, 9)}`;
 
     // Guarantee required new fields are present even if AI skips them
-    if (!Array.isArray(fullCase.specialty_tags))      fullCase.specialty_tags      = [];
-    if (!Array.isArray(fullCase.managementConflicts)) fullCase.managementConflicts = [];
-    if (!Array.isArray(fullCase.requiredConsultations)) fullCase.requiredConsultations = [];
+    if (!Array.isArray(fullCase.specialty_tags))          fullCase.specialty_tags          = [];
+    if (!Array.isArray(fullCase.managementConflicts))     fullCase.managementConflicts     = [];
+    if (!Array.isArray(fullCase.requiredConsultations))   fullCase.requiredConsultations   = [];
+    if (!Array.isArray(fullCase.availableMedications))    fullCase.availableMedications    = [];
+    // Coerce legacy string[] availableTests to {name,stat,routine}[]
+    if (fullCase.availableTests) {
+      for (const key of ["labs", "imaging"] as const) {
+        if (Array.isArray(fullCase.availableTests[key])) {
+          fullCase.availableTests[key] = fullCase.availableTests[key].map((t: any) =>
+            typeof t === "string" ? { name: t, stat: key === "labs" ? 20 : 30, routine: key === "labs" ? 45 : 60 } : t
+          );
+        }
+      }
+    }
 
     // ── Persist FULL case server-side (Supabase or in-memory fallback) ──────
     await storeCaseServerSide(fullCase.id, fullCase);
