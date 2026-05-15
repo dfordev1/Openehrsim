@@ -239,13 +239,14 @@ function SidebarPatient({ patient, selected, onClick }: {
 }
 
 // ─── CPOE bar ──────────────────────────────────────────────────────────────────
-function CPOEBar({ caseId, simTime, busy, onExecute, onOpenTimeAdvance, onOrderTest, onConsult }: {
+function CPOEBar({ caseId, simTime, busy, onExecute, onOpenTimeAdvance, onOrderTest, onOrderMedication, onConsult }: {
   caseId: string | undefined;
   simTime: number;
   busy: boolean;
   onExecute: (t: string) => Promise<void>;
   onOpenTimeAdvance: () => void;
   onOrderTest: (type: 'lab' | 'imaging', name: string) => Promise<void>;
+  onOrderMedication: (name: string, route?: string, frequency?: string) => Promise<void>;
   onConsult: () => void;
 }) {
   const [val, setVal]     = useState('');
@@ -280,8 +281,9 @@ function CPOEBar({ caseId, simTime, busy, onExecute, onOpenTimeAdvance, onOrderT
     clear();
     setPlacing(true);
     try {
-      if (r.category === 'lab')     await onOrderTest('lab', r.name);
+      if (r.category === 'lab')          await onOrderTest('lab', r.name);
       else if (r.category === 'imaging') await onOrderTest('imaging', r.name);
+      else if (r.category === 'medication') await onOrderMedication(r.name, r.route, r.frequency);
       else await onExecute(r.name);
     } finally {
       setPlacing(false);
@@ -1171,9 +1173,10 @@ function EpicShell() {
                 caseId={mc.id}
                 simTime={simTime}
                 busy={isBusy}
-                onExecute={t => handlePerformIntervention(2, t)}
+                onExecute={t => handlePerformIntervention(undefined, t)}
                 onOpenTimeAdvance={() => setTimeAdvOpen(true)}
                 onOrderTest={handleOrderTest}
+                onOrderMedication={handleOrderMedication}
                 onConsult={handleConsult}
               />
             </>
