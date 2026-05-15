@@ -1,228 +1,534 @@
 /**
- * ClinicalLayout — modern clinical UI.
- * Slate palette · system-ui · shadow cards · underline tabs · pill badges.
+ * ClinicalLayout — Epic EHR pixel-perfect clone.
+ * Dark teal nav · patient list sidebar · vitals sparklines · 4-column grid.
  */
 
 import * as Sentry from '@sentry/react';
 import React, {
-  Component,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ErrorInfo,
-  type ReactNode,
+  Component, useCallback, useEffect, useMemo, useRef, useState,
+  type ErrorInfo, type ReactNode,
 } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCase } from '../contexts/CaseContext';
 import { useNavigation } from '../contexts/NavigationContext';
+import { searchOrders } from '../services/geminiService';
 import { AuthModal } from './Auth';
 import { CaseLibrary } from './CaseLibrary';
 import { CommandPalette } from './CommandPalette';
-import { AssessmentTab } from './tabs/AssessmentTab';
-import { ArchiveView } from './ArchiveView';
 import { DiagnosisPad } from './DiagnosisPad';
 import { StageCommitGate } from './StageCommitGate';
-import type { LabResult, MedicalCase, AvailableTest } from '../types';
+import { TimeAdvanceModal } from './TimeAdvanceModal';
+import { AssessmentTab } from './tabs/AssessmentTab';
+import { ArchiveView } from './ArchiveView';
+import type { LabResult, OrderSearchResult } from '../types';
+import type { VitalsHistoryEntry } from '../hooks/useVitalsPoll';
 
-// ─── design tokens ─────────────────────────────────────────────────────────────
-const T = {
-  // surfaces
-  bg:       '#f1f5f9',
-  card:     '#ffffff',
-  header:   '#0f172a',
-  subhead:  '#1e293b',
-  // borders
-  border:   '#e2e8f0',
-  borderMd: '#cbd5e1',
-  // text
-  text:     '#0f172a',
-  textSm:   '#334155',
-  muted:    '#64748b',
-  // accent
-  indigo:   '#4f46e5',
-  indigoLt: '#eef2ff',
-  // status
-  red:      '#ef4444',
-  redLt:    '#fef2f2',
-  redBd:    '#fecaca',
-  amber:    '#d97706',
-  amberLt:  '#fffbeb',
-  amberBd:  '#fde68a',
-  emerald:  '#059669',
-  emeraldLt:'#ecfdf5',
-  blue:     '#2563eb',
-  blueLt:   '#eff6ff',
-  purple:   '#7c3aed',
-  purpleLt: '#f5f3ff',
-  // font
-  sans: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
-  mono: '"JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace',
+// ─── Epic colour palette ───────────────────────────────────────────────────────
+const E = {
+  teal:      '#1b5e6e',
+  tealDk:    '#144d5c',
+  tealLt:    '#e8f4f7',
+  tabBar:    '#dce8ed',
+  bodyBg:    '#f0f3f5',
+  panel:     '#ffffff',
+  panelHd:   '#e8ecef',
+  border:    '#cdd6dd',
+  borderDk:  '#b0bec5',
+  text:      '#1a2b35',
+  textSm:    '#3a5060',
+  muted:     '#6b8fa3',
+  red:       '#c0392b',
+  redLt:     '#fdf0ef',
+  amber:     '#d97706',
+  amberLt:   '#fffbeb',
+  green:     '#1a7a3c',
+  greenLt:   '#edf9f1',
+  blue:      '#1565c0',
+  blueLt:    '#e8f0fe',
+  font:      '"Segoe UI", Arial, Helvetica, sans-serif',
+  mono:      '"Consolas", "Courier New", monospace',
 };
 
-// ─── vitals analysis ───────────────────────────────────────────────────────────
-function vitalsAbnormal(mc: MedicalCase) {
-  const v = mc.vitals;
-  const sbp = parseInt(mc.vitals.bloodPressure.split('/')[0]) || 120;
-  return {
-    hr:    v.heartRate > 100 || v.heartRate < 60,
-    hrCrit:v.heartRate > 150 || v.heartRate < 40,
-    bp:    sbp > 140 || sbp < 90,
-    bpCrit:sbp > 180 || sbp < 80,
-    rr:    v.respiratoryRate > 20 || v.respiratoryRate < 12,
-    rrCrit:v.respiratoryRate > 30 || v.respiratoryRate < 8,
-    spo2:  v.oxygenSaturation < 95,
-    spo2Crit: v.oxygenSaturation < 88,
-    temp:  v.temperature > 38.3 || v.temperature < 36,
-    tempCrit: v.temperature > 40 || v.temperature < 34,
-  };
-}
-
-// ─── lab flag ──────────────────────────────────────────────────────────────────
-function labFlag(lab: LabResult) {
-  if (lab.status === 'critical') {
-    const v = parseFloat(String(lab.value));
-    const parts = lab.normalRange.split('-');
-    const lo = parseFloat(parts[0]);
-    const isLow = !isNaN(v) && !isNaN(lo) && v < lo;
-    return isLow
-      ? { code: 'LL', color: T.blue,   bg: T.blueLt }
-      : { code: 'HH', color: T.red,    bg: T.redLt  };
-  }
-  if (lab.status === 'abnormal') {
-    const v = parseFloat(String(lab.value));
-    const parts = lab.normalRange.split('-');
-    const lo = parseFloat(parts[0]), hi = parseFloat(parts[parts.length - 1]);
-    if (!isNaN(v) && !isNaN(lo) && !isNaN(hi))
-      return v < lo
-        ? { code: 'L', color: T.blue,   bg: T.blueLt  }
-        : { code: 'H', color: T.amber,  bg: T.amberLt };
-    return { code: 'H', color: T.amber, bg: T.amberLt };
-  }
-  return { code: '', color: T.emerald, bg: 'transparent' };
-}
-
-// ─── action badge colours ──────────────────────────────────────────────────────
-const actionBadge: Record<string, { bg: string; color: string; label: string }> = {
-  order:         { bg: T.blueLt,   color: T.blue,    label: 'Order'    },
-  medication:    { bg: T.emeraldLt,color: T.emerald,  label: 'Meds'     },
-  exam:          { bg: T.purpleLt, color: T.purple,   label: 'Exam'     },
-  procedure:     { bg: T.amberLt,  color: T.amber,    label: 'Procedure'},
-  transfer:      { bg: T.redLt,    color: T.red,      label: 'Transfer' },
-  communication: { bg: T.indigoLt, color: T.indigo,   label: 'Comms'    },
-  'time-advance':{ bg: '#f8fafc',  color: T.muted,    label: 'Time'     },
-};
-
-// ─── Error Boundary ────────────────────────────────────────────────────────────
+// ─── Error boundary ────────────────────────────────────────────────────────────
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   constructor(props: { children: ReactNode }) { super(props); this.state = { hasError: false }; }
   static getDerivedStateFromError() { return { hasError: true }; }
-  componentDidCatch(e: Error, i: ErrorInfo) { Sentry.captureException(e, { extra: { componentStack: i.componentStack } }); }
+  componentDidCatch(e: Error, i: ErrorInfo) {
+    Sentry.captureException(e, { extra: { componentStack: i.componentStack } });
+  }
   render() {
-    if (this.state.hasError) return (
-      <div style={{ padding: 48, fontFamily: T.sans, fontSize: 14, color: T.text }}>
-        <p style={{ fontWeight: 600, marginBottom: 8 }}>Something went wrong.</p>
-        <button onClick={() => window.location.reload()} style={btn('md')}>Reload</button>
-      </div>
-    );
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 40, fontFamily: E.font, fontSize: 13 }}>
+          <strong>Application Error</strong>
+          <button onClick={() => window.location.reload()} style={{ marginLeft: 16, padding: '4px 12px' }}>
+            Reload
+          </button>
+        </div>
+      );
+    }
     return this.props.children;
   }
 }
 
 export { ErrorBoundary };
-export function ClinicalLayout() { return <ErrorBoundary><Shell /></ErrorBoundary>; }
+export function ClinicalLayout() {
+  return (
+    <ErrorBoundary>
+      <EpicShell />
+    </ErrorBoundary>
+  );
+}
 
-type Tab = 'chart' | 'orders' | 'results' | 'mar' | 'consult' | 'assessment';
+// ─── Vitals helpers ────────────────────────────────────────────────────────────
+type VitalStatus = 'critical' | 'abnormal' | 'normal';
 
-// ─── Shell ─────────────────────────────────────────────────────────────────────
-function Shell() {
-  const { user, isAuthOpen, setIsAuthOpen, handleLogout, isSupabaseConfigured, isAuthLoading, isRecovery, clearRecovery } = useAuth();
+function vitalStatus(key: string, val: number): VitalStatus {
+  if (key === 'hr')   return val > 150 || val < 40 ? 'critical' : val > 100 || val < 60 ? 'abnormal' : 'normal';
+  if (key === 'sbp')  return val < 80 || val > 180 ? 'critical' : val < 90 || val > 160 ? 'abnormal' : 'normal';
+  if (key === 'spo2') return val < 88 ? 'critical' : val < 94 ? 'abnormal' : 'normal';
+  if (key === 'rr')   return val > 30 || val < 8 ? 'critical' : val > 20 || val < 12 ? 'abnormal' : 'normal';
+  if (key === 'temp') return val > 40 || val < 34 ? 'critical' : val > 38.3 || val < 36 ? 'abnormal' : 'normal';
+  return 'normal';
+}
+
+function statusColor(s: VitalStatus): string {
+  return s === 'critical' ? E.red : s === 'abnormal' ? E.amber : E.text;
+}
+
+// ─── Lab flag ─────────────────────────────────────────────────────────────────
+function labFlagInfo(lab: LabResult): { code: string; color: string; bg: string } {
+  if (lab.status === 'critical') {
+    const v = parseFloat(String(lab.value));
+    const lo = parseFloat(lab.normalRange.split('-')[0]);
+    const isLow = !isNaN(v) && !isNaN(lo) && v < lo;
+    return isLow
+      ? { code: 'LL', color: E.blue, bg: E.blueLt }
+      : { code: 'HH', color: E.red,  bg: E.redLt  };
+  }
+  if (lab.status === 'abnormal') {
+    const v = parseFloat(String(lab.value));
+    const parts = lab.normalRange.split('-');
+    const lo = parseFloat(parts[0]);
+    const hi = parseFloat(parts[parts.length - 1]);
+    if (!isNaN(v) && !isNaN(lo) && !isNaN(hi)) {
+      return v < lo
+        ? { code: 'L', color: E.blue,  bg: E.blueLt  }
+        : { code: 'H', color: E.amber, bg: E.amberLt };
+    }
+    return { code: 'H', color: E.amber, bg: E.amberLt };
+  }
+  return { code: '', color: E.green, bg: 'transparent' };
+}
+
+// ─── Sparkline ────────────────────────────────────────────────────────────────
+function Sparkline({ values, color, w = 80, h = 28 }: {
+  values: number[]; color: string; w?: number; h?: number;
+}) {
+  if (values.length < 2) return <svg width={w} height={h} />;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const pts = values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * (w - 4) + 2;
+      const y = h - 4 - ((v - min) / range) * (h - 8);
+      return x.toFixed(1) + ',' + y.toFixed(1);
+    })
+    .join(' ');
+  const last = values[values.length - 1];
+  const cx = (w - 2).toFixed(1);
+  const cy = (h - 4 - ((last - min) / range) * (h - 8)).toFixed(1);
+  return (
+    <svg width={w} height={h} style={{ overflow: 'visible' }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" />
+      <circle cx={cx} cy={cy} r={2.5} fill={color} />
+    </svg>
+  );
+}
+
+// ─── Section header ───────────────────────────────────────────────────────────
+function SectionHead({ title }: { title: string }) {
+  return (
+    <div style={{
+      background: E.teal, color: '#fff', padding: '4px 10px',
+      fontSize: 11, fontWeight: 600, letterSpacing: 0.3, flexShrink: 0,
+    }}>
+      {title}
+    </div>
+  );
+}
+
+function SubHead({ label, bg = E.panelHd, color = E.textSm }: {
+  label: string; bg?: string; color?: string;
+}) {
+  return (
+    <div style={{
+      background: bg, padding: '3px 10px', fontSize: 10, fontWeight: 600,
+      color, textTransform: 'uppercase' as const, letterSpacing: 0.5,
+      borderBottom: '1px solid ' + E.border, borderTop: '1px solid ' + E.border,
+    }}>
+      {label}
+    </div>
+  );
+}
+
+// ─── Patient list sidebar ─────────────────────────────────────────────────────
+interface MockPatient {
+  name: string; age: string; status: 'critical' | 'abnormal' | 'stable'; room: string;
+}
+
+const MOCK_PATIENTS: MockPatient[] = [
+  { name: 'Cruz, Patricia',    age: '62F', status: 'critical', room: '3A-01' },
+  { name: 'Alvarez, Jonathan', age: '45M', status: 'stable',   room: '3A-02' },
+  { name: 'Garcia, Michael',   age: '71M', status: 'abnormal', room: '3A-03' },
+  { name: 'Thompson, Sarah',   age: '38F', status: 'stable',   room: '3A-04' },
+  { name: 'Martinez, Elena',   age: '49F', status: 'stable',   room: 'ICU-1' },
+  { name: 'Brown, James',      age: '67M', status: 'critical', room: 'ICU-2' },
+  { name: 'Lee, Michelle',     age: '52F', status: 'stable',   room: '3C-01' },
+  { name: 'Davis, Robert',     age: '44M', status: 'stable',   room: '3C-02' },
+];
+
+function SidebarGroup({ label, color }: { label: string; color: string }) {
+  return (
+    <div style={{
+      padding: '3px 8px', fontSize: 10, fontWeight: 700,
+      color: '#fff', background: color, marginTop: 2,
+    }}>
+      {label}
+    </div>
+  );
+}
+
+function SidebarPatient({ patient, selected, onClick }: {
+  patient: MockPatient; selected: boolean; onClick: () => void;
+}) {
+  const dotColor = patient.status === 'critical' ? E.red
+    : patient.status === 'abnormal' ? E.amber
+    : E.green;
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        width: '100%', padding: '4px 8px',
+        background: selected ? E.tealLt : 'none',
+        border: 'none', borderBottom: '1px solid ' + E.border,
+        cursor: 'pointer', textAlign: 'left', fontFamily: E.font,
+        display: 'flex', alignItems: 'center', gap: 6,
+      }}
+      onMouseEnter={e => { if (!selected) e.currentTarget.style.background = '#f0f7fa'; }}
+      onMouseLeave={e => { if (!selected) e.currentTarget.style.background = 'none'; }}
+    >
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{
+          fontSize: 11, fontWeight: selected ? 600 : 400,
+          color: selected ? E.teal : E.text,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          margin: 0,
+        }}>
+          {patient.name}
+        </p>
+        <p style={{ fontSize: 10, color: E.muted, margin: 0 }}>
+          {patient.room} · {patient.age}
+        </p>
+      </div>
+    </button>
+  );
+}
+
+// ─── CPOE bar ──────────────────────────────────────────────────────────────────
+function CPOEBar({ caseId, simTime, busy, onExecute, onOpenTimeAdvance, onOrderTest, onConsult }: {
+  caseId: string | undefined;
+  simTime: number;
+  busy: boolean;
+  onExecute: (t: string) => Promise<void>;
+  onOpenTimeAdvance: () => void;
+  onOrderTest: (type: 'lab' | 'imaging', name: string) => Promise<void>;
+  onConsult: () => void;
+}) {
+  const [val, setVal]     = useState('');
+  const [res, setRes]     = useState<OrderSearchResult[]>([]);
+  const [placing, setPlacing] = useState(false);
+  const deb = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const isBusy = busy || placing;
+
+  const doSearch = useCallback((q: string) => {
+    clearTimeout(deb.current);
+    if (!q.trim() || !caseId) { setRes([]); return; }
+    deb.current = setTimeout(async () => {
+      try {
+        setRes((await searchOrders(caseId, q)).results.slice(0, 7));
+      } catch {
+        setRes([]);
+      }
+    }, 250);
+  }, [caseId]);
+
+  const clear = () => { setVal(''); setRes([]); };
+
+  const execute = async () => {
+    const t = val.trim();
+    if (!t || isBusy) return;
+    clear();
+    await onExecute(t);
+  };
+
+  const place = async (r: OrderSearchResult) => {
+    if (isBusy) return;
+    clear();
+    setPlacing(true);
+    try {
+      if (r.category === 'lab')     await onOrderTest('lab', r.name);
+      else if (r.category === 'imaging') await onOrderTest('imaging', r.name);
+      else await onExecute(r.name);
+    } finally {
+      setPlacing(false);
+    }
+  };
+
+  const catStyle = (cat: string): React.CSSProperties => {
+    const map: Record<string, { bg: string; color: string }> = {
+      lab:       { bg: E.blueLt,   color: E.blue  },
+      imaging:   { bg: '#f3e5f5',  color: '#7b1fa2' },
+      medication:{ bg: E.amberLt,  color: E.amber },
+      consult:   { bg: E.tealLt,   color: E.teal  },
+      procedure: { bg: E.panelHd,  color: E.muted },
+    };
+    const s = map[cat] ?? map.procedure;
+    return {
+      fontSize: 10, fontWeight: 600, padding: '1px 6px',
+      borderRadius: 10, background: s.bg, color: s.color,
+    };
+  };
+
+  const timeColor = simTime >= 60 ? E.red : simTime >= 30 ? E.amber : E.muted;
+
+  return (
+    <div style={{ background: E.panelHd, borderTop: '1px solid ' + E.border, fontFamily: E.font }}>
+      <AnimatePresence>
+        {res.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
+            style={{ background: E.panel, borderBottom: '1px solid ' + E.border, maxHeight: 240, overflowY: 'auto' }}
+          >
+            {res.map(r => (
+              <button
+                key={r.name}
+                onMouseDown={() => place(r)}
+                disabled={isBusy}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                  padding: '5px 12px', background: 'none', border: 'none',
+                  borderBottom: '1px solid ' + E.border, cursor: 'pointer',
+                  textAlign: 'left', fontFamily: E.font, fontSize: 12,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = E.tealLt; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+              >
+                <span style={{ flex: 1, color: E.text }}>{r.name}</span>
+                {(r.route || r.frequency) && (
+                  <span style={{ color: E.muted, fontSize: 10 }}>
+                    {[r.route, r.frequency].filter(Boolean).join(' · ')}
+                  </span>
+                )}
+                <span style={catStyle(r.category)}>{r.category}</span>
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px' }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: E.teal, letterSpacing: 0.5 }}>CPOE</span>
+        <input
+          type="text"
+          value={val}
+          onChange={e => { setVal(e.target.value); doSearch(e.target.value); }}
+          onKeyDown={e => { if (e.key === 'Enter') execute(); if (e.key === 'Escape') clear(); }}
+          onBlur={() => setTimeout(() => setRes([]), 150)}
+          placeholder={isBusy ? 'Processing…' : 'Order, medication, procedure, or free text…'}
+          disabled={isBusy || !caseId}
+          style={{
+            flex: 1, padding: '4px 8px', fontSize: 12,
+            border: '1px solid ' + E.border,
+            background: isBusy ? '#f5f5f5' : '#fff',
+            fontFamily: E.font, outline: 'none',
+          }}
+        />
+        <button
+          onClick={execute}
+          disabled={isBusy || !val.trim()}
+          style={{
+            padding: '4px 14px', fontSize: 12,
+            background: E.teal, color: '#fff',
+            border: 'none', cursor: 'pointer', fontFamily: E.font,
+          }}
+        >
+          Accept
+        </button>
+        <div style={{ width: 1, height: 18, background: E.border, margin: '0 4px' }} />
+        <button
+          onClick={onOpenTimeAdvance}
+          disabled={isBusy || !caseId}
+          style={{ fontSize: 11, color: E.teal, background: 'none', border: '1px solid ' + E.border, padding: '3px 8px', cursor: 'pointer', fontFamily: E.font }}
+        >
+          ↻ Advance Time
+        </button>
+        <button
+          onClick={onConsult}
+          disabled={isBusy || !caseId}
+          style={{ fontSize: 11, color: E.teal, background: 'none', border: '1px solid ' + E.border, padding: '3px 8px', cursor: 'pointer', fontFamily: E.font }}
+        >
+          Consult
+        </button>
+        {simTime > 0 && (
+          <span style={{ fontSize: 11, fontFamily: E.mono, color: timeColor }}>
+            T+{simTime}m
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Table style constants ─────────────────────────────────────────────────────
+const thStyle: React.CSSProperties = {
+  padding: '3px 8px', textAlign: 'left', fontSize: 10,
+  fontWeight: 600, color: E.muted, textTransform: 'uppercase',
+  borderBottom: '1px solid ' + E.border,
+};
+const tdStyle: React.CSSProperties = {
+  padding: '3px 8px', fontSize: 11, borderBottom: '1px solid ' + E.border,
+};
+
+// ─── Epic Shell ───────────────────────────────────────────────────────────────
+function EpicShell() {
+  const {
+    user, isAuthOpen, setIsAuthOpen, handleLogout,
+    isSupabaseConfigured, isAuthLoading, isRecovery, clearRecovery,
+  } = useAuth();
 
   const {
-    medicalCase, loading, error, loadingStep, patientOutcome,
-    consultantAdvice, isConsulting, setIsConsultOpen,
-    intervening, userNotes, setUserNotes, evaluation, submitting,
-    differential, setDifferential, calling, logs, reasoning,
+    medicalCase: mc, loading, error, loadingStep, patientOutcome, vitalsHistory,
+    consultantAdvice, isConsulting,
+    intervening, calling, userNotes, setUserNotes, evaluation, submitting,
+    differential, setDifferential, logs, reasoning,
     isDxPadOpen, setIsDxPadOpen, dxPadInitialTab,
     pendingStage, setPendingStage,
     loadNewCase, handlePerformIntervention, handleConsult,
-    handleOrderTest, handleDiscontinueMedication,
+    handleOrderTest, handleOrderMedication, handleDiscontinueMedication,
     handleAdvanceTime, handleEndCase, setMedicalCase, simTime,
   } = useCase();
 
   const { isLibraryOpen, setIsLibraryOpen, isCommandOpen, setIsCommandOpen } = useNavigation();
 
-  const [tab, setTab] = useState<Tab>('chart');
-  const [orderInput, setOrderInput] = useState('');
-  const [urgency, setUrgency] = useState<'STAT' | 'Routine'>('STAT');
-  const [advanceMin, setAdvanceMin] = useState(15);
-  const [examOpen, setExamOpen] = useState<Record<string, boolean>>({});
-  const [imgOpen, setImgOpen] = useState<Record<string, boolean>>({});
-  const [suggestions, setSuggestions] = useState<(AvailableTest & { _kind: 'lab' | 'imaging' })[]>([]);
-  const [acOpen, setAcOpen] = useState(false);
-  const [critDismissed, setCritDismissed] = useState<Set<string>>(new Set());
-  const inputRef = useRef<HTMLInputElement>(null);
-  const prevLabCount = useRef(0);
+  const [chartTab, setChartTab] = useState('chart-review');
+  const [timelineTab, setTimelineTab] = useState<'all' | 'events' | 'orders' | 'results'>('all');
+  const [imgOpen, setImgOpen]   = useState<Record<string, boolean>>({});
+  const [assessOpen, setAssessOpen] = useState(false);
+  const [timeAdvOpen, setTimeAdvOpen] = useState(false);
+  const [selectedPt, setSelectedPt] = useState<string | null>(null);
 
-  // ─ Autocomplete ──────────────────────────────────────────────────────────────
-  const allTests = useMemo(() => {
-    if (!medicalCase?.availableTests) return [];
-    const ordered = new Set([
-      ...(medicalCase.labs || []).map(l => l.name.toLowerCase()),
-      ...(medicalCase.imaging || []).map(i => i.type.toLowerCase()),
-    ]);
-    return [
-      ...(medicalCase.availableTests.labs || [])
-        .filter(t => !ordered.has(t.name.toLowerCase()))
-        .map(t => ({ ...t, _kind: 'lab' as const })),
-      ...(medicalCase.availableTests.imaging || [])
-        .filter(t => !ordered.has(t.name.toLowerCase()))
-        .map(t => ({ ...t, _kind: 'imaging' as const })),
-    ];
-  }, [medicalCase]);
+  const isBusy = intervening || calling;
 
-  const search = useCallback((q: string) => {
-    if (!q.trim()) { setSuggestions([]); setAcOpen(false); return; }
-    const r = allTests.filter(t => t.name.toLowerCase().includes(q.toLowerCase())).slice(0, 8);
-    setSuggestions(r);
-    setAcOpen(r.length > 0);
-  }, [allTests]);
+  // Computed labs/imaging
+  const availLabs = useMemo(() =>
+    (mc?.labs || []).filter(l => l.availableAt !== undefined && l.availableAt <= simTime),
+    [mc, simTime]);
+  const pendLabs = useMemo(() =>
+    (mc?.labs || []).filter(l => l.availableAt !== undefined && l.availableAt > simTime),
+    [mc, simTime]);
+  const availImgs = useMemo(() =>
+    (mc?.imaging || []).filter(i => i.availableAt !== undefined && i.availableAt <= simTime),
+    [mc, simTime]);
+  const pendImgs = useMemo(() =>
+    (mc?.imaging || []).filter(i => i.availableAt !== undefined && i.availableAt > simTime),
+    [mc, simTime]);
 
-  // ─ Quick chips ────────────────────────────────────────────────────────────────
-  const quickLabs = useMemo(() =>
-    (medicalCase?.availableTests?.labs || [])
-      .filter(t => !(medicalCase?.labs || []).some(l => l.name.toLowerCase() === t.name.toLowerCase()))
-      .slice(0, 5),
-    [medicalCase]);
-  const quickImgs = useMemo(() =>
-    (medicalCase?.availableTests?.imaging || [])
-      .filter(t => !(medicalCase?.imaging || []).some(i => i.type.toLowerCase() === t.name.toLowerCase()))
-      .slice(0, 3),
-    [medicalCase]);
+  // Vitals
+  const sbp = mc ? parseInt(mc.vitals.bloodPressure.split('/')[0]) || 120 : 120;
 
-  // ─ Critical result alerts ─────────────────────────────────────────────────────
-  const newCrits = useMemo(() => {
-    if (!medicalCase) return [];
-    return (medicalCase.labs || [])
-      .filter(l => l.availableAt !== undefined && l.availableAt <= simTime && l.status === 'critical' && !critDismissed.has(l.name));
-  }, [medicalCase, simTime, critDismissed]);
+  const vData = mc ? [
+    { key: 'hr',   label: 'HR',   value: mc.vitals.heartRate,        unit: 'bpm',  status: vitalStatus('hr', mc.vitals.heartRate) },
+    { key: 'bp',   label: 'BP',   value: sbp,                         unit: 'mmHg', display: mc.vitals.bloodPressure, status: vitalStatus('sbp', sbp) },
+    { key: 'spo2', label: 'SpO₂', value: mc.vitals.oxygenSaturation, unit: '%',    status: vitalStatus('spo2', mc.vitals.oxygenSaturation) },
+    { key: 'rr',   label: 'RR',   value: mc.vitals.respiratoryRate,  unit: '/min', status: vitalStatus('rr', mc.vitals.respiratoryRate) },
+    { key: 'temp', label: 'Temp', value: mc.vitals.temperature,      unit: '°C',   status: vitalStatus('temp', mc.vitals.temperature) },
+  ] : [];
 
-  const availLabCount = medicalCase
-    ? (medicalCase.labs || []).filter(l => l.availableAt !== undefined && l.availableAt <= simTime).length
-    : 0;
-  const hasNewResult = availLabCount > prevLabCount.current;
-  useEffect(() => { prevLabCount.current = availLabCount; }, [availLabCount]);
+  // Sparkline series
+  const sparkSeries = useMemo(() => {
+    if (!mc) return {} as Record<string, number[]>;
+    const hist: VitalsHistoryEntry[] = vitalsHistory || [];
+    if (hist.length >= 2) {
+      return {
+        hr:   hist.map(h => h.hr),
+        spo2: hist.map(h => h.spo2),
+        rr:   hist.map(h => h.rr),
+        temp: hist.map(h => h.rr),   // temp not in VitalsHistoryEntry; use rr proxy
+        bp:   hist.map(h => h.sbp),
+      };
+    }
+    const mock = (v: number, spread = 8): number[] =>
+      Array.from({ length: 10 }, (_, i) =>
+        v + Math.sin(i) * spread * 0.5 + (Math.random() - 0.5) * spread * 0.3,
+      );
+    return {
+      hr:   mock(mc.vitals.heartRate, 15),
+      spo2: mock(mc.vitals.oxygenSaturation, 3),
+      rr:   mock(mc.vitals.respiratoryRate, 4),
+      temp: mock(mc.vitals.temperature, 0.5),
+      bp:   mock(sbp, 12),
+    };
+  }, [mc, vitalsHistory]);
 
-  // ─ Auth gate ──────────────────────────────────────────────────────────────────
+  // Clinical events / alarms
+  const clinEvents = useMemo(() => {
+    if (!mc) return [] as { label: string; desc: string; level: 'critical' | 'warning' }[];
+    const ev: { label: string; desc: string; level: 'critical' | 'warning' }[] = [];
+    if (mc.vitals.oxygenSaturation < 88)
+      ev.push({ label: 'SpO₂', desc: mc.vitals.oxygenSaturation + '% — Critical hypoxia', level: 'critical' });
+    else if (mc.vitals.oxygenSaturation < 94)
+      ev.push({ label: 'SpO₂', desc: mc.vitals.oxygenSaturation + '% — Below target', level: 'warning' });
+    if (sbp < 80)
+      ev.push({ label: 'BP', desc: mc.vitals.bloodPressure + ' — Severe hypotension', level: 'critical' });
+    else if (sbp < 90)
+      ev.push({ label: 'BP', desc: mc.vitals.bloodPressure + ' — Hypotension', level: 'warning' });
+    if (mc.vitals.heartRate > 150)
+      ev.push({ label: 'HR', desc: mc.vitals.heartRate + ' bpm — Tachycardia', level: 'critical' });
+    if (mc.vitals.temperature > 38.3)
+      ev.push({ label: 'Temp', desc: mc.vitals.temperature + '°C — Fever', level: 'warning' });
+    availLabs.filter(l => l.status === 'critical').forEach(l =>
+      ev.push({ label: l.name, desc: l.value + ' ' + l.unit + ' — Critical result', level: 'critical' }),
+    );
+    (mc.activeAlarms || []).forEach(a => ev.push({ label: '⚡', desc: a, level: 'warning' }));
+    return ev;
+  }, [mc, sbp, availLabs]);
+
+  const activeMeds = useMemo(() =>
+    (mc?.medications || []).filter(m => m.discontinuedAt === undefined),
+    [mc]);
+
+  const today = new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+
+  // ── Auth gate ────────────────────────────────────────────────────────────────
   if (isSupabaseConfigured && !isAuthLoading && !user) {
     return (
-      <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T.sans }}>
+      <div style={{ minHeight: '100vh', background: E.teal, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: E.font }}>
         <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} isRecovery={isRecovery} onRecoveryHandled={clearRecovery} />
-        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 40, width: 360, boxShadow: '0 4px 24px rgba(0,0,0,0.07)' }}>
-          <div style={{ fontWeight: 700, fontSize: 20, color: T.text, marginBottom: 8 }}>OpenEHR Sim</div>
-          <div style={{ color: T.muted, fontSize: 14, marginBottom: 28 }}>Clinical decision support workstation</div>
-          <button onClick={() => setIsAuthOpen(true)} style={btn('lg')}>Sign In</button>
+        <div style={{ background: E.panel, padding: 40, width: 340, boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
+          <div style={{ background: E.teal, color: '#fff', padding: '10px 14px', marginBottom: 24, fontSize: 16, fontWeight: 700 }}>
+            <span style={{ fontStyle: 'italic', fontWeight: 900, fontSize: 22 }}>epic</span>
+            <span style={{ marginLeft: 12, fontSize: 13, fontWeight: 400, opacity: 0.8 }}>Clinical Workstation</span>
+          </div>
+          <p style={{ fontSize: 13, color: E.textSm, marginBottom: 20 }}>Sign in to access patient records.</p>
+          <button
+            onClick={() => setIsAuthOpen(true)}
+            style={{ padding: '7px 20px', background: E.teal, color: '#fff', border: 'none', fontSize: 13, cursor: 'pointer', fontFamily: E.font }}
+          >
+            Sign In
+          </button>
         </div>
       </div>
     );
@@ -230,595 +536,52 @@ function Shell() {
 
   if (isAuthLoading || loading || error) {
     return (
-      <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T.sans }}>
+      <div style={{ minHeight: '100vh', background: E.bodyBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: E.font, fontSize: 13 }}>
         {error ? (
-          <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 32, maxWidth: 380, textAlign: 'center', boxShadow: '0 4px 24px rgba(0,0,0,0.07)' }}>
-            <div style={{ color: T.red, fontWeight: 600, marginBottom: 8 }}>System error</div>
-            <div style={{ color: T.textSm, marginBottom: 20, fontSize: 14 }}>{error}</div>
-            <button onClick={() => loadNewCase()} style={btn('md')}>Retry</button>
+          <div style={{ background: E.panel, border: '1px solid ' + E.border, padding: 28, maxWidth: 360, textAlign: 'center' }}>
+            <p style={{ color: E.red, fontWeight: 600, marginBottom: 8 }}>Connection Error</p>
+            <p style={{ color: E.textSm, marginBottom: 16 }}>{error}</p>
+            <button onClick={() => loadNewCase()} style={{ padding: '5px 16px', background: E.teal, color: '#fff', border: 'none', cursor: 'pointer' }}>
+              Retry
+            </button>
           </div>
         ) : (
-          <div style={{ textAlign: 'center', color: T.muted, fontSize: 14 }}>
-            <Spinner />
-            <div style={{ marginTop: 12 }}>{loadingStep || 'Loading…'}</div>
-          </div>
+          <div style={{ textAlign: 'center', color: E.muted }}>{loadingStep || 'Loading…'}</div>
         )}
       </div>
     );
   }
 
-  const mc = medicalCase;
-  const isBusy = intervening || calling;
-  const abn = mc ? vitalsAbnormal(mc) : null;
-  const activeMeds = (mc?.medications || []).filter(m => m.discontinuedAt === undefined);
-  const discMeds   = (mc?.medications || []).filter(m => m.discontinuedAt !== undefined);
-  const availLabs  = (mc?.labs || []).filter(l => l.availableAt !== undefined && l.availableAt <= simTime);
-  const pendLabs   = (mc?.labs || []).filter(l => l.availableAt !== undefined && l.availableAt > simTime);
-  const availImgs  = (mc?.imaging || []).filter(i => i.availableAt !== undefined && i.availableAt <= simTime);
-  const pendImgs   = (mc?.imaging || []).filter(i => i.availableAt !== undefined && i.availableAt > simTime);
-  const critCount  = availLabs.filter(l => l.status === 'critical').length;
-  const resultCount = availLabs.length + availImgs.length;
-
-  function submitOrder() {
-    const v = orderInput.trim();
-    if (!v || isBusy || !mc) return;
-    setOrderInput('');
-    setSuggestions([]);
-    setAcOpen(false);
-    handlePerformIntervention(urgency === 'STAT' ? 2 : 5, v);
-  }
-
-  function placeTest(t: AvailableTest & { _kind: 'lab' | 'imaging' }) {
-    handleOrderTest(t._kind, t.name);
-    setSuggestions([]);
-    setAcOpen(false);
-    setOrderInput('');
-  }
-
-  function examineAll() {
-    if (!mc) return;
-    const locked = Object.entries(mc.physicalExam || {}).filter(([, v]) => v === '[[LOCKED]]').map(([k]) => k);
-    if (!locked.length) return;
-    setMedicalCase(prev => prev ? { ...prev, clinicalActions: [...(prev.clinicalActions || []), ...locked.map((s, i) => ({ id: `exam-all-${Date.now()}-${i}`, timestamp: prev.simulationTime, type: 'exam' as const, description: `Performed physical exam: ${s}` }))] } : prev);
-    setExamOpen(Object.fromEntries(locked.map(k => [k, true])));
-    handlePerformIntervention(3, 'Complete physical examination performed');
-  }
-
-  const timeColor = simTime >= 60 ? T.red : simTime >= 30 ? T.amber : T.emerald;
-
-  return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: T.sans, fontSize: 13, background: T.bg, color: T.text }}>
-
-      {/* Global modals */}
-      <CaseLibrary isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} onSelectCase={(d, c, e) => { setIsLibraryOpen(false); loadNewCase(d, c, e); }} />
+  // ── Global overlays ──────────────────────────────────────────────────────────
+  const overlays = (
+    <>
+      <CaseLibrary
+        isOpen={isLibraryOpen}
+        onClose={() => setIsLibraryOpen(false)}
+        onSelectCase={(d, c, e) => { setIsLibraryOpen(false); loadNewCase(d, c, e); }}
+      />
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} isRecovery={isRecovery} onRecoveryHandled={clearRecovery} />
-      <CommandPalette isOpen={isCommandOpen} onClose={() => setIsCommandOpen(false)} onNavigate={() => {}} onNewCase={() => setIsLibraryOpen(true)} onConsult={handleConsult} hasArchive={!!user} onOrderTest={mc ? handleOrderTest : undefined} onAdminister={mc ? (med) => handlePerformIntervention(2, `Administer ${med}`) : undefined} onAdvanceTime={mc ? handleAdvanceTime : undefined} />
-
-      {/* ── App header ── */}
-      <header style={{ background: T.header, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: 44, flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: -0.3 }}>OpenEHR Sim</span>
-          <span style={{ color: '#475569', fontSize: 11, fontWeight: 500, letterSpacing: 0.5, textTransform: 'uppercase' }}>Clinical Workstation</span>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <HeaderBtn onClick={() => setIsLibraryOpen(true)}>New Case</HeaderBtn>
-          <HeaderBtn onClick={() => setIsCommandOpen(true)}>⌘K Commands</HeaderBtn>
-          {mc && <HeaderBtn onClick={() => setIsDxPadOpen(p => !p)}>Dx Pad</HeaderBtn>}
-          {user && <span style={{ color: '#64748b', fontSize: 12, marginLeft: 8 }}>{user.email} · <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 12, padding: 0, textDecoration: 'underline' }}>Sign out</button></span>}
-        </div>
-      </header>
-
-      {!mc ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ textAlign: 'center', maxWidth: 420 }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>🏥</div>
-            <div style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>No patient loaded</div>
-            <div style={{ color: T.muted, marginBottom: 28 }}>Select a case from the library or generate a new one to begin your simulation.</div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button onClick={() => setIsLibraryOpen(true)} style={btn('lg')}>Browse Cases</button>
-              <button onClick={() => loadNewCase()} style={btn('lg', 'ghost')}>Generate New</button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* ── Patient banner ── */}
-          <div style={{ background: T.subhead, color: '#fff', padding: '10px 16px', flexShrink: 0, display: 'flex', gap: 0, flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-              <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: -0.3 }}>{mc.patientName}</span>
-              <span style={{ color: '#94a3b8', fontSize: 13 }}>{mc.age} y/o {mc.gender}</span>
-              <span style={{ color: '#475569', fontSize: 12 }}>MRN {mc.id.slice(-8).toUpperCase()}</span>
-              {mc.difficulty && <Pill color={T.indigo} bg={T.indigoLt} style={{ color: '#c7d2fe' }}>{mc.difficulty}</Pill>}
-              {mc.category && <Pill color="#475569" bg="#1e293b" style={{ color: '#94a3b8', border: '1px solid #334155' }}>{mc.category.replace(/_/g, ' ')}</Pill>}
-              {mc.physiologicalTrend && mc.physiologicalTrend !== 'stable' && (
-                <span style={{ background: mc.physiologicalTrend === 'improving' ? '#064e3b' : '#7f1d1d', color: mc.physiologicalTrend === 'improving' ? '#6ee7b7' : '#fca5a5', padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
-                  {mc.physiologicalTrend === 'improving' ? '↑' : '↓'} {mc.physiologicalTrend}
-                </span>
-              )}
-              {patientOutcome && patientOutcome !== 'alive' && (
-                <span style={{ background: patientOutcome === 'deceased' ? '#1c1917' : '#7f1d1d', color: '#fff', padding: '2px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
-                  {patientOutcome === 'deceased' ? '✕ Expired' : '⚠ Critical deterioration'}
-                </span>
-              )}
-              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 12, color: '#94a3b8' }}>Sim time</span>
-                <span style={{ fontWeight: 700, fontSize: 14, color: timeColor, fontFamily: T.mono }}>T+{simTime}m</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#94a3b8', flexWrap: 'wrap', alignItems: 'center' }}>
-              <span>📍 <span style={{ color: '#cbd5e1' }}>{mc.currentLocation}</span></span>
-              <span>Allergies: <span style={{ color: '#fca5a5' }}>NKDA</span></span>
-              <span>Code: <span style={{ color: '#cbd5e1' }}>Full Code</span></span>
-              {mc.specialty_tags?.length ? <span>Tags: <span style={{ color: '#c7d2fe' }}>{mc.specialty_tags.join(' · ')}</span></span> : null}
-              {mc.currentCondition && <span style={{ fontStyle: 'italic', color: '#64748b' }}>{mc.currentCondition}</span>}
-            </div>
-          </div>
-
-          {/* ── Vitals strip ── */}
-          <div style={{ background: '#f8fafc', borderBottom: `1px solid ${T.border}`, padding: '8px 16px', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: T.muted, letterSpacing: 0.8, textTransform: 'uppercase', marginRight: 4 }}>Vitals</span>
-            {abn && <>
-              <VitalChip label="HR" value={`${mc.vitals.heartRate}`} unit="bpm" crit={abn.hrCrit} warn={abn.hr} />
-              <VitalChip label="BP" value={mc.vitals.bloodPressure} unit="mmHg" crit={abn.bpCrit} warn={abn.bp} />
-              <VitalChip label="RR" value={`${mc.vitals.respiratoryRate}`} unit="/min" crit={abn.rrCrit} warn={abn.rr} />
-              <VitalChip label="SpO₂" value={`${mc.vitals.oxygenSaturation}`} unit="%" crit={abn.spo2Crit} warn={abn.spo2} />
-              <VitalChip label="Temp" value={`${mc.vitals.temperature}`} unit="°C" crit={abn.tempCrit} warn={abn.temp} />
-              {mc.vitals.weightKg && <VitalChip label="Wt" value={`${mc.vitals.weightKg}`} unit="kg" />}
-            </>}
-            {mc.activeAlarms?.map((alarm, i) => (
-              <span key={i} style={{ background: T.redLt, color: T.red, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, border: `1px solid ${T.redBd}` }}>⚡ {alarm}</span>
-            ))}
-          </div>
-
-          {/* ── Critical banner ── */}
-          {newCrits.length > 0 && (
-            <div style={{ background: '#fef2f2', borderBottom: `2px solid ${T.red}`, padding: '8px 16px', display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0 }}>
-              <span style={{ background: T.red, color: '#fff', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>CRITICAL</span>
-              {newCrits.slice(0, 3).map(l => (
-                <span key={l.name} style={{ fontSize: 12, color: T.red }}>
-                  <strong>{l.name}</strong>: {l.value} {l.unit} <span style={{ color: T.muted }}>(ref {l.normalRange})</span>
-                </span>
-              ))}
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                <button onClick={() => { setTab('results'); setCritDismissed(p => new Set([...p, ...newCrits.map(l => l.name)])); }} style={btn('sm', 'danger')}>View Results</button>
-                <button onClick={() => setCritDismissed(p => new Set([...p, ...newCrits.map(l => l.name)]))} style={btn('sm', 'ghost')}>Dismiss</button>
-              </div>
-            </div>
-          )}
-
-          {/* ── Tab bar ── */}
-          <nav style={{ background: T.card, borderBottom: `1px solid ${T.border}`, padding: '0 16px', display: 'flex', gap: 2, flexShrink: 0, overflowX: 'auto' }}>
-            {(['chart', 'orders', 'results', 'mar', 'consult', 'assessment'] as Tab[]).map(t => {
-              const active = tab === t;
-              return (
-                <button key={t} onClick={() => setTab(t)} style={{ padding: '12px 16px', fontSize: 13, fontWeight: active ? 600 : 400, color: active ? T.indigo : T.muted, background: 'none', border: 'none', cursor: 'pointer', borderBottom: `2px solid ${active ? T.indigo : 'transparent'}`, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6, fontFamily: T.sans, transition: 'color 0.15s' }}>
-                  {t === 'chart'  && 'Chart Review'}
-                  {t === 'orders' && <>Orders {(mc.clinicalActions || []).filter(a => a.type !== 'time-advance').length > 0 && <TabBadge n={(mc.clinicalActions || []).filter(a => a.type !== 'time-advance').length} />}</>}
-                  {t === 'results' && <>Results {resultCount > 0 && <TabBadge n={resultCount} color={critCount > 0 ? T.red : T.emerald} />}{hasNewResult && tab !== 'results' && <span style={{ width: 6, height: 6, borderRadius: 3, background: T.red, display: 'inline-block' }} />}</>}
-                  {t === 'mar' && <>MAR {activeMeds.length > 0 && <TabBadge n={activeMeds.length} color={T.emerald} />}</>}
-                  {t === 'consult' && <>Consult {isConsulting && <span style={{ width: 6, height: 6, borderRadius: 3, background: T.amber, display: 'inline-block' }} />}</>}
-                  {t === 'assessment' && 'Assessment'}
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* ── Content ── */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
-
-            {/* CHART */}
-            {tab === 'chart' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, maxWidth: 1280 }}>
-
-                {/* HPI */}
-                <Card fullWidth title="History of Present Illness">
-                  <div style={{ padding: '12px 16px', lineHeight: 1.75, color: T.textSm }}>{mc.historyOfPresentIllness}</div>
-                  <Divider />
-                  <div style={{ padding: '8px 16px 12px', fontSize: 13 }}>
-                    <span style={{ fontWeight: 600, color: T.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>Chief Complaint </span>
-                    <span style={{ color: T.textSm }}>{mc.chiefComplaint}</span>
-                  </div>
-                  {mc.initialAppearance && (
-                    <>
-                      <Divider />
-                      <div style={{ padding: '8px 16px 12px', fontSize: 13, color: T.textSm, fontStyle: 'italic', background: '#fafbff' }}>
-                        <span style={{ fontWeight: 600, fontStyle: 'normal', color: T.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>Appearance </span>
-                        {mc.initialAppearance}
-                      </div>
-                    </>
-                  )}
-                </Card>
-
-                {/* PMH + recommended consultations */}
-                <Card title="Past Medical History & Consultations">
-                  {(mc.pastMedicalHistory || []).map((h, i) => (
-                    <div key={i} style={{ padding: '8px 16px', borderBottom: `1px solid ${T.border}`, fontSize: 13, color: T.textSm, background: i % 2 ? '#fafbff' : '#fff' }}>
-                      {h}
-                    </div>
-                  ))}
-                  {mc.requiredConsultations?.length ? (
-                    <>
-                      <SectionHead color={T.emerald}>Recommended Consultations</SectionHead>
-                      {mc.requiredConsultations.map((c, i) => (
-                        <div key={i} style={{ padding: '8px 16px', borderBottom: `1px solid ${T.border}`, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: i % 2 ? T.emeraldLt : '#fff' }}>
-                          <span>{c}</span>
-                          <button onClick={() => { handleConsult(); setTab('consult'); }} style={btn('sm', 'success')}>Consult →</button>
-                        </div>
-                      ))}
-                    </>
-                  ) : null}
-                </Card>
-
-                {/* Management conflicts */}
-                {mc.managementConflicts?.length ? (
-                  <Card title="⚠ Active Management Conflicts" titleColor={T.amber} fullWidth>
-                    {mc.managementConflicts.map((c, i) => (
-                      <div key={i} style={{ padding: '8px 16px', borderBottom: `1px solid ${T.amberBd}`, fontSize: 13, color: T.amber, background: i % 2 ? T.amberLt : '#fff' }}>
-                        {c}
-                      </div>
-                    ))}
-                  </Card>
-                ) : null}
-
-                {/* Physical exam */}
-                <Card fullWidth title="Physical Examination"
-                  action={mc.physicalExam && Object.values(mc.physicalExam).some(v => v === '[[LOCKED]]')
-                    ? <button onClick={examineAll} disabled={isBusy} style={btn('sm', 'ghost')}>Examine All</button>
-                    : undefined}
-                >
-                  {mc.physicalExam && (Object.entries(mc.physicalExam) as [string, string][]).map(([sys, val], i) => {
-                    const locked = val === '[[LOCKED]]';
-                    const open = examOpen[sys];
-                    return (
-                      <div key={sys} style={{ display: 'flex', borderBottom: `1px solid ${T.border}`, background: i % 2 ? '#fafbff' : '#fff', minHeight: 38 }}>
-                        <div style={{ width: 140, flexShrink: 0, padding: '8px 16px', fontSize: 11, fontWeight: 600, color: T.muted, letterSpacing: 0.5, textTransform: 'uppercase', borderRight: `1px solid ${T.border}` }}>
-                          {sys}
-                        </div>
-                        <div style={{ flex: 1, padding: '8px 16px', fontSize: 13, color: T.textSm, lineHeight: 1.6 }}>
-                          {locked ? (
-                            <button onClick={() => {
-                              setMedicalCase(prev => prev ? { ...prev, clinicalActions: [...(prev.clinicalActions || []), { id: `exam-${Date.now()}`, timestamp: prev.simulationTime, type: 'exam' as const, description: `Performed physical exam: ${sys}` }] } : prev);
-                              setExamOpen(p => ({ ...p, [sys]: true }));
-                            }} style={btn('sm', 'ghost')}>Perform Exam</button>
-                          ) : (
-                            <span style={{ cursor: val.length > 120 ? 'pointer' : undefined }} onClick={() => val.length > 120 && setExamOpen(p => ({ ...p, [sys]: !p[sys] }))}>
-                              {open || val.length <= 120 ? val : val.slice(0, 120) + '…'}
-                              {val.length > 120 && <span style={{ color: T.indigo, fontSize: 11, marginLeft: 6 }}>{open ? 'less' : 'more'}</span>}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </Card>
-              </div>
-            )}
-
-            {/* ORDERS */}
-            {tab === 'orders' && (
-              <div style={{ maxWidth: 1000 }}>
-                <Card title="Order History">
-                  {(mc.clinicalActions || []).filter(a => a.type !== 'time-advance').length === 0 ? (
-                    <EmptyState>No orders placed yet.</EmptyState>
-                  ) : (
-                    <table style={tbl}>
-                      <thead>
-                        <tr>
-                          <Th style={{ width: 80 }}>Time</Th>
-                          <Th style={{ width: 100 }}>Type</Th>
-                          <Th>Order / Action</Th>
-                          <Th>Result / Impact</Th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[...(mc.clinicalActions || [])].filter(a => a.type !== 'time-advance').reverse().map((a, i) => {
-                          const badge = actionBadge[a.type] || { bg: T.bg, color: T.muted, label: a.type };
-                          return (
-                            <tr key={a.id} style={{ background: i % 2 ? '#fafbff' : '#fff' }}>
-                              <Td style={{ fontFamily: T.mono, fontSize: 11, color: T.muted }}>T+{a.timestamp}m</Td>
-                              <Td>
-                                <span style={{ background: badge.bg, color: badge.color, padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{badge.label}</span>
-                              </Td>
-                              <Td>{a.description}</Td>
-                              <Td style={{ color: T.muted, fontStyle: 'italic', fontSize: 12 }}>{a.impact || '—'}</Td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  )}
-                </Card>
-              </div>
-            )}
-
-            {/* RESULTS */}
-            {tab === 'results' && (
-              <div style={{ maxWidth: 1200, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <Card title={<>Lab Results {critCount > 0 && <span style={{ background: T.red, color: '#fff', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, marginLeft: 8 }}>⚠ {critCount} critical</span>}</>}>
-                  {availLabs.length === 0 && pendLabs.length === 0 ? (
-                    <EmptyState>No labs ordered yet.</EmptyState>
-                  ) : (
-                    <table style={tbl}>
-                      <thead>
-                        <tr>
-                          <Th style={{ width: '28%' }}>Test</Th>
-                          <Th>Result</Th>
-                          <Th>Units</Th>
-                          <Th>Ref Range</Th>
-                          <Th style={{ textAlign: 'center', width: 60 }}>Flag</Th>
-                          <Th style={{ width: 90 }}>Available</Th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {availLabs.map((l, i) => {
-                          const f = labFlag(l);
-                          const isCrit = l.status === 'critical';
-                          const isAbn  = l.status === 'abnormal';
-                          return (
-                            <tr key={i} style={{ background: isCrit ? T.redLt : isAbn ? T.amberLt : i % 2 ? '#fafbff' : '#fff' }}>
-                              <Td style={{ fontWeight: 500 }}>{l.name}</Td>
-                              <Td style={{ fontFamily: T.mono, fontWeight: (isCrit || isAbn) ? 700 : 400, color: isCrit ? T.red : isAbn ? T.amber : T.text, fontSize: 14 }}>{l.value}</Td>
-                              <Td style={{ fontFamily: T.mono, color: T.muted, fontSize: 12 }}>{l.unit}</Td>
-                              <Td style={{ fontFamily: T.mono, color: T.muted, fontSize: 12 }}>{l.normalRange}</Td>
-                              <Td style={{ textAlign: 'center' }}>
-                                {f.code
-                                  ? <span style={{ background: f.bg, color: f.color, padding: '2px 7px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>{f.code}</span>
-                                  : <span style={{ color: T.emerald, fontSize: 13 }}>—</span>}
-                              </Td>
-                              <Td style={{ fontFamily: T.mono, fontSize: 11, color: T.muted }}>T+{l.availableAt}m</Td>
-                            </tr>
-                          );
-                        })}
-                        {pendLabs.map((l, i) => (
-                          <tr key={`p${i}`} style={{ background: '#fafbff', color: T.muted }}>
-                            <Td>{l.name}</Td>
-                            <Td colSpan={4} style={{ fontStyle: 'italic', fontSize: 12 }}>
-                              Pending — ETA T+{l.availableAt}m
-                              <span style={{ marginLeft: 6, background: T.bg, padding: '1px 6px', borderRadius: 10, fontSize: 11 }}>{Math.max(0, (l.availableAt ?? 0) - simTime)} min remaining</span>
-                            </Td>
-                            <Td style={{ fontFamily: T.mono, fontSize: 11 }}>T+{l.availableAt}m</Td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </Card>
-
-                <Card title="Imaging & Diagnostics">
-                  {availImgs.length === 0 && pendImgs.length === 0 ? (
-                    <EmptyState>No imaging ordered yet.</EmptyState>
-                  ) : (
-                    <>
-                      {availImgs.map((img, i) => (
-                        <div key={i} style={{ borderBottom: `1px solid ${T.border}` }}>
-                          <div onClick={() => setImgOpen(p => ({ ...p, [img.type]: !p[img.type] }))}
-                            style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: i % 2 ? '#fafbff' : '#fff' }}>
-                            <span style={{ fontWeight: 600, fontSize: 13 }}>{img.type}</span>
-                            <span style={{ color: T.muted, fontSize: 12 }}>T+{img.availableAt}m · {imgOpen[img.type] ? '▲' : '▼'}</span>
-                          </div>
-                          {imgOpen[img.type] && (
-                            <div style={{ padding: '12px 24px 16px', background: '#fafbff', borderTop: `1px solid ${T.border}` }}>
-                              {img.findings && <p style={{ marginBottom: 8, lineHeight: 1.7, fontSize: 13, color: T.textSm }}><span style={{ fontWeight: 600, fontSize: 11, color: T.muted, textTransform: 'uppercase', letterSpacing: 0.5 }}>Findings</span><br />{img.findings}</p>}
-                              {img.impression && <p style={{ lineHeight: 1.7, fontSize: 13, fontWeight: 500 }}><span style={{ fontWeight: 600, fontSize: 11, color: T.red, textTransform: 'uppercase', letterSpacing: 0.5 }}>Impression</span><br />{img.impression}</p>}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                      {pendImgs.map((img, i) => (
-                        <div key={`pi${i}`} style={{ padding: '10px 16px', color: T.muted, fontSize: 13, borderBottom: `1px solid ${T.border}`, fontStyle: 'italic' }}>
-                          {img.type} — Pending ETA T+{img.availableAt}m ({Math.max(0, (img.availableAt ?? 0) - simTime)} min)
-                        </div>
-                      ))}
-                    </>
-                  )}
-                </Card>
-              </div>
-            )}
-
-            {/* MAR */}
-            {tab === 'mar' && (
-              <div style={{ maxWidth: 1000, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <Card title={`Medication Administration Record — Active (${activeMeds.length})`}>
-                  {activeMeds.length === 0 ? (
-                    <EmptyState>No active medications.</EmptyState>
-                  ) : (
-                    <table style={tbl}>
-                      <thead>
-                        <tr>
-                          <Th style={{ width: '35%' }}>Medication</Th>
-                          <Th>Dose</Th>
-                          <Th>Route</Th>
-                          <Th>Started</Th>
-                          <Th style={{ width: 110 }}>Action</Th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {activeMeds.map((m, i) => (
-                          <tr key={m.id} style={{ background: i % 2 ? '#fafbff' : '#fff' }}>
-                            <Td style={{ fontWeight: 600 }}>{m.name}</Td>
-                            <Td>{m.dose}</Td>
-                            <Td>{m.route}</Td>
-                            <Td style={{ fontFamily: T.mono, fontSize: 11, color: T.muted }}>T+{m.timestamp}m</Td>
-                            <Td><button onClick={() => handleDiscontinueMedication(m.id, m.name)} style={btn('sm', 'danger')}>Discontinue</button></Td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </Card>
-                {discMeds.length > 0 && (
-                  <Card title="Discontinued Medications">
-                    <table style={tbl}>
-                      <tbody>
-                        {discMeds.map((m, i) => (
-                          <tr key={m.id} style={{ background: i % 2 ? '#fafbff' : '#fff', color: T.muted }}>
-                            <Td><s>{m.name}</s></Td>
-                            <Td><s>{m.dose} {m.route}</s></Td>
-                            <Td style={{ fontFamily: T.mono, fontSize: 11 }}>T+{m.timestamp}m → T+{m.discontinuedAt}m</Td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </Card>
-                )}
-              </div>
-            )}
-
-            {/* CONSULT */}
-            {tab === 'consult' && (
-              <div style={{ maxWidth: 820, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <Card title="AI Consultant" action={
-                  <button onClick={() => handleConsult()} disabled={isBusy || isConsulting} style={btn('sm', isConsulting ? 'ghost' : 'primary')}>
-                    {isConsulting ? 'Consulting…' : 'Request Consult'}
-                  </button>
-                }>
-                  {isConsulting ? (
-                    <div style={{ padding: 32, textAlign: 'center', color: T.muted }}>
-                      <Spinner />
-                      <div style={{ marginTop: 10 }}>Awaiting consultant response…</div>
-                    </div>
-                  ) : consultantAdvice ? (
-                    <div style={{ padding: 16 }}>
-                      <blockquote style={{ background: T.indigoLt, border: `1px solid #c7d2fe`, borderRadius: 8, padding: '12px 16px', margin: '0 0 16px', fontStyle: 'italic', fontSize: 14, color: T.textSm, lineHeight: 1.75 }}>
-                        "{consultantAdvice.advice}"
-                      </blockquote>
-                      {consultantAdvice.reasoning && (
-                        <p style={{ fontSize: 13, color: T.textSm, lineHeight: 1.75, marginBottom: 16 }}>{consultantAdvice.reasoning}</p>
-                      )}
-                      <div style={{ fontWeight: 600, fontSize: 11, color: T.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>Recommended Actions</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {consultantAdvice.recommendedActions.map((a, i) => (
-                          <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                            <span style={{ background: T.indigo, color: '#fff', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>{i + 1}</span>
-                            <span style={{ fontSize: 13, color: T.textSm, lineHeight: 1.6 }}>{a}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ padding: '40px 24px', textAlign: 'center' }}>
-                      <div style={{ fontSize: 32, marginBottom: 10 }}>💬</div>
-                      <div style={{ color: T.muted, marginBottom: 16 }}>No consultation requested yet.</div>
-                      <button onClick={() => handleConsult()} disabled={isBusy} style={btn('md')}>Request AI Consult</button>
-                    </div>
-                  )}
-                </Card>
-                {mc.requiredConsultations?.length ? (
-                  <Card title="Subspecialty Consultations Required">
-                    {mc.requiredConsultations.map((c, i) => (
-                      <div key={i} style={{ padding: '10px 16px', borderBottom: `1px solid ${T.border}`, fontSize: 13, background: i % 2 ? T.emeraldLt : '#fff' }}>{c}</div>
-                    ))}
-                  </Card>
-                ) : null}
-              </div>
-            )}
-
-            {/* ASSESSMENT */}
-            {tab === 'assessment' && (
-              <div style={{ maxWidth: 980, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <Card title="Case Assessment & Scoring">
-                  <div style={{ padding: 16 }}>
-                    <AssessmentTab
-                      medicalCase={mc}
-                      simTime={simTime}
-                      userNotes={userNotes}
-                      evaluation={evaluation}
-                      submitting={submitting}
-                      logs={logs}
-                      differential={differential}
-                      onDifferentialChange={setDifferential}
-                      onNotesChange={setUserNotes}
-                      onEndCase={handleEndCase}
-                      onNewCase={() => loadNewCase()}
-                    />
-                  </div>
-                </Card>
-                {user && (
-                  <Card title="Performance History">
-                    <div style={{ padding: 16 }}><ArchiveView user={user} /></div>
-                  </Card>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* ── Quick-order chips ── */}
-          {(quickLabs.length > 0 || quickImgs.length > 0) && (
-            <div style={{ background: T.card, borderTop: `1px solid ${T.border}`, padding: '6px 16px', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: T.muted, letterSpacing: 0.5, textTransform: 'uppercase', marginRight: 2 }}>Quick order</span>
-              {quickLabs.map(t => (
-                <button key={t.name} onClick={() => handleOrderTest('lab', t.name)} disabled={isBusy}
-                  style={{ fontSize: 11, padding: '3px 10px', cursor: 'pointer', color: T.blue, background: T.blueLt, border: `1px solid #bfdbfe`, borderRadius: 20, whiteSpace: 'nowrap', fontFamily: T.sans }}>
-                  + {t.name}
-                </button>
-              ))}
-              {quickImgs.map(t => (
-                <button key={t.name} onClick={() => handleOrderTest('imaging', t.name)} disabled={isBusy}
-                  style={{ fontSize: 11, padding: '3px 10px', cursor: 'pointer', color: T.purple, background: T.purpleLt, border: `1px solid #ddd6fe`, borderRadius: 20, whiteSpace: 'nowrap', fontFamily: T.sans }}>
-                  + {t.name}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* ── CPOE bar ── */}
-          <div style={{ background: T.card, borderTop: `2px solid ${T.indigo}`, padding: '8px 16px', flexShrink: 0 }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: T.indigo, letterSpacing: 0.8, textTransform: 'uppercase' }}>CPOE</span>
-              <div style={{ flex: 1, minWidth: 260, position: 'relative' }}>
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={orderInput}
-                  onChange={e => { setOrderInput(e.target.value); search(e.target.value); }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') submitOrder();
-                    if (e.key === 'Escape') { setSuggestions([]); setAcOpen(false); }
-                  }}
-                  onBlur={() => setTimeout(() => setAcOpen(false), 150)}
-                  onFocus={() => orderInput && search(orderInput)}
-                  placeholder={isBusy ? 'Processing…' : 'Search or enter order (labs, imaging, medications, procedures…)'}
-                  disabled={isBusy}
-                  style={{ width: '100%', padding: '7px 12px', fontSize: 13, fontFamily: T.sans, border: `1px solid ${T.borderMd}`, borderRadius: 6, background: isBusy ? T.bg : '#fff', boxSizing: 'border-box', outline: 'none' }}
-                />
-                {acOpen && suggestions.length > 0 && (
-                  <div style={{ position: 'absolute', bottom: 'calc(100% + 4px)', left: 0, right: 0, background: '#fff', border: `1px solid ${T.border}`, borderRadius: 8, boxShadow: '0 -8px 24px rgba(0,0,0,0.12)', zIndex: 100, maxHeight: 260, overflowY: 'auto' }}>
-                    {suggestions.map(s => (
-                      <button key={s.name} onMouseDown={() => placeTest(s)}
-                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', padding: '8px 12px', background: 'none', border: 'none', borderBottom: `1px solid ${T.border}`, cursor: 'pointer', textAlign: 'left', fontFamily: T.sans, fontSize: 13, color: T.text }}>
-                        <span>{s.name}</span>
-                        <span style={{ fontSize: 11, color: s._kind === 'lab' ? T.blue : T.purple, background: s._kind === 'lab' ? T.blueLt : T.purpleLt, padding: '2px 8px', borderRadius: 20, marginLeft: 10, whiteSpace: 'nowrap' }}>
-                          {s._kind} · STAT {s.stat}m
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <select value={urgency} onChange={e => setUrgency(e.target.value as 'STAT' | 'Routine')}
-                style={{ padding: '7px 10px', fontSize: 13, border: `1px solid ${T.borderMd}`, borderRadius: 6, background: '#fff', fontFamily: T.sans }}>
-                <option>STAT</option>
-                <option>Routine</option>
-              </select>
-              <button onClick={submitOrder} disabled={isBusy || !orderInput.trim()} style={btn('md')}>
-                Place Order
-              </button>
-              <div style={{ width: 1, background: T.border, height: 24, margin: '0 4px' }} />
-              <span style={{ fontSize: 12, color: T.muted }}>Advance:</span>
-              <select value={advanceMin} onChange={e => setAdvanceMin(Number(e.target.value))}
-                style={{ padding: '7px 8px', fontSize: 12, border: `1px solid ${T.borderMd}`, borderRadius: 6, background: '#fff', fontFamily: T.sans }}>
-                {[5, 10, 15, 20, 30, 45, 60].map(n => <option key={n} value={n}>{n} min</option>)}
-              </select>
-              <button onClick={() => handleAdvanceTime(advanceMin)} disabled={isBusy} style={btn('md', 'ghost')}>↻ Advance</button>
-              <div style={{ width: 1, background: T.border, height: 24, margin: '0 4px' }} />
-              <button onClick={() => setTab('assessment')} style={btn('md', 'danger')}>End Case</button>
-            </div>
-          </div>
-        </>
+      <CommandPalette
+        isOpen={isCommandOpen}
+        onClose={() => setIsCommandOpen(false)}
+        onNavigate={() => {}}
+        onNewCase={() => setIsLibraryOpen(true)}
+        onConsult={handleConsult}
+        hasArchive={!!user}
+        onOrderTest={mc ? handleOrderTest : undefined}
+        onAdminister={mc ? (med: string) => handlePerformIntervention(2, 'Administer ' + med) : undefined}
+        onAdvanceTime={mc ? handleAdvanceTime : undefined}
+      />
+      {timeAdvOpen && mc && (
+        <TimeAdvanceModal
+          medicalCase={mc}
+          simTime={simTime}
+          intervening={intervening}
+          onAdvance={handleAdvanceTime}
+          onClose={() => setTimeAdvOpen(false)}
+        />
       )}
-
-      {/* DiagnosisPad */}
-      {mc && (
+      {isDxPadOpen && mc && (
         <DiagnosisPad
           isOpen={isDxPadOpen}
           onToggle={() => setIsDxPadOpen(p => !p)}
@@ -840,113 +603,583 @@ function Shell() {
           onUpdateFindingRelevanceForDx={reasoning.updateFindingRelevanceForDx}
         />
       )}
+      {/* Archive view */}
+      {user && <ArchiveView user={user} />}
+    </>
+  );
 
-      {/* Stage Commit Gate */}
-      {mc && pendingStage && (
-        <StageCommitGate
-          isOpen={!!pendingStage}
-          fromStage={reasoning.currentStage}
-          toStage={pendingStage}
-          problemRepresentation={reasoning.problemRepresentation}
-          onProblemRepresentationChange={reasoning.setProblemRepresentation}
-          differentials={reasoning.differentials}
-          onSetLead={reasoning.setLeadDiagnosis}
-          findings={reasoning.findings}
-          previousPrSnapshot={reasoning.latestPrSnapshot}
-          unmetRequirements={reasoning.checkStageGate(reasoning.currentStage)}
-          onCommit={(fromStage) => {
-            const snapId = reasoning.commitStage(fromStage, simTime);
-            if (snapId && pendingStage) { reasoning.goToStage(pendingStage); setPendingStage(null); }
-            return snapId;
-          }}
-          onCancel={() => setPendingStage(null)}
-        />
+  // ── Assessment overlay ───────────────────────────────────────────────────────
+  const assessOverlay = (
+    <AnimatePresence>
+      {assessOpen && mc && (
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={e => { if (e.target === e.currentTarget) setAssessOpen(false); }}
+        >
+          <motion.div
+            initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.96, opacity: 0 }}
+            style={{ background: E.panel, width: '90vw', maxWidth: 900, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.4)' }}
+          >
+            <div style={{ background: E.teal, color: '#fff', padding: '8px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontWeight: 600, fontSize: 13 }}>End Case / Assessment</span>
+              <button onClick={() => setAssessOpen(false)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto', padding: 20 }}>
+              <AssessmentTab
+                medicalCase={mc}
+                simTime={simTime}
+                userNotes={userNotes}
+                onNotesChange={setUserNotes}
+                differential={differential}
+                onDifferentialChange={setDifferential}
+                evaluation={evaluation}
+                submitting={submitting}
+                logs={logs}
+                onEndCase={handleEndCase}
+                onNewCase={loadNewCase}
+              />
+            </div>
+          </motion.div>
+        </motion.div>
       )}
+    </AnimatePresence>
+  );
+
+  // ── STAGE COMMIT GATE ────────────────────────────────────────────────────────
+  const stageGate = mc && pendingStage ? (
+    <StageCommitGate
+      isOpen={!!pendingStage}
+      fromStage={reasoning.currentStage}
+      toStage={pendingStage}
+      problemRepresentation={reasoning.problemRepresentation}
+      onProblemRepresentationChange={reasoning.setProblemRepresentation}
+      differentials={reasoning.differentials}
+      onSetLead={reasoning.setLeadDiagnosis}
+      findings={reasoning.findings}
+      previousPrSnapshot={reasoning.latestPrSnapshot}
+      unmetRequirements={reasoning.checkStageGate(reasoning.currentStage)}
+      onCommit={fromStage => {
+        const snapId = reasoning.commitStage(fromStage, simTime);
+        if (snapId && pendingStage) {
+          reasoning.goToStage(pendingStage);
+          setPendingStage(null);
+        }
+        return snapId;
+      }}
+      onCancel={() => setPendingStage(null)}
+    />
+  ) : null;
+
+  // ── MAIN LAYOUT ──────────────────────────────────────────────────────────────
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: E.font, fontSize: 12, background: E.bodyBg, color: E.text }}>
+      {overlays}
+      {assessOverlay}
+      {stageGate}
+
+      {/* TOP NAV */}
+      <header style={{ background: E.teal, color: '#fff', height: 32, display: 'flex', alignItems: 'center', padding: '0 10px', flexShrink: 0 }}>
+        <span style={{ fontStyle: 'italic', fontWeight: 900, fontSize: 18, letterSpacing: -0.5, marginRight: 16 }}>epic</span>
+        {['Appboard', 'Patient Lists', 'Routed', 'My Basket', 'Scan Team', 'Chart Room', 'Analytics', 'References', 'Manage'].map(item => (
+          <button
+            key={item}
+            onClick={item === 'Patient Lists' ? () => setIsLibraryOpen(true) : undefined}
+            style={{ padding: '0 9px', height: 32, background: 'none', border: 'none', color: 'rgba(255,255,255,0.88)', fontSize: 11, cursor: 'pointer', borderRight: '1px solid rgba(255,255,255,0.15)', whiteSpace: 'nowrap' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.2)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+          >
+            {item}
+          </button>
+        ))}
+        <div style={{ flex: 1 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button onClick={() => setIsCommandOpen(true)} style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '2px 8px', cursor: 'pointer', fontSize: 10, fontFamily: E.font }}>⌘K</button>
+          {user && <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>{user.email?.split('@')[0]}</span>}
+          <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 10, textDecoration: 'underline' }}>Sign Out</button>
+          <span style={{ fontFamily: E.mono, fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>{today}</span>
+        </div>
+      </header>
+
+      {/* BODY */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+
+        {/* LEFT SIDEBAR */}
+        <aside style={{ width: 178, flexShrink: 0, background: E.panel, borderRight: '1px solid ' + E.borderDk, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+          <div style={{ background: E.teal, color: '#fff', padding: '4px 8px', fontSize: 11, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+            <span>Patient List</span>
+            <button onClick={() => setIsLibraryOpen(true)} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', fontSize: 9, padding: '1px 5px', cursor: 'pointer' }}>+ New</button>
+          </div>
+
+          <SidebarGroup label="3A Patients" color="#2196f3" />
+          {MOCK_PATIENTS.filter(p => p.room.startsWith('3A')).map(p => (
+            <SidebarPatient
+              key={p.name}
+              patient={p}
+              selected={selectedPt === p.name}
+              onClick={() => setSelectedPt(p.name)}
+            />
+          ))}
+
+          {mc && (
+            <>
+              <SidebarGroup label="Current Case" color={E.teal} />
+              <SidebarPatient
+                patient={{
+                  name: mc.patientName.includes(',')
+                    ? mc.patientName
+                    : mc.patientName.split(' ').slice(-1)[0] + ', ' + mc.patientName.split(' ').slice(0, -1).join(' '),
+                  age: mc.age + (mc.gender ? mc.gender[0] : ''),
+                  status: mc.physiologicalTrend === 'critical' ? 'critical'
+                    : mc.physiologicalTrend === 'declining' ? 'abnormal'
+                    : 'stable',
+                  room: (mc.currentLocation || 'ED-1').slice(0, 6),
+                }}
+                selected
+                onClick={() => {}}
+              />
+            </>
+          )}
+
+          <SidebarGroup label="ICU Patients" color="#f44336" />
+          {MOCK_PATIENTS.filter(p => p.room.startsWith('ICU')).map(p => (
+            <SidebarPatient key={p.name} patient={p} selected={false} onClick={() => setSelectedPt(p.name)} />
+          ))}
+
+          <SidebarGroup label="3C Patients" color="#4caf50" />
+          {MOCK_PATIENTS.filter(p => p.room.startsWith('3C')).map(p => (
+            <SidebarPatient key={p.name} patient={p} selected={false} onClick={() => setSelectedPt(p.name)} />
+          ))}
+
+          <div style={{ flex: 1 }} />
+          <div style={{ borderTop: '1px solid ' + E.border, padding: '4px 0' }}>
+            {['Follow Up', 'Referrals', 'Quick Links'].map(label => (
+              <div
+                key={label}
+                style={{ padding: '4px 10px', fontSize: 11, color: E.teal, cursor: 'pointer', borderBottom: '1px solid ' + E.border }}
+                onMouseEnter={e => { e.currentTarget.style.background = E.tealLt; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+              >
+                {label}
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        {/* CHART AREA */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+          {!mc ? (
+            /* No patient loaded */
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: E.bodyBg }}>
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ color: E.muted, marginBottom: 16 }}>No patient selected</p>
+                <button onClick={() => loadNewCase()} style={{ padding: '6px 18px', background: E.teal, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: E.font }}>
+                  Generate Case
+                </button>
+                <button onClick={() => setIsLibraryOpen(true)} style={{ padding: '6px 18px', background: 'none', color: E.teal, border: '1px solid ' + E.teal, cursor: 'pointer', fontSize: 12, fontFamily: E.font, marginLeft: 8 }}>
+                  Browse Library
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Patient loaded */
+            <>
+              {/* PATIENT HEADER BAND */}
+              <div style={{ background: E.teal, color: '#fff', padding: '5px 10px', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 2 }}>
+                      <span style={{ fontWeight: 700, fontSize: 17, letterSpacing: -0.3 }}>
+                        {mc.patientName.includes(',')
+                          ? mc.patientName
+                          : mc.patientName.split(' ').slice(-1)[0] + ', ' + mc.patientName.split(' ').slice(0, -1).join(' ')}
+                      </span>
+                      {mc.difficulty && (
+                        <span style={{ fontSize: 10, background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: 2 }}>
+                          {mc.difficulty.toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.82)', display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 1 }}>
+                      <span>Age: <strong style={{ color: '#fff' }}>{mc.age} y/o {mc.gender}</strong></span>
+                      <span>MRN: <strong style={{ color: '#fff' }}>{mc.id.slice(-8).toUpperCase()}</strong></span>
+                      <span>Code: <strong style={{ color: '#fff' }}>Full Code</strong></span>
+                      {(mc.specialty_tags || []).length > 0 && (
+                        <span>Specialty: <strong style={{ color: '#c8e8ff' }}>{(mc.specialty_tags || []).join(', ')}</strong></span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.82)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                      <span>Location: <strong style={{ color: '#fff' }}>{mc.currentLocation}</strong></span>
+                      {mc.physiologicalTrend && mc.physiologicalTrend !== 'stable' && (
+                        <span style={{
+                          background: mc.physiologicalTrend === 'improving' ? '#1a6e2e' : '#8b1a1a',
+                          padding: '0 6px', borderRadius: 2, color: '#fff', fontWeight: 600,
+                        }}>
+                          {mc.physiologicalTrend === 'improving' ? '↑' : mc.physiologicalTrend === 'critical' ? '⚠' : '↓'} {mc.physiologicalTrend.toUpperCase()}
+                        </span>
+                      )}
+                      {patientOutcome && patientOutcome !== 'alive' && (
+                        <span style={{
+                          background: patientOutcome === 'deceased' ? '#111' : '#8b0000',
+                          padding: '0 8px', borderRadius: 2, color: '#fff', fontWeight: 700,
+                        }}>
+                          {patientOutcome === 'deceased' ? '✕ EXPIRED' : '⚠ DETERIORATING'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ background: '#c0392b', padding: '3px 8px', maxWidth: 240, fontSize: 10, lineHeight: 1.4 }}>
+                      <span style={{ fontWeight: 700, color: '#fff' }}>⚠ ALLERGIES: </span>
+                      <span style={{ color: '#ffd6d6' }}>NKDA</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button onClick={() => loadNewCase()} style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', padding: '3px 8px', cursor: 'pointer', fontSize: 10, fontFamily: E.font }}>New Case</button>
+                      <button onClick={() => setAssessOpen(true)} style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', padding: '3px 8px', cursor: 'pointer', fontSize: 10, fontFamily: E.font }}>End Case</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECONDARY CHART TABS */}
+              <div style={{ background: E.tabBar, display: 'flex', borderBottom: '2px solid ' + E.borderDk, flexShrink: 0 }}>
+                {['Chart Review', 'Flowsheet', 'Medications', 'Plan', 'Notes', 'Orders', 'Results'].map(tab => {
+                  const key = tab.toLowerCase().replace(' ', '-');
+                  const active = chartTab === key;
+                  return (
+                    <button
+                      key={tab}
+                      onClick={() => setChartTab(key)}
+                      style={{
+                        padding: '5px 12px', fontSize: 11, fontFamily: E.font, cursor: 'pointer',
+                        background: active ? E.panel : 'transparent',
+                        border: 'none', borderRight: '1px solid ' + E.border,
+                        borderBottom: active ? '2px solid ' + E.panel : 'none',
+                        color: active ? E.teal : E.textSm,
+                        fontWeight: active ? 600 : 400,
+                        marginBottom: active ? -2 : 0,
+                      }}
+                    >
+                      {tab}
+                    </button>
+                  );
+                })}
+                <div style={{ flex: 1 }} />
+                <button onClick={() => setIsDxPadOpen(p => !p)} style={{ padding: '4px 10px', fontSize: 10, background: 'none', border: 'none', color: E.teal, cursor: 'pointer', fontFamily: E.font }}>
+                  Dx Pad
+                </button>
+              </div>
+
+              {/* VITALS STRIP */}
+              <div style={{ background: E.panel, borderBottom: '1px solid ' + E.border, padding: '6px 10px', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: E.muted, marginRight: 10, letterSpacing: 0.5, whiteSpace: 'nowrap' }}>
+                    {'VITALS' + (simTime > 0 ? ' Last ' + simTime + 'm' : '')}
+                  </span>
+                  {vData.map(vd => {
+                    const spark = (sparkSeries[vd.key as keyof typeof sparkSeries] as number[] | undefined) || [];
+                    const col = statusColor(vd.status);
+                    return (
+                      <div key={vd.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 10px', borderRight: '1px solid ' + E.border, minWidth: 100 }}>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: E.muted, letterSpacing: 0.5, textTransform: 'uppercase' as const, marginBottom: 1 }}>
+                          {vd.label}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Sparkline values={spark} color={col} />
+                          <div>
+                            <div style={{ fontSize: 16, fontWeight: 700, color: col, lineHeight: 1, fontFamily: E.mono }}>
+                              {vd.display ?? vd.value}
+                            </div>
+                            <div style={{ fontSize: 9, color: E.muted }}>{vd.unit}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 4-COLUMN CONTENT GRID */}
+              <div style={{ flex: 1, display: 'flex', overflow: 'hidden', gap: 0 }}>
+
+                {/* COL 1 — Timeline */}
+                <div style={{ width: 220, flexShrink: 0, borderRight: '1px solid ' + E.border, display: 'flex', flexDirection: 'column', overflowY: 'auto', background: E.panel }}>
+                  <SectionHead title="Timeline" />
+                  <div style={{ display: 'flex', background: E.panelHd, borderBottom: '1px solid ' + E.border }}>
+                    {(['all', 'events', 'orders', 'results'] as const).map(t => (
+                      <button
+                        key={t}
+                        onClick={() => setTimelineTab(t)}
+                        style={{
+                          flex: 1, padding: '4px 0', fontSize: 10, border: 'none', cursor: 'pointer',
+                          background: timelineTab === t ? E.panel : 'transparent',
+                          color: timelineTab === t ? E.teal : E.muted,
+                          fontWeight: timelineTab === t ? 600 : 400, fontFamily: E.font,
+                        }}
+                      >
+                        {t[0].toUpperCase() + t.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ flex: 1, overflowY: 'auto' }}>
+                    {[...(logs || [])].reverse()
+                      .filter(log => {
+                        if (timelineTab === 'all') return true;
+                        if (timelineTab === 'events') return log.text.startsWith('ACTION:') || log.text.startsWith('WAIT');
+                        if (timelineTab === 'orders') return log.text.startsWith('ORDER:') || log.text.startsWith('D/C:');
+                        if (timelineTab === 'results') return log.text.startsWith('ORDER: ') && (log.text.toLowerCase().includes('lab') || log.text.toLowerCase().includes('imaging'));
+                        return true;
+                      })
+                      .map((log, i) => {
+                        const typeColor = log.text.startsWith('ACTION:') || log.text.startsWith('WAIT') ? E.amber
+                          : log.text.startsWith('D/C:') ? E.red
+                          : E.teal;
+                        return (
+                          <div key={i} style={{ padding: '5px 8px', borderBottom: '1px solid ' + E.border }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 5 }}>
+                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: typeColor, flexShrink: 0, marginTop: 3 }} />
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{ fontSize: 10, color: E.muted, margin: '0 0 1px' }}>{log.time}</p>
+                                <p style={{ fontSize: 11, color: E.text, margin: 0, wordBreak: 'break-word' }}>{log.text}</p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    {(logs || []).length === 0 && (
+                      <p style={{ padding: '10px 8px', color: E.muted, fontSize: 11, textAlign: 'center' }}>No activity yet</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* COL 2 — Patient Summary */}
+                <div style={{ width: 260, flexShrink: 0, borderRight: '1px solid ' + E.border, display: 'flex', flexDirection: 'column', overflowY: 'auto', background: E.panel }}>
+                  <SectionHead title="Patient Summary" />
+
+                  <SubHead label="Chief Complaint / HPI" />
+                  <div style={{ padding: '6px 10px', fontSize: 11, color: E.text, lineHeight: 1.5 }}>
+                    {mc.chiefComplaint}
+                  </div>
+                  {mc.historyOfPresentIllness && (
+                    <div style={{ padding: '0 10px 8px', fontSize: 11, color: E.textSm, lineHeight: 1.5 }}>
+                      {mc.historyOfPresentIllness}
+                    </div>
+                  )}
+
+                  <SubHead label="PMH / Social" />
+                  <div style={{ padding: '4px 10px' }}>
+                    {(mc.pastMedicalHistory || []).length > 0 ? (
+                      (mc.pastMedicalHistory || []).map((pmh, i) => (
+                        <div key={i} style={{ fontSize: 11, color: E.text, padding: '1px 0', borderBottom: '1px solid ' + E.border }}>
+                          {pmh}
+                        </div>
+                      ))
+                    ) : (
+                      <p style={{ fontSize: 11, color: E.muted, margin: 0 }}>None reported</p>
+                    )}
+                  </div>
+
+                  <SubHead label="Active Medications" />
+                  <div style={{ padding: '4px 10px' }}>
+                    {activeMeds.length > 0 ? activeMeds.map((med, i) => (
+                      <div key={i} style={{ fontSize: 11, padding: '2px 0', borderBottom: '1px solid ' + E.border, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ color: E.text }}>{med.name}</span>
+                        <button
+                          onClick={() => handleDiscontinueMedication(med.id, med.name)}
+                          disabled={isBusy}
+                          style={{ fontSize: 9, color: E.red, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        >
+                          D/C
+                        </button>
+                      </div>
+                    )) : (
+                      <p style={{ fontSize: 11, color: E.muted, margin: 0 }}>No active medications</p>
+                    )}
+                  </div>
+
+                  {consultantAdvice && (
+                    <>
+                      <SubHead label="Consultant Advice" />
+                      <div style={{ padding: '6px 10px', fontSize: 11, color: E.textSm, lineHeight: 1.5, background: E.tealLt, borderBottom: '1px solid ' + E.border }}>
+                        {isConsulting ? (
+                          <span style={{ color: E.muted }}>Consulting…</span>
+                        ) : consultantAdvice?.advice}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* COL 3 — Labs, Exam, Imaging */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: E.panel, borderRight: '1px solid ' + E.border }}>
+                  <SectionHead title="Chart" />
+                  <div style={{ flex: 1, overflowY: 'auto' }}>
+
+                    {/* Latest Labs */}
+                    <SubHead label="Latest Labs" />
+                    {availLabs.length > 0 ? (
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr>
+                            <th style={thStyle}>Test</th>
+                            <th style={thStyle}>Result</th>
+                            <th style={thStyle}>Ref</th>
+                            <th style={thStyle}>Flag</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {availLabs.map(lab => {
+                            const { code, color, bg } = labFlagInfo(lab);
+                            return (
+                              <tr key={lab.name} style={{ background: lab.status === 'critical' ? E.redLt : lab.status === 'abnormal' ? '#fffdf0' : 'transparent' }}>
+                                <td style={tdStyle}>{lab.name}</td>
+                                <td style={{ ...tdStyle, fontFamily: E.mono, color: color, fontWeight: lab.status !== 'normal' ? 600 : 400 }}>
+                                  {lab.value} {lab.unit}
+                                </td>
+                                <td style={{ ...tdStyle, color: E.muted }}>{lab.normalRange}</td>
+                                <td style={{ ...tdStyle }}>
+                                  {code && (
+                                    <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 2, background: bg, color: color }}>
+                                      {code}
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <p style={{ padding: '8px 10px', color: E.muted, fontSize: 11 }}>No labs available yet</p>
+                    )}
+                    {pendLabs.length > 0 && (
+                      <div style={{ padding: '4px 10px', fontSize: 10, color: E.muted, background: E.panelHd }}>
+                        {pendLabs.length} pending: {pendLabs.map(l => l.name + ' ETA T+' + l.availableAt + 'm').join(', ')}
+                      </div>
+                    )}
+
+                    {/* Physical Exam */}
+                    <SubHead label="Physical Exam" />
+                    {mc.physicalExam && Object.keys(mc.physicalExam).length > 0 ? (
+                      <div style={{ padding: '4px 0' }}>
+                        {Object.entries(mc.physicalExam).map(([sys, find]) => (
+                          <div key={sys} style={{ borderBottom: '1px solid ' + E.border }}>
+                            <button
+                              onClick={() => setImgOpen(prev => ({ ...prev, [sys]: !prev[sys] }))}
+                              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: E.font }}
+                            >
+                              <span style={{ fontSize: 9, color: E.muted }}>{imgOpen[sys] ? '▾' : '▸'}</span>
+                              <span style={{ fontSize: 10, fontWeight: 600, color: E.textSm, textTransform: 'uppercase' as const, flex: 1 }}>{sys}</span>
+                            </button>
+                            {imgOpen[sys] && (
+                              <div style={{ padding: '2px 10px 6px 22px', fontSize: 11, color: E.text, lineHeight: 1.5 }}>
+                                {find as string}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p style={{ padding: '8px 10px', color: E.muted, fontSize: 11 }}>No exam documented</p>
+                    )}
+
+                    {/* Imaging */}
+                    <SubHead label="Imaging" />
+                    {availImgs.length > 0 ? availImgs.map(img => (
+                      <div key={img.type} style={{ borderBottom: '1px solid ' + E.border }}>
+                        <div style={{ padding: '5px 10px', fontSize: 11, fontWeight: 600, color: E.textSm }}>
+                          {img.type}
+                        </div>
+                        <div style={{ padding: '0 10px 6px', fontSize: 11, color: E.text, lineHeight: 1.5 }}>
+                          {img.impression || img.findings}
+                        </div>
+                      </div>
+                    )) : (
+                      <p style={{ padding: '8px 10px', color: E.muted, fontSize: 11 }}>No imaging available</p>
+                    )}
+                    {pendImgs.length > 0 && (
+                      <div style={{ padding: '4px 10px', fontSize: 10, color: E.muted, background: E.panelHd }}>
+                        {pendImgs.map(i => i.type + ' ETA T+' + i.availableAt + 'm').join(', ')} pending
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* COL 4 — Events, Orders, Tasks */}
+                <div style={{ width: 240, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: E.panel }}>
+                  <SectionHead title="Active Events" />
+
+                  {/* Clinical events */}
+                  <div style={{ maxHeight: 140, overflowY: 'auto', borderBottom: '1px solid ' + E.border }}>
+                    {clinEvents.length > 0 ? clinEvents.map((ev, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          padding: '4px 8px', borderBottom: '1px solid ' + E.border,
+                          background: ev.level === 'critical' ? E.redLt : E.amberLt,
+                          display: 'flex', alignItems: 'flex-start', gap: 6,
+                        }}
+                      >
+                        <span style={{ fontSize: 9, fontWeight: 700, color: ev.level === 'critical' ? E.red : E.amber, minWidth: 28 }}>
+                          {ev.label}
+                        </span>
+                        <span style={{ fontSize: 10, color: E.text, lineHeight: 1.3 }}>{ev.desc}</span>
+                      </div>
+                    )) : (
+                      <p style={{ padding: '6px 8px', fontSize: 11, color: E.muted, textAlign: 'center' }}>No active alerts</p>
+                    )}
+                  </div>
+
+                  <SubHead label="Orders" />
+                  <div style={{ flex: 1, overflowY: 'auto' }}>
+                    {[...(mc.clinicalActions || [])].reverse().slice(0, 12).map((action, i) => {
+                      const badge = Object.entries({ medication: 'Rx', exam: 'Exam', procedure: 'Proc', order: 'Ord', communication: 'Comm', 'time-advance': 'Time' })
+                        .find(([k]) => action.type?.includes(k));
+                      return (
+                        <div key={i} style={{ padding: '4px 8px', borderBottom: '1px solid ' + E.border, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                          <span style={{ fontSize: 9, background: E.tealLt, color: E.teal, padding: '1px 4px', borderRadius: 2, flexShrink: 0, fontWeight: 600 }}>
+                            {badge ? badge[1] : 'Act'}
+                          </span>
+                          <p style={{ fontSize: 11, color: E.text, margin: 0, flex: 1, wordBreak: 'break-word' }}>{action.description}</p>
+                        </div>
+                      );
+                    })}
+                    {(mc.clinicalActions || []).length === 0 && (
+                      <p style={{ padding: '6px 8px', fontSize: 11, color: E.muted, textAlign: 'center' }}>No orders yet</p>
+                    )}
+                  </div>
+
+                  <SubHead label="To Do / Tasks" />
+                  <div style={{ padding: '4px 8px', fontSize: 11 }}>
+                    {[
+                      { done: (mc.labs || []).length > 0,     text: 'Order initial labs' },
+                      { done: (mc.clinicalActions || []).length > 2, text: 'Perform assessment' },
+                      { done: !!consultantAdvice,              text: 'Consult specialist' },
+                    ].map(task => (
+                      <div key={task.text} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', borderBottom: '1px solid ' + E.border }}>
+                        <span style={{ color: task.done ? E.green : E.muted, fontSize: 13 }}>{task.done ? '✓' : '○'}</span>
+                        <span style={{ color: task.done ? E.muted : E.text, textDecoration: task.done ? 'line-through' : 'none' }}>{task.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>{/* end 4-col grid */}
+
+              {/* CPOE BAR */}
+              <CPOEBar
+                caseId={mc.id}
+                simTime={simTime}
+                busy={isBusy}
+                onExecute={t => handlePerformIntervention(2, t)}
+                onOpenTimeAdvance={() => setTimeAdvOpen(true)}
+                onOrderTest={handleOrderTest}
+                onConsult={handleConsult}
+              />
+            </>
+          )}
+        </div>{/* end chart area */}
+      </div>{/* end body */}
     </div>
   );
-}
-
-// ─── Small shared components ───────────────────────────────────────────────────
-function Spinner() {
-  return (
-    <div style={{ width: 24, height: 24, border: `3px solid ${T.border}`, borderTop: `3px solid ${T.indigo}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto' }} />
-  );
-}
-
-function VitalChip({ label, value, unit, crit, warn }: { label: string; value: string; unit: string; crit?: boolean; warn?: boolean }) {
-  const bg = crit ? T.redLt : warn ? T.amberLt : '#fff';
-  const bd = crit ? T.redBd : warn ? T.amberBd : T.border;
-  const vc = crit ? T.red : warn ? T.amber : T.textSm;
-  return (
-    <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 2, padding: '3px 10px', borderRadius: 20, background: bg, border: `1px solid ${bd}` }}>
-      <span style={{ fontSize: 11, fontWeight: 600, color: T.muted }}>{label}</span>
-      <span style={{ fontSize: 13, fontWeight: crit || warn ? 700 : 500, color: vc, fontFamily: T.mono, marginLeft: 3 }}>{value}</span>
-      <span style={{ fontSize: 10, color: T.muted }}>{unit}</span>
-      {crit && <span style={{ fontSize: 10, color: T.red, marginLeft: 2 }}>▲▲</span>}
-      {!crit && warn && <span style={{ fontSize: 10, color: T.amber, marginLeft: 2 }}>▲</span>}
-    </div>
-  );
-}
-
-function TabBadge({ n, color = T.indigo }: { n: number; color?: string }) {
-  return <span style={{ background: color, color: '#fff', borderRadius: 20, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>{n}</span>;
-}
-
-function Pill({ children, color, bg, style }: { children: ReactNode; color: string; bg: string; style?: React.CSSProperties }) {
-  return <span style={{ background: bg, color, padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, ...style }}>{children}</span>;
-}
-
-function Card({ title, children, fullWidth, action, titleColor }: { title: ReactNode; children: ReactNode; fullWidth?: boolean; action?: ReactNode; titleColor?: string }) {
-  return (
-    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', ...(fullWidth ? { gridColumn: '1 / -1' } : {}) }}>
-      <div style={{ padding: '10px 16px', borderBottom: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fafbff' }}>
-        <span style={{ fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, color: titleColor || T.textSm }}>{title}</span>
-        {action}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function SectionHead({ children, color = T.muted }: { children: ReactNode; color?: string }) {
-  return (
-    <div style={{ padding: '6px 16px', background: '#f8fafc', borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, fontWeight: 600, fontSize: 11, color, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-      {children}
-    </div>
-  );
-}
-
-function Divider() { return <div style={{ height: 1, background: T.border }} />; }
-
-function EmptyState({ children }: { children: ReactNode }) {
-  return <div style={{ padding: '24px 16px', color: T.muted, fontSize: 13, textAlign: 'center' }}>{children}</div>;
-}
-
-function HeaderBtn({ children, onClick }: { children: ReactNode; onClick: () => void }) {
-  return (
-    <button onClick={onClick} style={{ background: 'none', border: '1px solid #334155', color: '#94a3b8', padding: '4px 10px', fontSize: 12, cursor: 'pointer', borderRadius: 6, fontFamily: T.sans }}>
-      {children}
-    </button>
-  );
-}
-
-// ─── Table helpers ─────────────────────────────────────────────────────────────
-const tbl: React.CSSProperties = { width: '100%', borderCollapse: 'collapse' };
-
-function Th({ children, style }: { children?: ReactNode; style?: React.CSSProperties }) {
-  return <th style={{ padding: '8px 16px', textAlign: 'left', fontWeight: 600, fontSize: 11, color: T.muted, textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: `1px solid ${T.border}`, background: '#fafbff', ...style }}>{children}</th>;
-}
-function Td({ children, style, colSpan }: { children?: ReactNode; style?: React.CSSProperties; colSpan?: number }) {
-  return <td colSpan={colSpan} style={{ padding: '8px 16px', fontSize: 13, borderBottom: `1px solid ${T.border}`, verticalAlign: 'top', ...style }}>{children}</td>;
-}
-
-// ─── Button factory ────────────────────────────────────────────────────────────
-function btn(size: 'sm' | 'md' | 'lg', variant: 'primary' | 'ghost' | 'danger' | 'success' = 'primary'): React.CSSProperties {
-  const pad = size === 'sm' ? '3px 10px' : size === 'lg' ? '10px 24px' : '6px 16px';
-  const fs  = size === 'sm' ? 11 : size === 'lg' ? 14 : 13;
-  const base: React.CSSProperties = { padding: pad, fontSize: fs, fontFamily: T.sans, borderRadius: 6, cursor: 'pointer', fontWeight: 500, border: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 };
-  if (variant === 'ghost') return { ...base, background: T.bg, color: T.textSm, border: `1px solid ${T.borderMd}` };
-  if (variant === 'danger') return { ...base, background: T.red, color: '#fff' };
-  if (variant === 'success') return { ...base, background: T.emerald, color: '#fff' };
-  return { ...base, background: T.indigo, color: '#fff' };
 }
